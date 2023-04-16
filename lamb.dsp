@@ -6,9 +6,11 @@ declare license "AGPLv3";
 import("stdfaust.lib");
 
 process =
-  PMI_FBFFcompressor_N_chan(strength,thresh,att,rel,knee,prePost,link,FBFF,meter,N);
-// (ARtest:PMI_compression_gain_mono_db(strength,thresh,att,rel,knee,prePost):ba.db2linear)
-// , os.lf_sawpos(1)>0.5;
+  // PMI_FBFFcompressor_N_chan(strength,thresh,att,rel,knee,prePost,link,FBFF,meter,N);
+  (ARtest:PMI_compression_gain_mono_db(strength,thresh,att,rel,knee,prePost):ba.db2linear)
+, os.lf_sawpos(1)>0.5
+  // , (os.lf_sawpos(1)>0.5:moog_AR(att,rel))
+;
 
 PMI_FBFFcompressor_N_chan(strength,thresh,att,rel,knee,prePost,link,FBFF,meter,N) =
   si.bus(N) <: si.bus(N*2):
@@ -26,7 +28,8 @@ PMI_compression_gain_N_chan_db(strength,thresh,att,rel,knee,prePost,link,N) =
   <: (si.bus(N),(ba.parallelMin(N) <: si.bus(N))) : ro.interleave(N,2) : par(i,N,(it.interpolate_linear(link)));
 
 PMI_compression_gain_mono_db(strength,thresh,att,rel,knee,prePost) =
-  PMI(PMItime) : ba.bypass1(prePost,si.onePoleSwitching(att,rel)) : ba.linear2db : gain_computer(strength,thresh,knee) : ba.bypass1((prePost!=1),si.onePoleSwitching(rel,att))
+  // PMI(PMItime) : ba.bypass1(prePost,moog_AR(att,rel)) : ba.linear2db : gain_computer(strength,thresh,knee) : ba.bypass1((prePost!=1),moog_AR(rel,att))
+  PMI(PMItime) : ba.linear2db : gain_computer(strength,thresh,knee) : ba.bypass1(prePost,ba.db2linear:si.onePoleSwitching(rel,att):ba.linear2db)  : ba.bypass1((1-prePost),si.onePoleSwitching(rel,att))
 with {
   gain_computer(strength,thresh,knee,level) =
     select3((level>(thresh-(knee/2)))+(level>(thresh+(knee/2))),
@@ -39,6 +42,18 @@ with {
   with {
     s = ba.sec2samp(time):int:max(1);
   };
+
+};
+
+// my_AR(att,rel) = si.onePoleSwitching(a,r) with {
+// a =
+// };
+
+
+moog_AR(att,rel) = loop~_ with {
+  loop(prev,x) = x:ve.moog_vcf_2bn(res,fr(x,prev)):ve.moog_vcf_2bn(res,fr(x,prev)):ve.moog_vcf_2bn(res,fr(x,prev)):ve.moog_vcf_2bn(res,fr(x,prev));
+  fr(x,prev) = select2(x<=prev,1/att,1/rel);
+  res = hslider("res", 0.1, 0.01, 10, 0.01);
 };
 
 slidingPMI(n,maxn,p) = pow(p) : ba.slidingMeanp(n,maxn) : pow(1/p);
