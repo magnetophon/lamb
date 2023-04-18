@@ -18,22 +18,29 @@ process =
 ;
 test = select2(os.lf_sawpos(1)>0.5, 0.1,0.9);
 
-AR(trig,x) = x:loop~(_,_)
+AR(trig,x) = x:loop~(_,_,!,!)
                     :(hbargraph("ramp", 0, 1)
                      ,hbargraph("gain", 0, 1))
+                   ,_,_
 with {
   loop(prevRamp,prevGain,x) =
     ramp
    ,gain
+   ,dirChange
+   ,running
   with {
   ramp = (prevRamp+rampStep)*running:min(1):max(0);
-  rampStep = 1 / ma.SR / release;
-  release = hslider("release", 0.5, 0, 1, 1/192000):max(1 / ma.SR);
+  rampStep = 1 / ma.SR / release ;
+  release = hslider("release", 0.5, 0, 1, smallest):max(1 / ma.SR);
+  smallest = 1/192000;
   gain = prevGain+gainStep;
-  gainStep = rampStep*fullDif;
+  gainStep = rampStep* running*fullDif;
   rawDif = x-prevGain;
   fullDif =rawDif/(1-prevRamp):max(-1):min(1);
-  running = abs(rawDif)>=abs(gainStep);
+  running = (attacking | releasing) * (1-dirChange);
+  dirChange = (attacking != attacking');
+  releasing = rawDif>rampStep;
+  attacking = rawDif< 0-rampStep;
 };
 
 };
