@@ -18,7 +18,12 @@ process =
        // , os.lf_sawpos(1)>0.5
 ;
 test0 = select2(os.lf_sawpos(1)>0.5, 0.1,0.9);
-test = loop~_ with {
+test =
+  ((loop~_)
+  , no.lfnoise(hslider("rate", 100, 0.1, 1000, 0.1))
+  )
+  :it.interpolate_linear(hslider("Xfade", 0, 0, 1, 0.1))
+with {
   loop(prev,x) = no.lfnoise0(abs(prev*69)%9:pow(2)+1);
 };
 
@@ -34,8 +39,9 @@ with {
     ramp
    ,gain
    ,x
-   ,intervention
-    // ,shapedRamp
+   ,changeRate
+    // ,allShapedRamps
+    // ,allShapedRamps
   with {
   ramp = (prevRamp+rampStep)*running:min(1):max(0);
   rampStep = 1 / ma.SR / duration;
@@ -61,13 +67,20 @@ with {
   N=3;
   releasing = rawDif>(N / ma.SR);
   attacking = rawDif< 0-(N / ma.SR);
+  // TODO find the point in the first half of the graph where the slope is the same
+  // retrigger the ramp there
+  // use a multi step process, each time refining further
+  allShapedRamps =
+    par(i, NrShapers, 1/(NrShapers-i):sineShaper):>_/10;
+  NrShapers = 5;
 
   // sine shaper
   // s\left(x\right)=\left(\sin\left(\left(x\cdot0.5+0.75\right)\cdot2\pi\right)+1\right)\cdot0.5\left\{0\le x\le1\right\}
   sineShaper(x) = (sin((x*0.5 + 0.75)*2*ma.PI)+1)*0.5;
   shapedRamp = sineShaper(ramp);
-  intervention = abs((gainStep:max(smallest)/(gainStep':max(smallest)))-1)
-                 * releasing;
+  // shapedRamp = ramp;
+  changeRate = ((gainStep:max(smallest)/(gainStep':max(smallest)))-1)
+               * releasing;
 };
 };
 
