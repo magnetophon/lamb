@@ -5,12 +5,36 @@ declare license "AGPLv3";
 
 import("stdfaust.lib");
 
+// make a release based on:
+// place
+
 process =
-  // PMI_FBFFcompressor_N_chan(strength,thresh,att,rel,knee,prePost,link,FBFF,meter,N);
-  (ARtest:PMI_compression_gain_mono_db(strength,thresh,att,rel,knee,prePost):ba.db2linear)
-, os.lf_sawpos(1)>0.5
-  // , (os.lf_sawpos(1)>0.5:moog_AR(att,rel))
+  // ARtest:
+  test:AR(button("trig"))
+       // test
+       // PMI_FBFFcompressor_N_chan(strength,thresh,att,rel,knee,prePost,link,FBFF,meter,N);
+       // (ARtest:PMI_compression_gain_mono_db(strength,thresh,att,rel,knee,prePost):ba.db2linear)
+       // , os.lf_sawpos(1)>0.5
 ;
+test = select2(os.lf_sawpos(1)>0.5, 0.1,0.9);
+
+AR(trig,x) = x:loop~(_,_)
+                    :(hbargraph("ramp", 0, 1)
+                     ,hbargraph("ramp", 0, 1))
+with {
+  loop(prevRamp,prevX,x) =
+    (prevRamp+rampStep)
+   ,prevX+step
+  with {
+  rampStep = 1 / ma.SR / release * running;
+  release = hslider("release", 0.5, 0, 1, 1/192000):max(1 / ma.SR);
+  step = rampStep*dif;
+  dif = x-prevX;
+  running = abs(dif)>=ma.EPSILON;
+};
+
+};
+
 
 PMI_FBFFcompressor_N_chan(strength,thresh,att,rel,knee,prePost,link,FBFF,meter,N) =
   si.bus(N) <: si.bus(N*2):
@@ -29,7 +53,13 @@ PMI_compression_gain_N_chan_db(strength,thresh,att,rel,knee,prePost,link,N) =
 
 PMI_compression_gain_mono_db(strength,thresh,att,rel,knee,prePost) =
   // PMI(PMItime) : ba.bypass1(prePost,moog_AR(att,rel)) : ba.linear2db : gain_computer(strength,thresh,knee) : ba.bypass1((prePost!=1),moog_AR(rel,att))
-  PMI(PMItime) : ba.linear2db : gain_computer(strength,thresh,knee) : ba.bypass1(prePost,ba.db2linear:si.onePoleSwitching(rel,att):ba.linear2db)  : ba.bypass1((1-prePost),si.onePoleSwitching(rel,att))
+  PMI(PMItime) : ba.linear2db : gain_computer(strength,thresh,knee)
+                                // : ba.bypass1(prePost,ba.db2linear:my_AR(rel,att,r1,a1):ba.linear2db)
+                                // : ba.bypass1((1-prePost),my_AR(rel,att,r1,a1))
+  : ba.bypass1(prePost,ba.db2linear:my_AR(rel,att,r1,a1):ba.linear2db)
+  : ba.bypass1((1-prePost),my_AR(rel,att,r1,a1))
+    // : my_AR(0,att,0,a1)
+    // : my_AR(rel,0,r1,0)
 with {
   gain_computer(strength,thresh,knee,level) =
     select3((level>(thresh-(knee/2)))+(level>(thresh+(knee/2))),
@@ -45,10 +75,11 @@ with {
 
 };
 
-// my_AR(att,rel) = si.onePoleSwitching(a,r) with {
-// a =
-// };
-
+my_AR(att,rel,a2,r2) = si.onePoleSwitching(att,rel) : der~_ with {
+  // der(prev,x) = (x-prev) : (si.onePoleSwitching(a1,r1)+prev);
+  der(prev,x) = (x-prev)*t(prev,x)+prev;
+  t(prev,x) = select2(x>prev,a1,r1)*0.0001;
+};
 
 moog_AR(att,rel) = loop~_ with {
   loop(prev,x) = x:ve.moog_vcf_2bn(res,fr(x,prev)):ve.moog_vcf_2bn(res,fr(x,prev)):ve.moog_vcf_2bn(res,fr(x,prev)):ve.moog_vcf_2bn(res,fr(x,prev));
@@ -90,6 +121,10 @@ PMItime = AB(PMItimeP);
 PMItimeP = hslider("[10]PMI time",20,0,1000,1)*0.001;
 dw = AB(dwP);
 dwP = hslider ("[11]dry/wet",100,0,100,1) * 0.01:si.smoo;
+a1 = AB(a1P);
+a1P = hslider("[12]der attack",20,1,100,1);
+r1 = AB(r1P);
+r1P = hslider("[13]der release",200,1,1000,1);
 
 ARtest = toggle(soft,loud) with {
   toggle(a,b) = select2(block,b,a);
@@ -110,3 +145,33 @@ meter =
 // variable rms size
 // rms as attack
 // shaper around attack/release
+// https://www.desmos.com/calculator/xeystvebfz
+// https://www.desmos.com/calculator/ir2xakmtav
+// sine shaper: https://www.desmos.com/calculator/a9esb5hpzu
+// mult by shaper to get gain, div by shaper to calc dif
+// piecewise:
+// https://www.desmos.com/calculator/kinlygqpcf
+// knee:
+// https://www.desmos.com/calculator/b3nqkydhye
+// https://www.desmos.com/calculator/v6natnftsw
+// https://www.desmos.com/calculator/zfksmqczif
+// https://www.desmos.com/calculator/sbsdegqezh
+// https://www.desmos.com/calculator/pobazzinqv
+// https://www.desmos.com/calculator/znpkazx5zl
+// https://www.desmos.com/calculator/jgi4uhuifs
+// https://www.desmos.com/calculator/0m5ks4hraa
+//
+// complete:
+// https://www.desmos.com/calculator/otuch9nfsc
+// s(s(x)) with auto knee
+// https://www.desmos.com/calculator/hlushh63kc
+// both, with colors:
+// https://www.desmos.com/calculator/u5jhxh5tk1
+// compare to sine:
+// https://www.desmos.com/calculator/zybaewqrai
+// extra scaling:
+// https://www.desmos.com/calculator/qk8gymjfsl
+// scaling plus area under curve:
+// https://www.desmos.com/calculator/vcl8vrty1yi
+// no scaling area under curve
+// https://www.desmos.com/calculator/wjtyrllnhd
