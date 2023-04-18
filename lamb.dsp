@@ -24,15 +24,18 @@ test = loop~_ with {
 
 
 AR = loop~(_,_,!,!)
-          :(hbargraph("ramp", 0, 1)
-           ,hbargraph("gain", -1, 1))
-         ,_,_
+          // :(!,si.bus(4))
+          // :(hbargraph("ramp", 0, 1)
+          // ,hbargraph("gain", -1, 1))
+          // ,_,_
+          :par(i, 4, _*.25)
 with {
   loop(prevRamp,prevGain,x) =
     ramp
    ,gain
    ,x
-   ,running
+   ,intervention
+    // ,shapedRamp
   with {
   ramp = (prevRamp+rampStep)*running:min(1):max(0);
   rampStep = 1 / ma.SR / duration;
@@ -41,18 +44,31 @@ with {
   release = hslider("release", 0.5, 0, 1, smallest):max(1 / ma.SR);
   smallest = 1/192000;
   gain = prevGain+gainStep:max(-1):min(1);
-  gainStep = rampStep* running*fullDif;
+  rawGainStep = (shapedRamp-shapedRamp')*fullDif;
+  gainStep = select2(rawGainStep>0
+                    , rawGainStep:min(0-smallest)
+                    , rawGainStep:max(smallest)
+                    )
+             * running;
   rawDif = x-prevGain;
-  fullDif =rawDif/(1-prevRamp):max(-2):min(2);
+  fullDif =rawDif/(1-shapedRamp)
+           // :max(-2):min(2)
+  ;
   running = (attacking | releasing) * (1-dirChange);
-  dirChange = (attacking != attacking');
-  // N = hslider("N", 1, 1, 8, 1);
+  dirChange = (attacking != attacking')| (releasing != releasing');
   // TODO: find proper N (needs to be bigger than 2 when compiling to 32 bit)
+  // N = hslider("N", 1, 1, 8, 1);
   N=3;
   releasing = rawDif>(N / ma.SR);
   attacking = rawDif< 0-(N / ma.SR);
-};
 
+  // sine shaper
+  // s\left(x\right)=\left(\sin\left(\left(x\cdot0.5+0.75\right)\cdot2\pi\right)+1\right)\cdot0.5\left\{0\le x\le1\right\}
+  sineShaper(x) = (sin((x*0.5 + 0.75)*2*ma.PI)+1)*0.5;
+  shapedRamp = sineShaper(ramp);
+  intervention = abs((gainStep:max(smallest)/(gainStep':max(smallest)))-1)
+                 * releasing;
+};
 };
 
 
@@ -195,3 +211,8 @@ meter =
 // https://www.desmos.com/calculator/vcl8vrty1yi
 // no scaling area under curve
 // https://www.desmos.com/calculator/wjtyrllnhd
+
+// TODO: stop ramp if we are not there yet on the steepest point.
+// steepest => derivative of the derivative approaches 0.
+// not there yet =>
+// fullDif
