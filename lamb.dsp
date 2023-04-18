@@ -26,11 +26,13 @@ with {
   loop(prevRamp,prevGain,x) =
     ramp
    ,gain
-   ,dirChange
+   ,releasing
    ,running
   with {
   ramp = (prevRamp+rampStep)*running:min(1):max(0);
-  rampStep = 1 / ma.SR / release ;
+  rampStep = 1 / ma.SR / duration;
+  duration = select3(attacking+releasing*2,1,attack,release);
+  attack = hslider("attack", 0.1, 0, 1, smallest):max(1 / ma.SR);
   release = hslider("release", 0.5, 0, 1, smallest):max(1 / ma.SR);
   smallest = 1/192000;
   gain = prevGain+gainStep;
@@ -39,8 +41,11 @@ with {
   fullDif =rawDif/(1-prevRamp):max(-1):min(1);
   running = (attacking | releasing) * (1-dirChange);
   dirChange = (attacking != attacking');
-  releasing = rawDif>rampStep;
-  attacking = rawDif< 0-rampStep;
+  // N = hslider("N", 1, 1, 8, 1);
+  // TODO: find proper N (needs to be bigger than 2 when compiling to 32 bit)
+  N=3;
+  releasing = rawDif>(N / ma.SR);
+  attacking = rawDif< 0-(N / ma.SR);
 };
 
 };
