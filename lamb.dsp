@@ -10,23 +10,28 @@ import("stdfaust.lib");
 
 process =
   // ARtest:
-  test:AR(button("trig"))
+  // test
+  test:AR
        // test
        // PMI_FBFFcompressor_N_chan(strength,thresh,att,rel,knee,prePost,link,FBFF,meter,N);
        // (ARtest:PMI_compression_gain_mono_db(strength,thresh,att,rel,knee,prePost):ba.db2linear)
        // , os.lf_sawpos(1)>0.5
 ;
-test = select2(os.lf_sawpos(1)>0.5, 0.1,0.9);
+test0 = select2(os.lf_sawpos(1)>0.5, 0.1,0.9);
+test = loop~_ with {
+  loop(prev,x) = no.lfnoise0(abs(prev*69)%9:pow(2)+1);
+};
 
-AR(trig,x) = x:loop~(_,_,!,!)
-                    :(hbargraph("ramp", 0, 1)
-                     ,hbargraph("gain", 0, 1))
-                   ,_,_
+
+AR = loop~(_,_,!,!)
+          :(hbargraph("ramp", 0, 1)
+           ,hbargraph("gain", -1, 1))
+         ,_,_
 with {
   loop(prevRamp,prevGain,x) =
     ramp
    ,gain
-   ,releasing
+   ,x
    ,running
   with {
   ramp = (prevRamp+rampStep)*running:min(1):max(0);
@@ -35,10 +40,10 @@ with {
   attack = hslider("attack", 0.1, 0, 1, smallest):max(1 / ma.SR);
   release = hslider("release", 0.5, 0, 1, smallest):max(1 / ma.SR);
   smallest = 1/192000;
-  gain = prevGain+gainStep;
+  gain = prevGain+gainStep:max(-1):min(1);
   gainStep = rampStep* running*fullDif;
   rawDif = x-prevGain;
-  fullDif =rawDif/(1-prevRamp):max(-1):min(1);
+  fullDif =rawDif/(1-prevRamp):max(-2):min(2);
   running = (attacking | releasing) * (1-dirChange);
   dirChange = (attacking != attacking');
   // N = hslider("N", 1, 1, 8, 1);
