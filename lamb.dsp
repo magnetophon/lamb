@@ -20,17 +20,20 @@ test = select2(os.lf_sawpos(1)>0.5, 0.1,0.9);
 
 AR(trig,x) = x:loop~(_,_)
                     :(hbargraph("ramp", 0, 1)
-                     ,hbargraph("ramp", 0, 1))
+                     ,hbargraph("gain", 0, 1))
 with {
-  loop(prevRamp,prevX,x) =
-    (prevRamp+rampStep)
-   ,prevX+step
+  loop(prevRamp,prevGain,x) =
+    ramp
+   ,gain
   with {
-  rampStep = 1 / ma.SR / release * running;
+  ramp = (prevRamp+rampStep)*running:min(1):max(0);
+  rampStep = 1 / ma.SR / release;
   release = hslider("release", 0.5, 0, 1, 1/192000):max(1 / ma.SR);
-  step = rampStep*dif;
-  dif = x-prevX;
-  running = abs(dif)>=ma.EPSILON;
+  gain = prevGain+gainStep;
+  gainStep = rampStep*fullDif;
+  rawDif = x-prevGain;
+  fullDif =rawDif/(1-prevRamp):max(-1):min(1);
+  running = abs(rawDif)>=abs(gainStep);
 };
 
 };
