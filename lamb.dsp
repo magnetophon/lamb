@@ -288,3 +288,9 @@ meter =
 // steepest => derivative of the derivative approaches 0.
 // not there yet =>
 // fullDif
+//
+// TODO:
+// for when the max slope is not big enough:
+// make a table of shape in to ramp at maxSlope out
+// find the shape that gives the wanted slope at the maxslope of that shape
+// ramp to that maxslope, shape offset untill done
