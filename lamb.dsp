@@ -67,9 +67,8 @@ with {
                     )
              * running;
   rawDif = x-prevGain;
-  fullDif =rawDif/(1-shapedRamp)
-           // :max(-2):min(2)
-  ;
+  fullDif =rawDif/(1-shapedRamp);
+  // fullDif =rawDif/(1-sineShaper(rawRamp-rampStep));
   running = (attacking | releasing) * (1-dirChange);
   dirChange = (attacking != attacking')| (releasing != releasing');
   // TODO: find proper N (needs to be bigger than 2 when compiling to 32 bit)
@@ -104,7 +103,7 @@ with {
     )
   with {
     bigger = compSlope>slope(middle);
-    slope(x) = (sineShaper(x)-sineShaper(x-rampStep))*dif;
+    slope(x) = (sineShaper(x)-sineShaper(x-rampStep))*(dif/(1-sineShaper(x)));
     // slope(x) = (sineShaper(x+rampStep)-sineShaper(x))*dif;
     // slope(x) = (shapedRamp-sineShaper(rawRamp-rampStep))*dif;
     middle = (start+end)*.5;
@@ -125,7 +124,7 @@ with {
     // (sineShaper(rawRamp)-sineShaper(rawRamp-(rampStep)))
     (sineShaper(rawRamp-rampStep)-sineShaper(rawRamp-(2*rampStep)))
     // (sineShaper(x+rampStep)-sineShaper(x))
-    * rawDif'
+    * (rawDif'/(1-sineShaper(rawRamp-rampStep)))
     :compare(start,end,rawDif)
      // * (rawDif'/(1-sineShaper(rawRamp-rampStep)))
      // :compare(start,end,rawDif/(1-sineShaper(rawRamp)))
