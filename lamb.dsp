@@ -44,11 +44,12 @@ with {
    ,x
     // ,intervention
     // , newRamp(shapedRamp-shapedRamp')
-   , newRamp
-     // , newRamp(rawGainStep)/fullDif
-     // , newRamp(0.000001*hslider("slop", 1, 0.01, 100, 0.01))
-     // ,allShapedRamps
-     // ,allShapedRamps
+   ,changeRate
+    // , newRamp
+    // , newRamp(rawGainStep)/fullDif
+    // , newRamp(0.000001*hslider("slop", 1, 0.01, 100, 0.01))
+    // ,allShapedRamps
+    // ,allShapedRamps
   with {
   rawRamp = (prevRamp+rampStep)*running:min(1):max(0);
   ramp = select2(intervention,rawRamp,newRamp);
@@ -93,15 +94,17 @@ with {
   intervention =
     abs(changeRate)>
     (6000/ma.SR);
-  compare(start,end,compSlope) =
+  compare(start,end,dif,compSlope) =
     (
       select2(bigger , start , middle)
     , select2(bigger , middle , end)
+    , dif
     , compSlope
     )
   with {
     bigger = compSlope>slope(middle);
-    slope(x) = sineShaper(x+rampStep)-sineShaper(x);
+    slope(x) = (sineShaper(x+rampStep)-sineShaper(x))*dif;
+    // slope(x) = (shapedRamp-sineShaper(rawRamp-rampStep))*dif;
     middle = (start+end)*.5;
   };
   // each compare halves the range,
@@ -109,11 +112,29 @@ with {
   // for a SR of 192k we need at least that many steps
   // 2^18 = 262144
   // so we need 18 compares in total
-  newRamp = compare(0,0.5,
-                    (shapedRamp-sineShaper(rawRamp-rampStep))
-                    *(rawDif'/rawDif))
-            :seq(i, 17, compare)
-            : ((+:_*.5),!); // average start and end, throw away the compare slope
+  newRamp =
+
+    // select2(newRampCalc(0,0.5)>0.499
+    // ,newRampCalc(0.5,1)
+    // ,newRampCalc(0,0.5)
+    // );
+    // newRampCalc(start,end) =
+
+    (shapedRamp-sineShaper(rawRamp-rampStep))
+    // (sineShaper(x+rampStep)-sineShaper(x))
+    * rawDif'
+    // * (rawDif'/rawDif)
+    :compare(start,end,rawDif)
+    :seq(i, 17, compare)
+    : ((+:_*.5),!,!) // average start and end, throw away the compare slope
+      // + rampStep
+
+  with {
+    start = 0;
+    end = 0.5;
+  };
+
+
 };
 };
 
