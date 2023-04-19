@@ -17,8 +17,11 @@ process =
        // (ARtest:PMI_compression_gain_mono_db(strength,thresh,att,rel,knee,prePost):ba.db2linear)
        // , os.lf_sawpos(1)>0.5
 ;
-test0 = select2(os.lf_sawpos(1)>0.5, 0.1,0.9);
-test =
+test = select3(
+         ((os.lf_sawpos(1)>0.3)+(os.lf_sawpos(1)>0.5)),
+         -1,-0.9,0);
+test1 = select2(os.lf_sawpos(1)>0.5, 0.1,0.9);
+test2 =
   ((loop~_)
   , no.lfnoise(hslider("rate", 100, 0.1, 1000, 0.1))
   )
@@ -41,7 +44,8 @@ with {
    ,x
     // ,intervention
     // , newRamp(shapedRamp-shapedRamp')
-   , newRamp(rawGainStep)/fullDif
+   , newRamp(shapedRamp-sineShaper(rawRamp-rampStep))
+     // , newRamp(rawGainStep)/fullDif
      // , newRamp(0.000001*hslider("slop", 1, 0.01, 100, 0.01))
      // ,allShapedRamps
      // ,allShapedRamps
