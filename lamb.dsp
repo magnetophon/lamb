@@ -92,7 +92,7 @@ with {
     abs(changeRate)>
     (maxCR/ma.SR);
   // TODO: better value
-  maxCR = 200/duration;
+  maxCR = 200/duration/(2*shape);
   // maxCR = hslider("maxCR", 300, 1, 6000, 1)/duration;
   compare(start,end,dif,compSlope) =
     (
