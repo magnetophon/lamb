@@ -33,7 +33,7 @@ AR = loop~(_,_,!,!)
           // :(hbargraph("ramp", 0, 1)
           // ,hbargraph("gain", -1, 1))
           // ,_,_
-          :par(i, 4, _*.25)
+          // :par(i, 4, _*.25)
 with {
   loop(prevRamp,prevGain,x) =
     ramp
@@ -47,15 +47,15 @@ with {
      // ,allShapedRamps
   with {
   rawRamp = (prevRamp+rampStep)*running:min(1):max(0);
-  // ramp = select2(intervention,rawRamp,(newRamp(rawGainStep)/fullDif));
-  ramp = rawRamp;
+  ramp = select2(intervention,rawRamp,(newRamp(rawGainStep)/fullDif));
+  // ramp = rawRamp;
   rampStep = 1 / ma.SR / duration;
   duration = select3(attacking+releasing*2,1,attack,release);
   attack = hslider("attack", 0.1, 0, 1, smallest):max(1 / ma.SR);
   release = hslider("release", 0.5, 0, 1, smallest):max(1 / ma.SR);
   smallest = 1/192000;
   gain = prevGain+gainStep:max(-1):min(1);
-  rawGainStep = (shapedRamp-shapedRamp')*fullDif;
+  rawGainStep = (shapedRamp-sineShaper(rawRamp-rampStep))*fullDif;
   gainStep = select2(rawGainStep>0
                     , rawGainStep:min(0-smallest)
                     , rawGainStep:max(smallest)
@@ -78,9 +78,6 @@ with {
   // correct half means: same half of the ramp we are on
   // half means: where f''(x) == 0 (slope of the slope, the steepest point)
   // in case of a simple sine shaper, it's 0.5, so don't worry for now
-  allShapedRamps =
-    par(i, NrShapers, 1/(NrShapers-i):sineShaper);
-  NrShapers = 5;
 
 
   // sine shaper
