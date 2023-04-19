@@ -39,11 +39,16 @@ with {
     ramp
    ,gain
    ,x
-   ,changeRate
-    // ,allShapedRamps
-    // ,allShapedRamps
+    // ,intervention
+    // , newRamp(shapedRamp-shapedRamp')
+   , newRamp(rawGainStep)/fullDif
+     // , newRamp(0.000001*hslider("slop", 1, 0.01, 100, 0.01))
+     // ,allShapedRamps
+     // ,allShapedRamps
   with {
-  ramp = (prevRamp+rampStep)*running:min(1):max(0);
+  rawRamp = (prevRamp+rampStep)*running:min(1):max(0);
+  // ramp = select2(intervention,rawRamp,(newRamp(rawGainStep)/fullDif));
+  ramp = rawRamp;
   rampStep = 1 / ma.SR / duration;
   duration = select3(attacking+releasing*2,1,attack,release);
   attack = hslider("attack", 0.1, 0, 1, smallest):max(1 / ma.SR);
@@ -67,20 +72,45 @@ with {
   N=3;
   releasing = rawDif>(N / ma.SR);
   attacking = rawDif< 0-(N / ma.SR);
-  // TODO find the point in the first half of the graph where the slope is the same
+  // TODO find the point (in the correct half of the graph) where the slope is the same
   // retrigger the ramp there
   // use a multi step process, each time refining further
+  // correct half means: same half of the ramp we are on
+  // half means: where f''(x) == 0 (slope of the slope, the steepest point)
+  // in case of a simple sine shaper, it's 0.5, so don't worry for now
   allShapedRamps =
-    par(i, NrShapers, 1/(NrShapers-i):sineShaper):>_/10;
+    par(i, NrShapers, 1/(NrShapers-i):sineShaper);
   NrShapers = 5;
+
 
   // sine shaper
   // s\left(x\right)=\left(\sin\left(\left(x\cdot0.5+0.75\right)\cdot2\pi\right)+1\right)\cdot0.5\left\{0\le x\le1\right\}
   sineShaper(x) = (sin((x*0.5 + 0.75)*2*ma.PI)+1)*0.5;
-  shapedRamp = sineShaper(ramp);
-  // shapedRamp = ramp;
+  shapedRamp = sineShaper(rawRamp);
   changeRate = ((gainStep:max(smallest)/(gainStep':max(smallest)))-1)
                * releasing;
+  intervention =
+    abs(changeRate)>
+    (6000/ma.SR);
+  compare(start,end,compSlope) =
+    (
+      select2(bigger , start , middle)
+    , select2(bigger , middle , end)
+    , compSlope
+    )
+  with {
+    bigger = compSlope>slope(middle);
+    slope(x) = sineShaper(x+rampStep)-sineShaper(x);
+    middle = (start+end)*.5;
+  };
+  // each compare halves the range,
+  // so if we want the perfect newRamp value,
+  // for a SR of 192k we need at least that many steps
+  // 2^18 = 262144
+  // so we need 18 compares in total
+  newRamp(compSlope) = compare(0,0.5,compSlope)
+                       :seq(i, 17, compare)
+                       : ((+:_*.5),!); // average start and end, throw away the compare slope
 };
 };
 
