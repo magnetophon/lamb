@@ -60,7 +60,7 @@ with {
   release = hslider("release", 0.5, 0, 1, smallest):max(1 / ma.SR);
   smallest = 1/192000;
   gain = prevGain+gainStep:max(-1):min(1);
-  rawGainStep = (shapedRamp-sineShaper(rawRamp-rampStep))*fullDif;
+  rawGainStep = (shapedRamp-warpedSine(shape,rawRamp-rampStep))*fullDif;
   gainStep = select2(rawGainStep>0
                     , rawGainStep:min(0-ma.EPSILON)
                     , rawGainStep:max(ma.EPSILON)
@@ -68,7 +68,7 @@ with {
              * running;
   rawDif = x-prevGain;
   fullDif =rawDif/(1-shapedRamp);
-  // fullDif =rawDif/(1-sineShaper(rawRamp-rampStep));
+  // fullDif =rawDif/(1-warpedSine(shape,rawRamp-rampStep));
   running = (attacking | releasing) * (1-dirChange);
   dirChange = (attacking != attacking')| (releasing != releasing');
   // TODO: find proper N (needs to be bigger than 2 when compiling to 32 bit)
@@ -85,7 +85,7 @@ with {
 
 
   sineShaper(x) = (sin((x*0.5 + 0.75)*2*ma.PI)+1)*0.5;
-  shapedRamp = sineShaper(rawRamp);
+  shapedRamp = warpedSine(shape,rawRamp);
   changeRate = ((gainStep/gainStep')-1)
                * releasing;
   intervention =
@@ -103,7 +103,7 @@ with {
     )
   with {
     bigger = compSlope>slope(middle);
-    slope(x) = (sineShaper(x)-sineShaper(x-rampStep))*(dif/(1-sineShaper(x)));
+    slope(x) = (warpedSine(shape,x)-warpedSine(shape,x-rampStep))*(dif/(1-warpedSine(shape,x)));
     middle = (start+end)*.5;
   };
   // each compare halves the range,
@@ -112,8 +112,8 @@ with {
   // 2^18 = 262144
   // so we need 18 compares in total
   newRamp =
-    (sineShaper(rawRamp-rampStep)-sineShaper(rawRamp-(2*rampStep)))
-    * (rawDif'/(1-sineShaper(rawRamp-rampStep)))
+    (warpedSine(shape,rawRamp-rampStep)-warpedSine(shape,rawRamp-(2*rampStep)))
+    * (rawDif'/(1-warpedSine(shape,rawRamp-rampStep)))
     :compare(start,end,rawDif)
     :seq(i, 17, compare)
     : ((+:_*.5),!,!) // average start and end, throw away the compare slope
@@ -123,8 +123,23 @@ with {
     start = 0;
     end = 0.5;
   };
+  kneeCurve(shape,knee,x) =
+    select3( (x>shape-(knee*.5)) + (x>shape+(knee*.5))
+           , 0
+           , (x-shape + (knee*.5)):pow(2)/(knee*2)
+           , x-shape);
+  warp(shape,knee,x) =
+    (x-factor*kneeCurve(shape,knee,x))/(2*shape) with {
+    factor = (1/shape-2)/(1/shape-1);
+  };
 
-
+    warpedSine(shape,x) =
+      sineShaper(warp(shape,knee,x)):pow(power)
+    with {
+    power = (4*shape/3)+(1/3);
+    knee = min(2*shape,2-(2*shape));
+  };
+  shape = hslider("shape", 0.5, 0, 1, 0.01);
 };
 };
 
