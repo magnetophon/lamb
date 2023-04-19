@@ -84,16 +84,16 @@ with {
   // in case of a simple sine shaper, it's 0.5, so don't worry for now
 
 
-  // sine shaper
-  // s\left(x\right)=\left(\sin\left(\left(x\cdot0.5+0.75\right)\cdot2\pi\right)+1\right)\cdot0.5\left\{0\le x\le1\right\}
   sineShaper(x) = (sin((x*0.5 + 0.75)*2*ma.PI)+1)*0.5;
   shapedRamp = sineShaper(rawRamp);
-  // changeRate = ((gainStep:max(smallest)/(gainStep':max(smallest)))-1)
   changeRate = ((gainStep/gainStep')-1)
                * releasing;
   intervention =
     abs(changeRate)>
-    (6000/ma.SR);
+    (maxCR/ma.SR);
+  // TODO: better value
+  maxCR = 200/duration;
+  // maxCR = hslider("maxCR", 300, 1, 6000, 1)/duration;
   compare(start,end,dif,compSlope) =
     (
       select2(bigger , start , middle)
@@ -104,8 +104,6 @@ with {
   with {
     bigger = compSlope>slope(middle);
     slope(x) = (sineShaper(x)-sineShaper(x-rampStep))*(dif/(1-sineShaper(x)));
-    // slope(x) = (sineShaper(x+rampStep)-sineShaper(x))*dif;
-    // slope(x) = (shapedRamp-sineShaper(rawRamp-rampStep))*dif;
     middle = (start+end)*.5;
   };
   // each compare halves the range,
@@ -114,20 +112,9 @@ with {
   // 2^18 = 262144
   // so we need 18 compares in total
   newRamp =
-
-    // select2(newRampCalc(0,0.5)>0.499
-    // ,newRampCalc(0.5,1)
-    // ,newRampCalc(0,0.5)
-    // );
-    // newRampCalc(start,end) =
-
-    // (sineShaper(rawRamp)-sineShaper(rawRamp-(rampStep)))
     (sineShaper(rawRamp-rampStep)-sineShaper(rawRamp-(2*rampStep)))
-    // (sineShaper(x+rampStep)-sineShaper(x))
     * (rawDif'/(1-sineShaper(rawRamp-rampStep)))
     :compare(start,end,rawDif)
-     // * (rawDif'/(1-sineShaper(rawRamp-rampStep)))
-     // :compare(start,end,rawDif/(1-sineShaper(rawRamp)))
     :seq(i, 17, compare)
     : ((+:_*.5),!,!) // average start and end, throw away the compare slope
       // + rampStep
