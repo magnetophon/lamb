@@ -17,11 +17,11 @@ process =
        // (ARtest:PMI_compression_gain_mono_db(strength,thresh,att,rel,knee,prePost):ba.db2linear)
        // , os.lf_sawpos(1)>0.5
 ;
-test = select3(
-         ((os.lf_sawpos(1)>0.3)+(os.lf_sawpos(1)>0.5)),
-         -1,-0.9,0);
+test0 = select3(
+          ((os.lf_sawpos(1)>0.3)+(os.lf_sawpos(1)>0.5)),
+         -0.1,0,1);
 test1 = select2(os.lf_sawpos(1)>0.5, 0.1,0.9);
-test2 =
+test =
   ((loop~_)
   , no.lfnoise(hslider("rate", 100, 0.1, 1000, 0.1))
   )
@@ -44,14 +44,14 @@ with {
    ,x
     // ,intervention
     // , newRamp(shapedRamp-shapedRamp')
-   , newRamp(shapedRamp-sineShaper(rawRamp-rampStep))
+   , newRamp
      // , newRamp(rawGainStep)/fullDif
      // , newRamp(0.000001*hslider("slop", 1, 0.01, 100, 0.01))
      // ,allShapedRamps
      // ,allShapedRamps
   with {
   rawRamp = (prevRamp+rampStep)*running:min(1):max(0);
-  ramp = select2(intervention,rawRamp,(newRamp(rawGainStep)/fullDif));
+  ramp = select2(intervention,rawRamp,newRamp);
   // ramp = rawRamp;
   rampStep = 1 / ma.SR / duration;
   duration = select3(attacking+releasing*2,1,attack,release);
@@ -109,9 +109,11 @@ with {
   // for a SR of 192k we need at least that many steps
   // 2^18 = 262144
   // so we need 18 compares in total
-  newRamp(compSlope) = compare(0,0.5,compSlope)
-                       :seq(i, 17, compare)
-                       : ((+:_*.5),!); // average start and end, throw away the compare slope
+  newRamp = compare(0,0.5,
+                    (shapedRamp-sineShaper(rawRamp-rampStep))
+                    *(rawDif'/rawDif))
+            :seq(i, 17, compare)
+            : ((+:_*.5),!); // average start and end, throw away the compare slope
 };
 };
 
