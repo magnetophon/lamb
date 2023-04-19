@@ -62,8 +62,8 @@ with {
   gain = prevGain+gainStep:max(-1):min(1);
   rawGainStep = (shapedRamp-sineShaper(rawRamp-rampStep))*fullDif;
   gainStep = select2(rawGainStep>0
-                    , rawGainStep:min(0-smallest)
-                    , rawGainStep:max(smallest)
+                    , rawGainStep:min(0-ma.EPSILON)
+                    , rawGainStep:max(ma.EPSILON)
                     )
              * running;
   rawDif = x-prevGain;
@@ -89,7 +89,8 @@ with {
   // s\left(x\right)=\left(\sin\left(\left(x\cdot0.5+0.75\right)\cdot2\pi\right)+1\right)\cdot0.5\left\{0\le x\le1\right\}
   sineShaper(x) = (sin((x*0.5 + 0.75)*2*ma.PI)+1)*0.5;
   shapedRamp = sineShaper(rawRamp);
-  changeRate = ((gainStep:max(smallest)/(gainStep':max(smallest)))-1)
+  // changeRate = ((gainStep:max(smallest)/(gainStep':max(smallest)))-1)
+  changeRate = ((gainStep/gainStep')-1)
                * releasing;
   intervention =
     abs(changeRate)>
@@ -103,7 +104,8 @@ with {
     )
   with {
     bigger = compSlope>slope(middle);
-    slope(x) = (sineShaper(x+rampStep)-sineShaper(x))*dif;
+    slope(x) = (sineShaper(x)-sineShaper(x-rampStep))*dif;
+    // slope(x) = (sineShaper(x+rampStep)-sineShaper(x))*dif;
     // slope(x) = (shapedRamp-sineShaper(rawRamp-rampStep))*dif;
     middle = (start+end)*.5;
   };
@@ -120,11 +122,13 @@ with {
     // );
     // newRampCalc(start,end) =
 
-    (shapedRamp-sineShaper(rawRamp-rampStep))
+    // (sineShaper(rawRamp)-sineShaper(rawRamp-(rampStep)))
+    (sineShaper(rawRamp-rampStep)-sineShaper(rawRamp-(2*rampStep)))
     // (sineShaper(x+rampStep)-sineShaper(x))
     * rawDif'
-    // * (rawDif'/rawDif)
     :compare(start,end,rawDif)
+     // * (rawDif'/(1-sineShaper(rawRamp-rampStep)))
+     // :compare(start,end,rawDif/(1-sineShaper(rawRamp)))
     :seq(i, 17, compare)
     : ((+:_*.5),!,!) // average start and end, throw away the compare slope
       // + rampStep
