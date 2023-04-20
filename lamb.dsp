@@ -38,11 +38,13 @@ with {
     ramp
    ,gain
    ,x
-   ,releasing
-   ,abs(changeRate)
-    // ,(changeRate* (warpedSine(shape,rawRamp+rampStep)/(warpedSine(shape,rawRamp):max(smallest))))
-   ,((maxCR/ma.SR))
-    // , running
+   , newShape
+     // , newRampShapeX
+     // ,(compareShape(0,1,0.5):>_)
+     // ,abs(changeRate)
+     // ,(changeRate* (warpedSine(shape,rawRamp+rampStep)/(warpedSine(shape,rawRamp):max(smallest))))
+     // ,((maxCR/ma.SR))
+     // , running
    , (maxDerTable(shape) :hbargraph("MD", 0, 1))
      // , maxDerivative(ba.time/(1<<16))
   with {
@@ -83,7 +85,7 @@ with {
   // changeRate = ((gainStep/gainStep')-1)
   changeRate = ((gainStep:max(smallest)/(gainStep':max(smallest)))-1)
                // / (fullDif:max(ma.EPSILON))
-               / (duration:max(ma.EPSILON))
+               / duration
                * (warpedSine(shape,rawRamp+rawRamp):max(ma.EPSILON)/(warpedSine(shape,rawRamp):max(ma.EPSILON)))
                * releasing;
 
@@ -104,7 +106,9 @@ with {
     )
   with {
     bigger = compSlope>slope(middle);
-    slope(x) = (warpedSine(shape,x)-warpedSine(shape,x-rampStep))*(dif/(1-warpedSine(shape,x)));
+    slope(x) =
+      (warpedSine(shape,x)-warpedSine(shape,x-rampStep))
+      *(dif/(1-warpedSine(shape,x)));
     middle = (start+end)*.5;
   };
   // each compare halves the range,
@@ -117,10 +121,8 @@ with {
     (start,end,rawDif)
   , (warpedSine(shape,rawRamp-rampStep)-warpedSine(shape,rawRamp-(2*rampStep)))
     * (rawDif'/(1-warpedSine(shape,rawRamp-rampStep)))
-    // :compare(start,end,rawDif)
     :seq(i, 14, compare)
-    : ((+:_*.5),!,!) // average start and end, throw away the compare slope
-      // + rampStep
+    : ((+:_*.5),!,!) // average start and end, throw away the rest
 
   with {
     start = 0;
@@ -140,9 +142,9 @@ with {
     (0,1,shape,stepsize)
     : seq(i, 32, compareDer)//32 is overkill, but it's for a table, so it's OK
     : ((+:_*.5),!,!) // average start and end, throw away the rest
-      * (shape!=0) // TODO: will this bite me in the *ss later on? is it even needed?
+      // * (shape!=0) // TODO: will this bite me in the *ss later on? is it even needed?
       // in any case, without this, it spits out a too high value.
-    :select2(shape>(1-ma.EPSILON),_,1)
+      // :select2(shape>(1-ma.EPSILON),_,1)
   ;
   compareDer(start,end,shape,stepsize) =
     (
@@ -158,7 +160,39 @@ with {
     middle = (start+end)*.5;
   };
 
-  // the curves:
+
+  compareShape(start,end,dif,compSlope) =
+    (
+      select2(bigger , start , middle)
+    , select2(bigger , middle , end)
+    , dif
+    , compSlope
+    )
+  with {
+    bigger = compSlope>slope(middle);
+    slope(shape) =
+      (warpedSine(shape,x)-warpedSine(shape,x-(1/ma.SR)))
+      *(dif/(1-warpedSine(shape,x)));
+    middle = (start+end)*.5;
+    x = maxDerTable(middle);
+  };
+  newShape =
+    (start,end,rawDif)
+  , (warpedSine(shape,rawRamp-(1/ma.SR))-warpedSine(shape,rawRamp-(2*(1/ma.SR))))
+    * (rawDif'/(1-warpedSine(shape,rawRamp-(1/ma.SR))))
+    :seq(i, 14, compareShape)
+    : ((+:_*.5),!,!) // average start and end, throw away the rest
+
+      // <: select2(_<=0.0001,_,-1)
+      // <: select2(_>=(1-0.0001),_,-1)
+      // : select2(releasing,-1,_)
+  with {
+    start = 0;
+    end = 1;
+  };
+  newRampShapeX = maxDerTable(newShape);
+
+  // ******************************************** the curves: ******************************
   kneeCurve(shape,knee,x) =
     select3( (x>shape-(knee*.5)) + (x>shape+(knee*.5))
            , 0
