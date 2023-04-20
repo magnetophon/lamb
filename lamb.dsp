@@ -9,11 +9,11 @@ import("stdfaust.lib");
 // place
 
 process =
-                test:AR
-                     // test
-                     // PMI_FBFFcompressor_N_chan(strength,thresh,att,rel,knee,prePost,link,FBFF,meter,N);
-                     // (ARtest:PMI_compression_gain_mono_db(strength,thresh,att,rel,knee,prePost):ba.db2linear)
-                     // , os.lf_sawpos(1)>0.5
+  test:AR
+       // test
+       // PMI_FBFFcompressor_N_chan(strength,thresh,att,rel,knee,prePost,link,FBFF,meter,N);
+       // (ARtest:PMI_compression_gain_mono_db(strength,thresh,att,rel,knee,prePost):ba.db2linear)
+       // , os.lf_sawpos(1)>0.5
 ;
 
 
@@ -52,8 +52,8 @@ with {
   gain = prevGain+gainStep:max(-1):min(1);
   rawGainStep = (shapedRamp-warpedSine(shape,rawRamp-rampStep))*fullDif;
   gainStep = select2(rawGainStep>0
-                    , rawGainStep:min(0-ma.EPSILON)
-                    , rawGainStep:max(ma.EPSILON)
+                    , rawGainStep:min(0-smallest)
+                    , rawGainStep:max(smallest)
                     )
              * running;
   rawDif = x-prevGain;
