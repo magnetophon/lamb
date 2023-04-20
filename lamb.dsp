@@ -38,7 +38,8 @@ with {
    ,gain
    ,x
    ,changeRate
-   , (maxDerivative(shape):hbargraph("MD", 0, 1))
+   , (maxDerTable(shape) :hbargraph("MD", 0, 1))
+     // , maxDerivative(ba.time/(1<<16))
   with {
   rawRamp = (prevRamp+rampStep)*running:min(1):max(0);
   ramp = select2(intervention,rawRamp,newRamp);
@@ -111,10 +112,22 @@ with {
     end = 0.5;
   };
 
+  maxDerTable(shape) =
+    // rdtable(SIZE,maxDerivative(ba.time/SIZE):max(0):min(1),int(shape*SIZE))
+    rdtable(SIZE,maxDerivative(0.5),int(shape*SIZE))
+    // rdtable(SIZE,(0.5),2)
+  with {
+    SIZE = 1<<16;
+    // SIZE = 2;
+  };
+
+
   maxDerivative(shape) =
     (0,1,shape)
-    : seq(i, 32, compareDer)//32 is overkill, but it's for a table, so it's OK
+    // : seq(i, 32, compareDer)//32 is overkill, but it's for a table, so it's OK
+    : compareDer
     : ((+:_*.5),!) // average start and end, throw away the rest
+      // : max(0):min(1)
   ;
   compareDer(start,end,shape) =
     (
@@ -124,7 +137,7 @@ with {
     )
   with {
     bigger = secondDerivative(shape,middle) > 0;
-    derivative(shape,x) = warpedSine(shape,x)-warpedSine(shape,x-rampStep);
+    derivative(shape,x) = warpedSine(shape,x+rampStep)-warpedSine(shape,x);
     secondDerivative(shape,x) = derivative(shape,x)-derivative(shape,x-rampStep);
     middle = (start+end)*.5;
   };
@@ -150,7 +163,9 @@ with {
     (x-factor*kneeCurve(shape,knee,x))/(2*shape) with {
     factor = (1/shape-2)/(1/shape-1);
   };
-  sineShaper(x) = (sin((x*0.5 + 0.75)*2*ma.PI)+1)*0.5;
+  // sineShaper(x) = (sin((x*0.5 + 0.75)*2*ma.PI)+1)*0.5;
+  sineShaper(x) = x:max(0.5):min(0.5);
+  // sineShaper(x) = (0.5);
   warpedSine(shape,x) =
     sineShaper(warp(shape,knee,x)):pow(power)
   with {
