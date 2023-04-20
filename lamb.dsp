@@ -113,10 +113,11 @@ with {
   // so we need 18 compares in total
   // at 48k, 13 total seems to little, 14 works
   newRamp =
-    (warpedSine(shape,rawRamp-rampStep)-warpedSine(shape,rawRamp-(2*rampStep)))
+    (start,end,rawDif)
+  , (warpedSine(shape,rawRamp-rampStep)-warpedSine(shape,rawRamp-(2*rampStep)))
     * (rawDif'/(1-warpedSine(shape,rawRamp-rampStep)))
-    :compare(start,end,rawDif)
-    :seq(i, 13, compare)
+    // :compare(start,end,rawDif)
+    :seq(i, 14, compare)
     : ((+:_*.5),!,!) // average start and end, throw away the compare slope
       // + rampStep
 
@@ -126,7 +127,6 @@ with {
   };
 
   maxDerTable(shape) =
-    // ba.tabulate(0, maxDerivative(1/SIZE), SIZE, ma.EPSILON, 1, shape).val
     ba.tabulate(0, maxDerivative(1/SIZE), SIZE, 0, 1, shape).val
   with {
     SIZE = 1<<9;
@@ -134,11 +134,12 @@ with {
     // more than 10 gives only errors
   };
 
-
   maxDerivative(stepsize,shape) =
     (0,1,shape,stepsize)
     : seq(i, 32, compareDer)//32 is overkill, but it's for a table, so it's OK
     : ((+:_*.5),!,!) // average start and end, throw away the rest
+      * (shape!=0) // TODO: will this bite me in the *ss later on? is it even needed?
+      // in any case, without this, it spits out a too high value.
   ;
   compareDer(start,end,shape,stepsize) =
     (
