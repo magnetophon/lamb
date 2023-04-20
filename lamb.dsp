@@ -113,17 +113,18 @@ with {
   };
 
   maxDerTable(shape) =
-    rdtable(SIZE,maxDerivative(ba.time/SIZE,1/SIZE),int(shape*SIZE))
-    // rdtable(SIZE,(0.5),2)
+    // ba.tabulate(0, maxDerivative(1/SIZE), SIZE, ma.EPSILON, 1, shape).val
+    ba.tabulate(0, maxDerivative(1/SIZE), SIZE, 0, 1, shape).val
   with {
-    // SIZE = 1<<8;
-    SIZE = 32;
+    SIZE = 1<<9;
+    // SIZE = 1<<10 gives ocasional error values, presumably cause the dif becomes too small
+    // more than 10 gives only errors
   };
 
 
-  maxDerivative(shape,stepsize) =
+  maxDerivative(stepsize,shape) =
     (0,1,shape,stepsize)
-    : seq(i, 3, compareDer)//32 is overkill, but it's for a table, so it's OK
+    : seq(i, 32, compareDer)//32 is overkill, but it's for a table, so it's OK
     : ((+:_*.5),!,!) // average start and end, throw away the rest
   ;
   compareDer(start,end,shape,stepsize) =
@@ -134,21 +135,10 @@ with {
     , stepsize
     )
   with {
-    bigger = secondDerivative(shape,middle) > 0;
+    bigger = secondDerivative(shape,middle) >= 0;
     derivative(shape,x) = warpedSine(shape,x+stepsize)-warpedSine(shape,x);
     secondDerivative(shape,x) = derivative(shape,x+stepsize)-derivative(shape,x);
     middle = (start+end)*.5;
-  };
-  newRamp1 =
-    (warpedSine(shape,rawRamp-rampStep)-warpedSine(shape,rawRamp-(2*rampStep)))
-    * (rawDif'/(1-warpedSine(shape,rawRamp-rampStep)))
-    :compare(start,end,rawDif)
-    :seq(i, 13, compare)
-    : ((+:_*.5),!,!) // average start and end, throw away the rest
-
-  with {
-    start = 0;
-    end = 0.5;
   };
 
   // the curves:
