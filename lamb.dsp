@@ -31,18 +31,23 @@ with {
 };
 
 
-AR = loop~(_,_,!,!)
+AR = loop~(_,_)
+          // :(!,si.bus(4))
 with {
   loop(prevRamp,prevGain,x) =
     ramp
    ,gain
    ,x
-   ,changeRate
-   , (maxDerTable(shape) :hbargraph("MD", 0, 1))
-     // , maxDerivative(ba.time/(1<<16))
+   ,releasing
+   ,abs(changeRate)
+    // ,(changeRate* (warpedSine(shape,rawRamp+rampStep)/(warpedSine(shape,rawRamp):max(smallest))))
+   ,((maxCR/ma.SR))
+    // , running
+    // , (maxDerTable(shape) :hbargraph("MD", 0, 1))
+    // , maxDerivative(ba.time/(1<<16))
   with {
   rawRamp = (prevRamp+rampStep)*running:min(1):max(0);
-  ramp = select2(intervention,rawRamp,newRamp);
+  ramp = select2(intervention,rawRamp,newRamp)*running;
   // ramp = rawRamp;
   rampStep = 1 / ma.SR / duration;
   duration = select3(attacking+releasing*2,1,attack,release);
@@ -61,8 +66,8 @@ with {
   running = (attacking | releasing) * (1-dirChange);
   dirChange = (attacking != attacking')| (releasing != releasing');
   // TODO: find proper N (needs to be bigger than 2 when compiling to 32 bit)
-  // N = hslider("N", 1, 1, 8, 1);
-  N=3;
+  // N = hslider("N", 1, 0, 8, 0.01);
+  N=1;
   releasing = rawDif>(N / ma.SR);
   attacking = rawDif< 0-(N / ma.SR);
   // TODO find the point (in the correct half of the graph) where the slope is the same
@@ -76,13 +81,19 @@ with {
   shapedRamp = warpedSine(shape,rawRamp);
   // changeRate = ((gainStep/gainStep')-1)
   changeRate = ((gainStep:max(smallest)/(gainStep':max(smallest)))-1)
+               // / (fullDif:max(ma.EPSILON))
+               / (duration:max(ma.EPSILON))
+               * (warpedSine(shape,rawRamp+rawRamp):max(ma.EPSILON)/(warpedSine(shape,rawRamp):max(ma.EPSILON)))
                * releasing;
+
   intervention =
-    abs(changeRate)>
-    (maxCR/ma.SR);
+    // 0;tmp=
+    (abs(changeRate)> (maxCR/ma.SR))
+    * (rawRamp > 0.01)
+  ;
   // TODO: better value
-  maxCR = 200/duration/(2*shape);
-  // maxCR = hslider("maxCR", 300, 1, 6000, 1)/duration;
+  // maxCR = hslider("maxCR", 300, 1, 6000, 1)*10;
+  maxCR = 10000;
   compare(start,end,dif,compSlope) =
     (
       select2(bigger , start , middle)
@@ -107,6 +118,7 @@ with {
     :compare(start,end,rawDif)
     :seq(i, 13, compare)
     : ((+:_*.5),!,!) // average start and end, throw away the compare slope
+      // + rampStep
 
   with {
     start = 0;
