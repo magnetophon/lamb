@@ -43,8 +43,8 @@ with {
     // ,(changeRate* (warpedSine(shape,rawRamp+rampStep)/(warpedSine(shape,rawRamp):max(smallest))))
    ,((maxCR/ma.SR))
     // , running
-    // , (maxDerTable(shape) :hbargraph("MD", 0, 1))
-    // , maxDerivative(ba.time/(1<<16))
+   , (maxDerTable(shape) :hbargraph("MD", 0, 1))
+     // , maxDerivative(ba.time/(1<<16))
   with {
   rawRamp = (prevRamp+rampStep)*running:min(1):max(0);
   ramp = select2(intervention,rawRamp,newRamp)*running;
@@ -53,6 +53,7 @@ with {
   duration = select3(attacking+releasing*2,1,attack,release);
   attack = hslider("attack", 0.1, 0, 1, smallest):max(1 / ma.SR);
   release = hslider("release", 0.5, 0, 1, smallest):max(1 / ma.SR);
+  // TODO better value
   smallest = 1/192000;
   gain = prevGain+gainStep:max(-1):min(1);
   rawGainStep = (shapedRamp-warpedSine(shape,rawRamp-rampStep))*fullDif;
@@ -128,6 +129,7 @@ with {
 
   maxDerTable(shape) =
     ba.tabulate(0, maxDerivative(1/SIZE), SIZE, 0, 1, shape).val
+    // rdtable(SIZE,maxDerivative(1/SIZE,ba.time/SIZE),int(shape*SIZE))
   with {
     SIZE = 1<<9;
     // SIZE = 1<<10 gives ocasional error values, presumably cause the dif becomes too small
@@ -140,6 +142,7 @@ with {
     : ((+:_*.5),!,!) // average start and end, throw away the rest
       * (shape!=0) // TODO: will this bite me in the *ss later on? is it even needed?
       // in any case, without this, it spits out a too high value.
+    :select2(shape>(1-ma.EPSILON),_,1)
   ;
   compareDer(start,end,shape,stepsize) =
     (
