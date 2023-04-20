@@ -9,17 +9,17 @@ import("stdfaust.lib");
 // place
 
 process =
-  // ARtest:
-  // test
-  test:AR
-       // test
-       // PMI_FBFFcompressor_N_chan(strength,thresh,att,rel,knee,prePost,link,FBFF,meter,N);
-       // (ARtest:PMI_compression_gain_mono_db(strength,thresh,att,rel,knee,prePost):ba.db2linear)
-       // , os.lf_sawpos(1)>0.5
+                test:AR
+                     // test
+                     // PMI_FBFFcompressor_N_chan(strength,thresh,att,rel,knee,prePost,link,FBFF,meter,N);
+                     // (ARtest:PMI_compression_gain_mono_db(strength,thresh,att,rel,knee,prePost):ba.db2linear)
+                     // , os.lf_sawpos(1)>0.5
 ;
+
+
 test0 = select3(
           ((os.lf_sawpos(1)>0.3)+(os.lf_sawpos(1)>0.5)),
-         -0.1,0,1);
+          -0.1,0,1);
 test1 = select2(os.lf_sawpos(1)>0.5, 0.1,0.9);
 test =
   ((loop~_)
@@ -32,24 +32,13 @@ with {
 
 
 AR = loop~(_,_,!,!)
-          // :(!,si.bus(4))
-          // :(hbargraph("ramp", 0, 1)
-          // ,hbargraph("gain", -1, 1))
-          // ,_,_
-          // :par(i, 4, _*.25)
 with {
   loop(prevRamp,prevGain,x) =
     ramp
    ,gain
    ,x
-    // ,intervention
-    // , newRamp(shapedRamp-shapedRamp')
    ,changeRate
-    // , newRamp
-    // , newRamp(rawGainStep)/fullDif
-    // , newRamp(0.000001*hslider("slop", 1, 0.01, 100, 0.01))
-    // ,allShapedRamps
-    // ,allShapedRamps
+   , (maxDerivative(shape):hbargraph("MD", 0, 1))
   with {
   rawRamp = (prevRamp+rampStep)*running:min(1):max(0);
   ramp = select2(intervention,rawRamp,newRamp);
@@ -68,7 +57,6 @@ with {
              * running;
   rawDif = x-prevGain;
   fullDif =rawDif/(1-shapedRamp);
-  // fullDif =rawDif/(1-warpedSine(shape,rawRamp-rampStep));
   running = (attacking | releasing) * (1-dirChange);
   dirChange = (attacking != attacking')| (releasing != releasing');
   // TODO: find proper N (needs to be bigger than 2 when compiling to 32 bit)
@@ -84,7 +72,6 @@ with {
   // in case of a simple sine shaper, it's 0.5, so don't worry for now
 
 
-  sineShaper(x) = (sin((x*0.5 + 0.75)*2*ma.PI)+1)*0.5;
   shapedRamp = warpedSine(shape,rawRamp);
   changeRate = ((gainStep/gainStep')-1)
                * releasing;
@@ -111,18 +98,49 @@ with {
   // for a SR of 192k we need at least that many steps
   // 2^18 = 262144
   // so we need 18 compares in total
+  // at 48k, 13 total seems to little, 14 works
   newRamp =
     (warpedSine(shape,rawRamp-rampStep)-warpedSine(shape,rawRamp-(2*rampStep)))
     * (rawDif'/(1-warpedSine(shape,rawRamp-rampStep)))
     :compare(start,end,rawDif)
-    :seq(i, 17, compare)
+    :seq(i, 13, compare)
     : ((+:_*.5),!,!) // average start and end, throw away the compare slope
-      // + rampStep
 
   with {
     start = 0;
     end = 0.5;
   };
+
+  maxDerivative(shape) =
+    (0,1,shape)
+    : seq(i, 32, compareDer)//32 is overkill, but it's for a table, so it's OK
+    : ((+:_*.5),!) // average start and end, throw away the rest
+  ;
+  compareDer(start,end,shape) =
+    (
+      select2(bigger , start , middle)
+    , select2(bigger , middle , end)
+    , shape
+    )
+  with {
+    bigger = secondDerivative(shape,middle) > 0;
+    derivative(shape,x) = warpedSine(shape,x)-warpedSine(shape,x-rampStep);
+    secondDerivative(shape,x) = derivative(shape,x)-derivative(shape,x-rampStep);
+    middle = (start+end)*.5;
+  };
+  newRamp1 =
+    (warpedSine(shape,rawRamp-rampStep)-warpedSine(shape,rawRamp-(2*rampStep)))
+    * (rawDif'/(1-warpedSine(shape,rawRamp-rampStep)))
+    :compare(start,end,rawDif)
+    :seq(i, 13, compare)
+    : ((+:_*.5),!,!) // average start and end, throw away the rest
+
+  with {
+    start = 0;
+    end = 0.5;
+  };
+
+  // the curves:
   kneeCurve(shape,knee,x) =
     select3( (x>shape-(knee*.5)) + (x>shape+(knee*.5))
            , 0
@@ -132,10 +150,10 @@ with {
     (x-factor*kneeCurve(shape,knee,x))/(2*shape) with {
     factor = (1/shape-2)/(1/shape-1);
   };
-
-    warpedSine(shape,x) =
-      sineShaper(warp(shape,knee,x)):pow(power)
-    with {
+  sineShaper(x) = (sin((x*0.5 + 0.75)*2*ma.PI)+1)*0.5;
+  warpedSine(shape,x) =
+    sineShaper(warp(shape,knee,x)):pow(power)
+  with {
     power = (4*shape/3)+(1/3);
     knee = min(2*shape,2-(2*shape));
   };
@@ -292,5 +310,7 @@ meter =
 // TODO:
 // for when the max slope is not big enough:
 // make a table of shape in to ramp at maxSlope out
-// find the shape that gives the wanted slope at the maxslope of that shape
-// ramp to that maxslope, shape offset untill done
+// find (binary search) the shape that gives the wanted slope at the maxslope of that shape
+// set ramp to that maxslope, shape offset untill done
+// *****  OR  ******
+// find the stepsize at which the slope matches at ramp=0.5
