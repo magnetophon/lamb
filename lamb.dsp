@@ -74,7 +74,8 @@ with {
 
 
   shapedRamp = warpedSine(shape,rawRamp);
-  changeRate = ((gainStep/gainStep')-1)
+  // changeRate = ((gainStep/gainStep')-1)
+  changeRate = ((gainStep:max(smallest)/(gainStep':max(smallest)))-1)
                * releasing;
   intervention =
     abs(changeRate)>
