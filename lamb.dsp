@@ -130,7 +130,8 @@ with {
   };
 
   maxDerTable(shape) =
-    ba.tabulate(0, maxDerivative(1/SIZE), SIZE, 0, 1, shape).val
+    maxDerivative(rampStep,shape)
+    // ba.tabulate(0, maxDerivative(1/SIZE), SIZE, 0, 1, shape).val
     // rdtable(SIZE,maxDerivative(1/SIZE,ba.time/SIZE),int(shape*SIZE))
   with {
     SIZE = 1<<9;
@@ -142,9 +143,9 @@ with {
     (0,1,shape,stepsize)
     : seq(i, 32, compareDer)//32 is overkill, but it's for a table, so it's OK
     : ((+:_*.5),!,!) // average start and end, throw away the rest
-      // * (shape!=0) // TODO: will this bite me in the *ss later on? is it even needed?
+      * (shape!=0) // TODO: will this bite me in the *ss later on? is it even needed?
       // in any case, without this, it spits out a too high value.
-      // :select2(shape>(1-ma.EPSILON),_,1)
+    :select2(shape>(1-ma.EPSILON),_,1)
   ;
   compareDer(start,end,shape,stepsize) =
     (
@@ -154,41 +155,42 @@ with {
     , stepsize
     )
   with {
-    bigger = secondDerivative(shape,middle) >= 0;
+    bigger = secondDerivative(shape,middle) > 0;
     derivative(shape,x) = warpedSine(shape,x+stepsize)-warpedSine(shape,x);
     secondDerivative(shape,x) = derivative(shape,x+stepsize)-derivative(shape,x);
     middle = (start+end)*.5;
   };
 
 
-  compareShape(start,end,dif,compSlope) =
+  compareShape(start,end,compSlope) =
     (
       select2(bigger , start , middle)
     , select2(bigger , middle , end)
-    , dif
     , compSlope
     )
   with {
-    bigger = compSlope>slope(middle);
-    slope(shape) =
-      (warpedSine(shape,x)-warpedSine(shape,x-(1/ma.SR)))
-      *(dif/(1-warpedSine(shape,x)));
+    bigger = compSlope>=slope;
+    slope =
+      (warpedSine(middle,x+(1/ma.SR))-warpedSine(middle,x))
+      *(1/(1-warpedSine(middle,x)));
     middle = (start+end)*.5;
     x = maxDerTable(middle);
   };
   newShape =
-    (start,end,rawDif)
-  , (warpedSine(shape,rawRamp-(1/ma.SR))-warpedSine(shape,rawRamp-(2*(1/ma.SR))))
-    * (rawDif'/(1-warpedSine(shape,rawRamp-(1/ma.SR))))
+    (start,end)
+  , (warpedSine(shape,rawRamp+(1/ma.SR))-warpedSine(shape,rawRamp))
+    * (rawDif'/rawDif/(1-warpedSine(shape,rawRamp+(1/ma.SR))))
     :seq(i, 14, compareShape)
-    : ((+:_*.5),!,!) // average start and end, throw away the rest
+    : ((+:_*.5),!) // average start and end, throw away the rest
+      // * ((ramp==0) | (ramp == 0.5))
+      * running
 
       // <: select2(_<=0.0001,_,-1)
       // <: select2(_>=(1-0.0001),_,-1)
       // : select2(releasing,-1,_)
   with {
-    start = 0;
-    end = 1;
+    start = 0.0001;
+    end = 0.999;
   };
   newRampShapeX = maxDerTable(newShape);
 
