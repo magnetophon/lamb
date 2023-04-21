@@ -17,11 +17,11 @@ process =
 ;
 
 
-test = select3(
-         ((os.lf_sawpos(1)>0.3)+(os.lf_sawpos(1)>0.5)),
+test0 = select3(
+          ((os.lf_sawpos(1)>0.3)+(os.lf_sawpos(1)>0.5)),
          0, 1, -0.1);
 test1 = select2(os.lf_sawpos(1)>0.5, 0.1,0.9);
-test2 =
+test =
   ((loop~_)
   , no.lfnoise(hslider("rate", 100, 0.1, 1000, 0.1))
   )
@@ -37,11 +37,11 @@ with {
   loop(prevRamp,prevGain,x) =
     rampWithShapeIntervention
   , gain
-    // , x
+  , x
   , switchedShape
     // , newShape'
     // , shapeIntervention
-  , shapeInterventionHold
+    // , shapeInterventionHold
     // , newRampShapeX
     // ,(compareShape(0,1,0.5):>_)
     // ,abs(changeRate)
@@ -69,8 +69,8 @@ with {
              * running;
   rawGainStepShapeFix = (warpedSine(switchedShape,rawRamp)-warpedSine(switchedShape,rawRamp-rampStep))*fullDifShapeFix;
   gainStepShapeFix = select2(rawGainStepShapeFix>0
-                            , rawGainStep:min(0-smallest)
-                            , rawGainStep:max(smallest)
+                            , rawGainStepShapeFix:min(0-smallest)
+                            , rawGainStepShapeFix:max(smallest)
                             )
              * running;
   rawDif = x-prevGain;
@@ -145,7 +145,8 @@ with {
     // maxDerivative(1/SIZE,shape)
     ba.tabulate(0, maxDerivative(1/SIZE), SIZE, 0, 1, shape).val
     // rdtable(SIZE,maxDerivative(1/SIZE,ba.time/SIZE),int(shape*SIZE))
-    + rampStep
+    // + rampStep
+    // 100/ma.SR
   with {
     SIZE = 1<<9;
     // SIZE = 1<<10 gives ocasional error values, presumably cause the dif becomes too small
@@ -175,26 +176,27 @@ with {
   };
 
 
-  compareShape(start,end,compSlope) =
+  compareShape(start,end,dif,compSlope) =
     (
       select2(bigger , start , middle)
     , select2(bigger , middle , end)
+    , dif
     , compSlope
     )
   with {
-    bigger = compSlope>=slope;
+    bigger = compSlope>slope;
     slope =
-      (warpedSine(middle,x+(1/ma.SR))-warpedSine(middle,x))
-      *(1/(1-warpedSine(middle,x)));
+      (warpedSine(middle,x)-warpedSine(middle,x-rampStep))
+      *(dif/(1-warpedSine(middle,x)));
     middle = (start+end)*.5;
     x = maxDerTable(middle);
   };
   newShape =
-    (start,end)
-  , (warpedSine(shape,rawRamp-(1/ma.SR))-warpedSine(shape,rawRamp-(2/ma.SR)))
-    * (rawDif'/rawDif/(1-warpedSine(shape,rawRamp-(1/ma.SR))))
+    (start,end,rawDif)
+  , (warpedSine(shape,rawRamp-rampStep)-warpedSine(shape,rawRamp-(2*rampStep)))
+    * (rawDif'/(1-warpedSine(shape,rawRamp-rampStep)))
     :seq(i, 14, compareShape)
-    : ((+:_*.5),!) // average start and end, throw away the rest
+    : ((+:_*.5),!,!) // average start and end, throw away the rest
       // * ((ramp<(thres*2)) | ((ramp > (0.5-thres)) & (ramp < (0.5+thres))  ))
       * running
 
@@ -202,13 +204,42 @@ with {
       // <: select2(_>=(1-0.0001),_,-1)
       // : select2(releasing,-1,_)
   with {
-    start = 0.0001;
-    end = 0.999;
+    start = 0.1;
+    // end = 0.5;
+    end = 0.9;
     // thres = (hslider("thres", 1, 0, 2, 0.01)/ma.SR)*10;
     // end = shape;
   };
   newRampShapeX = maxDerTable(newShape');
 
+  shapeIntervention =
+    intervention
+    &(ramp<thres) ;
+
+  shapeInterventionHold =
+    loop~_ with {
+    loop(prev) =
+      select2((shapeIntervention| (shapeIntervention'))
+             , (prev*((ramp>ramp') ))
+             , 1);
+  };
+
+  thres = hslider("thres", 1, 0, 1, 0.01)/rampStep/ma.SR*0.1;
+  rampWithShapeIntervention =
+    select2(shapeIntervention
+           , ramp
+           , newRampShapeX
+             // , ba.latch(shapeIntervention,newRampShapeX)
+
+             // ,0
+           );
+  switchedShape =
+    select2(shapeInterventionHold
+           , shape
+           , ba.latch(shapeIntervention,newShape')
+           );
+
+  // };
   // ******************************************** the curves: ******************************
   kneeCurve(shape,knee,x) =
     select3( (x>shape-(knee*.5)) + (x>shape+(knee*.5))
@@ -229,32 +260,6 @@ with {
     knee = min(2*shape,2-(2*shape));
   };
   shape = hslider("shape", 0.5, 0, 1, 0.01);
-  shapeIntervention =
-    intervention
-    &(ramp<thres) ;
-
-  shapeInterventionHold =
-    loop~_ with {
-    loop(prev) =
-      select2((shapeIntervention| (shapeIntervention'))
-             , (prev*((ramp>ramp') ))
-             , 1);
-  };
-
-  thres = hslider("thres", 1, 0, 1, 0.01)/rampStep/ma.SR*0.1;
-  rampWithShapeIntervention =
-    select2(shapeIntervention
-           , ramp
-           , newRampShapeX
-             // ,0
-           );
-  switchedShape =
-    select2(shapeInterventionHold
-           , shape
-           , ba.latch(shapeIntervention,newShape')
-           );
-
-  // };
 
 };
 };
