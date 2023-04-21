@@ -35,9 +35,9 @@ AR = loop~(_,_)
           // :(!,si.bus(4))
 with {
   loop(prevRamp,prevGain,x) =
-    ramp
+    rampWithShapeIntervention
   , gain
-  , x
+    // , x
   , switchedShape
     // , newShape'
     // , shapeIntervention
@@ -60,15 +60,22 @@ with {
   release = hslider("release", 0.5, 0, 1, smallest):max(1 / ma.SR);
   // TODO better value
   smallest = 1/192000;
-  gain = prevGain+gainStep:max(-1):min(1);
+  gain = prevGain+gainStepShapeFix:max(-1):min(1);
   rawGainStep = (warpedSine(shape,rawRamp)-warpedSine(shape,rawRamp-rampStep))*fullDif;
   gainStep = select2(rawGainStep>0
                     , rawGainStep:min(0-smallest)
                     , rawGainStep:max(smallest)
                     )
              * running;
+  rawGainStepShapeFix = (warpedSine(switchedShape,rawRamp)-warpedSine(switchedShape,rawRamp-rampStep))*fullDifShapeFix;
+  gainStepShapeFix = select2(rawGainStepShapeFix>0
+                            , rawGainStep:min(0-smallest)
+                            , rawGainStep:max(smallest)
+                            )
+             * running;
   rawDif = x-prevGain;
   fullDif =rawDif/(1-warpedSine(shape,rawRamp));
+  fullDifShapeFix =rawDif/(1-warpedSine(switchedShape,rawRamp));
   running = (attacking | releasing) * (1-dirChange);
   dirChange = (attacking != attacking')| (releasing != releasing');
   // TODO: find proper N (needs to be bigger than 2 when compiling to 32 bit)
@@ -229,25 +236,23 @@ with {
   shapeInterventionHold =
     loop~_ with {
     loop(prev) =
-      select2(shapeIntervention
-             , (prev*(ramp>ramp'))
+      select2((shapeIntervention| (shapeIntervention'))
+             , (prev*((ramp>ramp') ))
              , 1);
   };
 
   thres = hslider("thres", 1, 0, 1, 0.01)/rampStep/ma.SR*0.1;
+  rampWithShapeIntervention =
+    select2(shapeIntervention
+           , ramp
+           , newRampShapeX
+             // ,0
+           );
   switchedShape =
     select2(shapeInterventionHold
            , shape
-           , newShape'
+           , ba.latch(shapeIntervention,newShape')
            );
-  tmp2 =
-    (warpedSine(shape,newRamp)-warpedSine(shape,newRamp-rampStep))
-    *(rawDif/(1-warpedSine(shape,newRamp)))
-
-    <
-    ((warpedSine(shape,rawRamp-rampStep)-warpedSine(shape,rawRamp-(2*rampStep)))
-     * (rawDif'/(1-warpedSine(shape,rawRamp-rampStep))));
-
 
   // };
 
