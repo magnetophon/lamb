@@ -17,11 +17,11 @@ process =
 ;
 
 
-test0 = select3(
-          ((os.lf_sawpos(1)>0.3)+(os.lf_sawpos(1)>0.5)),
-          -0.1,0,1);
+test = select3(
+         ((os.lf_sawpos(1)>0.3)+(os.lf_sawpos(1)>0.5)),
+         0, 1, -0.1);
 test1 = select2(os.lf_sawpos(1)>0.5, 0.1,0.9);
-test =
+test2 =
   ((loop~_)
   , no.lfnoise(hslider("rate", 100, 0.1, 1000, 0.1))
   )
@@ -36,17 +36,20 @@ AR = loop~(_,_)
 with {
   loop(prevRamp,prevGain,x) =
     ramp
-   ,gain
-   ,x
-   , newShape
-     // , newRampShapeX
-     // ,(compareShape(0,1,0.5):>_)
-     // ,abs(changeRate)
-     // ,(changeRate* (warpedSine(shape,rawRamp+rampStep)/(warpedSine(shape,rawRamp):max(smallest))))
-     // ,((maxCR/ma.SR))
-     // , running
-   , (maxDerTable(shape) :hbargraph("MD", 0, 1))
-     // , maxDerivative(ba.time/(1<<16))
+  , gain
+  , x
+  , switchedShape
+    // , newShape'
+    // , shapeIntervention
+  , shapeInterventionHold
+    // , newRampShapeX
+    // ,(compareShape(0,1,0.5):>_)
+    // ,abs(changeRate)
+    // ,(changeRate* (warpedSine(shape,rawRamp+rampStep)/(warpedSine(shape,rawRamp):max(smallest))))
+    // ,((maxCR/ma.SR))
+    // , running
+  , (maxDerTable(shape) :hbargraph("MD", 0, 1))
+    // , maxDerivative(ba.time/(1<<16))
   with {
   rawRamp = (prevRamp+rampStep)*running:min(1):max(0);
   ramp = select2(intervention,rawRamp,newRamp)*running;
@@ -58,14 +61,14 @@ with {
   // TODO better value
   smallest = 1/192000;
   gain = prevGain+gainStep:max(-1):min(1);
-  rawGainStep = (shapedRamp-warpedSine(shape,rawRamp-rampStep))*fullDif;
+  rawGainStep = (warpedSine(shape,rawRamp)-warpedSine(shape,rawRamp-rampStep))*fullDif;
   gainStep = select2(rawGainStep>0
                     , rawGainStep:min(0-smallest)
                     , rawGainStep:max(smallest)
                     )
              * running;
   rawDif = x-prevGain;
-  fullDif =rawDif/(1-shapedRamp);
+  fullDif =rawDif/(1-warpedSine(shape,rawRamp));
   running = (attacking | releasing) * (1-dirChange);
   dirChange = (attacking != attacking')| (releasing != releasing');
   // TODO: find proper N (needs to be bigger than 2 when compiling to 32 bit)
@@ -130,9 +133,12 @@ with {
   };
 
   maxDerTable(shape) =
-    maxDerivative(rampStep,shape)
-    // ba.tabulate(0, maxDerivative(1/SIZE), SIZE, 0, 1, shape).val
+    // hslider("start", 0.2, 0, 1, 0.01)
+    // maxDerivative(rampStep,shape)
+    // maxDerivative(1/SIZE,shape)
+    ba.tabulate(0, maxDerivative(1/SIZE), SIZE, 0, 1, shape).val
     // rdtable(SIZE,maxDerivative(1/SIZE,ba.time/SIZE),int(shape*SIZE))
+    + rampStep
   with {
     SIZE = 1<<9;
     // SIZE = 1<<10 gives ocasional error values, presumably cause the dif becomes too small
@@ -178,11 +184,11 @@ with {
   };
   newShape =
     (start,end)
-  , (warpedSine(shape,rawRamp+(1/ma.SR))-warpedSine(shape,rawRamp))
-    * (rawDif'/rawDif/(1-warpedSine(shape,rawRamp+(1/ma.SR))))
+  , (warpedSine(shape,rawRamp-(1/ma.SR))-warpedSine(shape,rawRamp-(2/ma.SR)))
+    * (rawDif'/rawDif/(1-warpedSine(shape,rawRamp-(1/ma.SR))))
     :seq(i, 14, compareShape)
     : ((+:_*.5),!) // average start and end, throw away the rest
-      // * ((ramp==0) | (ramp == 0.5))
+      // * ((ramp<(thres*2)) | ((ramp > (0.5-thres)) & (ramp < (0.5+thres))  ))
       * running
 
       // <: select2(_<=0.0001,_,-1)
@@ -191,8 +197,10 @@ with {
   with {
     start = 0.0001;
     end = 0.999;
+    // thres = (hslider("thres", 1, 0, 2, 0.01)/ma.SR)*10;
+    // end = shape;
   };
-  newRampShapeX = maxDerTable(newShape);
+  newRampShapeX = maxDerTable(newShape');
 
   // ******************************************** the curves: ******************************
   kneeCurve(shape,knee,x) =
@@ -214,6 +222,35 @@ with {
     knee = min(2*shape,2-(2*shape));
   };
   shape = hslider("shape", 0.5, 0, 1, 0.01);
+  shapeIntervention =
+    intervention
+    &(ramp<thres) ;
+
+  shapeInterventionHold =
+    loop~_ with {
+    loop(prev) =
+      select2(shapeIntervention
+             , (prev*(ramp>ramp'))
+             , 1);
+  };
+
+  thres = hslider("thres", 1, 0, 1, 0.01)/rampStep/ma.SR*0.1;
+  switchedShape =
+    select2(shapeInterventionHold
+           , shape
+           , newShape'
+           );
+  tmp2 =
+    (warpedSine(shape,newRamp)-warpedSine(shape,newRamp-rampStep))
+    *(rawDif/(1-warpedSine(shape,newRamp)))
+
+    <
+    ((warpedSine(shape,rawRamp-rampStep)-warpedSine(shape,rawRamp-(2*rampStep)))
+     * (rawDif'/(1-warpedSine(shape,rawRamp-rampStep))));
+
+
+  // };
+
 };
 };
 
