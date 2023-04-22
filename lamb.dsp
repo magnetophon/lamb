@@ -31,14 +31,15 @@ with {
 };
 
 
-AR = loop~(_,_)
+AR = loop~(_,_,_)
           // :(!,si.bus(4))
 with {
-  loop(prevRamp,prevGain,x) =
-    rampWithShapeIntervention
-  , gain
+  loop(prevShape,prevRamp,prevGain,x) =
+    switchedShape
+  , rampShapeFix
+    // , ramp
+  , gainShapeFix
   , x
-  , switchedShape
     // , newShape'
     // , shapeIntervention
     // , shapeInterventionHold
@@ -48,7 +49,7 @@ with {
     // ,(changeRate* (warpedSine(shape,rawRamp+rampStep)/(warpedSine(shape,rawRamp):max(smallest))))
     // ,((maxCR/ma.SR))
     // , running
-  , (maxDerTable(shape) :hbargraph("MD", 0, 1))
+  , (maxDerTable(prevShape) :hbargraph("MD", 0, 1))
     // , maxDerivative(ba.time/(1<<16))
   with {
   rawRamp = (prevRamp+rampStep)*running:min(1):max(0);
@@ -56,26 +57,31 @@ with {
   // ramp = rawRamp;
   rampStep = 1 / ma.SR / duration;
   duration = select3(attacking+releasing*2,1,attack,release);
-  attack = hslider("attack", 0.1, 0, 1, smallest):max(1 / ma.SR);
-  release = hslider("release", 0.5, 0, 1, smallest):max(1 / ma.SR);
+  attack = hslider("attack", 0.08, 0, 1, 0.01):max(1 / ma.SR);
+  release = hslider("release", 0.5, 0, 1, 0.01):max(1 / ma.SR);
   // TODO better value
   smallest = 1/192000;
-  gain = prevGain+gainStepShapeFix:max(-1):min(1);
-  rawGainStep = (warpedSine(shape,rawRamp)-warpedSine(shape,rawRamp-rampStep))*fullDif;
+  gainShapeFix = prevGain+gainStepShapeFix:max(-1):min(1);
+  gain         = prevGain+gainStep:max(-1):min(1);
+  rawGainStep = (warpedSine(prevShape,rawRamp)
+                 -warpedSine(prevShape,rawRamp-rampStep))
+                *fullDif;
   gainStep = select2(rawGainStep>0
                     , rawGainStep:min(0-smallest)
                     , rawGainStep:max(smallest)
                     )
              * running;
-  rawGainStepShapeFix = (warpedSine(switchedShape,rawRamp)-warpedSine(switchedShape,rawRamp-rampStep))*fullDifShapeFix;
+  rawGainStepShapeFix = (warpedSine(switchedShape,ramp+rampStep)
+                         -warpedSine(switchedShape,ramp))
+                        *fullDifShapeFix;
   gainStepShapeFix = select2(rawGainStepShapeFix>0
                             , rawGainStepShapeFix:min(0-smallest)
                             , rawGainStepShapeFix:max(smallest)
                             )
              * running;
   rawDif = x-prevGain;
-  fullDif =rawDif/(1-warpedSine(shape,rawRamp));
-  fullDifShapeFix =rawDif/(1-warpedSine(switchedShape,rawRamp));
+  fullDif =rawDif/(1-warpedSine(prevShape,rawRamp));
+  fullDifShapeFix =rawDif/(1-warpedSine(switchedShape,ramp));
   running = (attacking | releasing) * (1-dirChange);
   dirChange = (attacking != attacking')| (releasing != releasing');
   // TODO: find proper N (needs to be bigger than 2 when compiling to 32 bit)
@@ -91,12 +97,12 @@ with {
   // in case of a simple sine shaper, it's 0.5, so don't worry for now
 
 
-  shapedRamp = warpedSine(shape,rawRamp);
+  shapedRamp = warpedSine(switchedShape,ramp);
   // changeRate = ((gainStep/gainStep')-1)
   changeRate = ((gainStep:max(smallest)/(gainStep':max(smallest)))-1)
                // / (fullDif:max(ma.EPSILON))
                / duration
-               * (warpedSine(shape,rawRamp+rawRamp):max(ma.EPSILON)/(warpedSine(shape,rawRamp):max(ma.EPSILON)))
+               * (warpedSine(prevShape,rawRamp+rawRamp):max(ma.EPSILON)/(warpedSine(prevShape,rawRamp):max(ma.EPSILON)))
                * releasing;
 
   intervention =
@@ -107,18 +113,17 @@ with {
   // TODO: better value
   // maxCR = hslider("maxCR", 300, 1, 6000, 1)*10;
   maxCR = 10000;
-  compare(start,end,dif,compSlope) =
+  compare(start,end,compSlope) =
     (
       select2(bigger , start , middle)
     , select2(bigger , middle , end)
-    , dif
     , compSlope
     )
   with {
     bigger = compSlope>slope(middle);
     slope(x) =
-      (warpedSine(shape,x)-warpedSine(shape,x-rampStep))
-      *(dif/(1-warpedSine(shape,x)));
+      (warpedSine(prevShape,x)-warpedSine(prevShape,x-rampStep))
+      *(1/(1-warpedSine(prevShape,x)));
     middle = (start+end)*.5;
   };
   // each compare halves the range,
@@ -126,13 +131,13 @@ with {
   // for a SR of 192k we need at least that many steps
   // 2^18 = 262144
   // so we need 18 compares in total
-  // at 48k, 13 total seems to little, 14 works
+  // at 48k, 8 seems enough
   newRamp =
-    (start,end,rawDif)
-  , (warpedSine(shape,rawRamp-rampStep)-warpedSine(shape,rawRamp-(2*rampStep)))
-    * (rawDif'/(1-warpedSine(shape,rawRamp-rampStep)))
-    :seq(i, 14, compare)
-    : ((+:_*.5),!,!) // average start and end, throw away the rest
+    (start,end)
+  , (warpedSine(prevShape,rawRamp-rampStep)-warpedSine(prevShape,rawRamp-(2*rampStep)))
+    * (rawDif'/rawDif/(1-warpedSine(prevShape,rawRamp-rampStep)))
+    :seq(i, 13, compare)
+    : ((+:_*.5),!) // average start and end, throw away the rest
 
   with {
     start = 0;
@@ -143,7 +148,8 @@ with {
     // hslider("start", 0.2, 0, 1, 0.01)
     // maxDerivative(rampStep,shape)
     // maxDerivative(1/SIZE,shape)
-    ba.tabulate(0, maxDerivative(1/SIZE), SIZE, 0, 1, shape).val
+    // ba.tabulate(0, maxDerivative(1/SIZE), SIZE, 0, 1, shape).val
+    0
     // rdtable(SIZE,maxDerivative(1/SIZE,ba.time/SIZE),int(shape*SIZE))
     // + rampStep
     // 100/ma.SR
@@ -192,18 +198,19 @@ with {
     x = maxDerTable(middle);
   };
   newShape =
-    (start,end,rawDif)
-  , (warpedSine(shape,rawRamp-rampStep)-warpedSine(shape,rawRamp-(2*rampStep)))
-    * (rawDif'/(1-warpedSine(shape,rawRamp-rampStep)))
-    :seq(i, 14, compareShape)
-    : ((+:_*.5),!,!) // average start and end, throw away the rest
-      // * ((ramp<(thres*2)) | ((ramp > (0.5-thres)) & (ramp < (0.5+thres))  ))
-      * running
+    0.5;tmp=
+          (start,end,rawDif)
+        , (warpedSine(prevShape,ramp-rampStep)-warpedSine(prevShape,ramp-(2*rampStep)))
+          * (rawDif'/(1-warpedSine(prevShape,ramp-rampStep)))
+          :seq(i, 14, compareShape)
+          : ((+:_*.5),!,!) // average start and end, throw away the rest
+            // * ((ramp<(thres*2)) | ((ramp > (0.5-thres)) & (ramp < (0.5+thres))  ))
+            * running
 
-      // <: select2(_<=0.0001,_,-1)
-      // <: select2(_>=(1-0.0001),_,-1)
-      // : select2(releasing,-1,_)
-  with {
+            // <: select2(_<=0.0001,_,-1)
+            // <: select2(_>=(1-0.0001),_,-1)
+            // : select2(releasing,-1,_)
+        with {
     start = 0.1;
     // end = 0.5;
     end = 0.9;
@@ -224,8 +231,8 @@ with {
              , 1);
   };
 
-  thres = hslider("thres", 1, 0, 1, 0.01)/rampStep/ma.SR*0.1;
-  rampWithShapeIntervention =
+  thres = hslider("thres", 0.3, 0, 1, 0.01)/rampStep/ma.SR*0.1;
+  rampShapeFix =
     select2(shapeIntervention
            , ramp
            , newRampShapeX
@@ -235,8 +242,8 @@ with {
            );
   switchedShape =
     select2(shapeInterventionHold
-           , shape
-           , ba.latch(shapeIntervention,newShape')
+           , shapeSlider
+           , ba.latch(shapeIntervention,newShape)
            );
 
   // };
@@ -259,7 +266,7 @@ with {
     power = (4*shape/3)+(1/3);
     knee = min(2*shape,2-(2*shape));
   };
-  shape = hslider("shape", 0.5, 0, 1, 0.01);
+  shapeSlider = hslider("shape", 0.5, 0, 1, 0.01);
 
 };
 };
@@ -417,3 +424,9 @@ meter =
 // set ramp to that maxslope, shape offset untill done
 // *****  OR  ******
 // find the stepsize at which the slope matches at ramp=0.5
+
+// TODO:
+// optimisation:
+// make a couple of lookup tables, each with a different shape
+// in: slope
+// out: phase at input slope
