@@ -36,13 +36,15 @@ AR = loop~(_,_)
 with {
   loop(prevRamp,prevGain,x) =
     ramp
-  , gain
+  , trueGain
     // rampShapeFix
     // , gainShapeFix
   , x
+  , (gain==x)
     // , (gain==gain')
     // , prevFullDif
-  , coockedDif
+    // , coockedDif
+    // , running
     // , releasing
     // , (abs(rawGainStep)/2)
     // , switchedShape
@@ -59,7 +61,7 @@ with {
     // , maxDerivative(ba.time/(1<<16))
   with {
   rawRamp = (prevRamp+rampStep)*running:min(1):max(0);
-  ramp = select2(intervention,rawRamp,newRamp):max(0):min(1)*running;
+  ramp = select2(intervention,rawRamp,newRamp):max(0):min(1)*runningNotDirChange;
   // ramp = rawRamp;
   rampStep = 1 / ma.SR / duration;
   duration = select3(attacking+releasing*2,1,attack,release);
@@ -68,6 +70,10 @@ with {
   // TODO better value
   smallest = 1/192000;
   gain = prevGain+gainStep:max(-1):min(1);
+  trueGain =
+    select2(running
+           , x
+           , gain);
   rawGainStep = (warpedSine(shape,rawRamp+rampStep)-warpedSine(shape,rawRamp))*fullDif;
   gainStep = select2(releasing
                     , rawGainStep:min(0-smallest)
@@ -84,16 +90,18 @@ with {
   rawDif = x-prevGain;
   fullDif =rawDif/(1-warpedSine(shape,rawRamp));
   fullDifShapeFix =rawDif/(1-warpedSine(switchedShape,rawRamp));
-  running = (attacking | releasing) * (1-dirChange);
+  runningNotDirChange = running* (1-dirChange);
+  running = (attacking | releasing) ;
   dirChange = (attacking != attacking')| (releasing != releasing');
   // TODO: find proper N (needs to be bigger than 2 when compiling to 32 bit)
   N = hslider("N", 0.25, 0, 1, 0.001)*0.00001;
   // N=3;
   prevFullDif =rawDif/(1-warpedSine(shapeSlider,prevRamp));
   coockedDif = (prevFullDif/ ((abs(prevGain-prevGain'):max(ma.EPSILON)*ma.SR)) );
+  closeEnough = (abs(coockedDif)<=(hslider("dif", 0.5, 0,1 , 0.001)*10000*ma.EPSILON));
   // prevFullDif =rawDif/shape;
-  releasing = coockedDif>0;
-  attacking = coockedDif<0;
+  releasing = (coockedDif>closeEnough);
+  attacking = (coockedDif<(0-closeEnough));
   // TODO find the point (in the correct half of the graph) where the slope is the same
   // retrigger the ramp there
   // use a multi step process, each time refining further
@@ -441,3 +449,4 @@ meter =
 // TODO: when changerate too big, set shape to 0.5 and try again
 // TODO: fix too slow speed at the beginning of short duration ramps when ramp is near ramp', but not equal: make a normal step.
 // TODO: when ramp is zero, and gain<x : fade to x
+// TODO: if you make the number of shapes the user can select small, say 16, you can use 16 lookup tables for the phase corrector
