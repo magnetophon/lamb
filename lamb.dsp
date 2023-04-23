@@ -74,14 +74,14 @@ with {
   smallest = 1/192000;
   gain = prevGain+gainStep:max(-1):min(1);
   trueGain =
-    select2( (1-running)
-             | (
-               ((attack==0) & (rawDif<0))
-               | ((release==0) & (rawDif>0))
-             )
+    select2( ((1-running)
+              | (
+                ((attack==0) & (rawDif<0))
+                | ((release==0) & (rawDif>0))))
+             & (1-dirChange)
            , gain
            , x
-           );
+);
   rawGainStep =
     shapeDif(shape,rawRamp,rampStep)*fullDif;
   shapeDif(shape,phase,step) =
@@ -94,16 +94,16 @@ with {
   };
 
   gainStep = select2(releasing
-                    , rawGainStep:min(0-smallest)
-                    , rawGainStep:max(smallest)
+                    , rawGainStep:min(0-smallest):max(rawDif)
+                    , rawGainStep:max(smallest):(min(rawDif))
                     )
              * running;
   gainShapeFix = prevGain+gainStepShapeFix:max(-1):min(1);
   rawGainStepShapeFix =
     shapeDif(switchedShape,rawRamp,rampStep)*fullDifShapeFix;
   gainStepShapeFix = select2(releasing
-                            , rawGainStepShapeFix:min(0-smallest)
-                            , rawGainStepShapeFix:max(smallest)
+                            , rawGainStepShapeFix:min(0-smallest):max(rawDif)
+                            , rawGainStepShapeFix:max(smallest):min(rawDif)
                             )
                      * running;
   rawDif = x-prevGain;
