@@ -133,8 +133,12 @@ with {
   coockedDif = (prevFullDif/ ((abs(prevGain-prevGain'):max(ma.EPSILON)*ma.SR)) );
   closeEnough = (abs(coockedDif)<=(5000*ma.EPSILON));
   // prevFullDif =rawDif/shape;
-  releasing = (coockedDif>closeEnough);
-  attacking = (coockedDif<(0-closeEnough));
+  releasing =
+    prevGain<x;
+  // (coockedDif>closeEnough);
+  attacking =
+    prevGain>x;
+  // (coockedDif<(0-closeEnough));
   // TODO find the point (in the correct half of the graph) where the slope is the same
   // retrigger the ramp there
   // use a multi step process, each time refining further
