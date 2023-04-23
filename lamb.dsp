@@ -40,6 +40,7 @@ with {
     // rampShapeFix
     // , gainShapeFix
   , x
+  , warpedSine(shape,rawRamp)
     // , (gain==x)
     // , (gain==gain')
     // , prevFullDif
@@ -72,7 +73,12 @@ with {
     hslider("release", 0.5, 0, nrRleases, 1 )/nrRleases:pow(2);
   nrRleases = 20;
   smallest = 1/192000;
-  gain = prevGain+gainStep:max(-1):min(1);
+  gain = prevGain+
+         // select2(gainStep>0 // TODO: without this we get small glitches when the ramp resets and we where already close to target
+         // , gainStep:max(rawDif *warpedSine(shape,ramp))
+         // , gainStep:min(rawDif *warpedSine(shape,ramp)))
+         gainStep
+         :max(-1):min(1);
   trueGain =
     select2( ((1-running)
               | (
@@ -81,23 +87,30 @@ with {
              & (1-dirChange)
            , gain
            , x
-);
+           );
   rawGainStep =
     shapeDif(shape,rawRamp,rampStep)*fullDif;
   shapeDif(shape,phase,step) =
     warpedSine(shape,phase+trueStepNew)
     - warpedSine(shape,phase-trueStepOld)
-    : max(smallest)
+    : max(ma.EPSILON)
+      // : max(smallest)
   with {
     trueStepNew = select2(phase==0 , 0, step);
     trueStepOld = select2(phase==0 , step, 0);
   };
 
   gainStep = select2(releasing
-                    , rawGainStep:min(0-smallest):max(rawDif)
-                    , rawGainStep:max(smallest):(min(rawDif))
+                    , rawGainStep:min(0-smallest)
+                                  // :max(maximum)
+                    , rawGainStep:max(smallest)
+                                  // :(min(maximum))
                     )
-             * running;
+             * running
+  with {
+    maximum = rawDif *warpedSine(shape,rawRamp);
+  };
+
   gainShapeFix = prevGain+gainStepShapeFix:max(-1):min(1);
   rawGainStepShapeFix =
     shapeDif(switchedShape,rawRamp,rampStep)*fullDifShapeFix;
@@ -126,7 +139,6 @@ with {
   // in case of a simple sine shaper, it's 0.5, so don't worry for now
 
 
-  shapedRamp = warpedSine(shape,rawRamp);
   // changeRate = ((gainStep/gainStep')-1)
   changeRate =
     // ((gainStep:max(smallest)/(gainStep':max(smallest)))-1)
@@ -144,18 +156,17 @@ with {
   // TODO: better value
   // maxCR = hslider("maxCR", 1000, 1, 6000, 1)*10;
   maxCR = 10000;
-  compare(start,end,dif,compSlope) =
+  compare(start,end,compSlope) =
     (
       select2(bigger , start , middle)
     , select2(bigger , middle , end)
-    , dif
     , compSlope
     )
   with {
     bigger = compSlope>slope(middle);
     slope(x) =
       shapeDif(shape,x,rampStep)
-      *(dif/(1-warpedSine(shape,x)));
+      *(1/(1-warpedSine(shape,x)));
     middle = (start+end)*.5;
   };
   // each compare halves the range,
@@ -165,11 +176,11 @@ with {
   // so we need 18 compares in total
   // at 48k, 13 total seems to little, 14 works
   newRamp =
-    (start,end,rawDif)
+    (start,end)
   , shapeDif(shape,rawRamp,rampStep')
-    * (rawDif'/(1-warpedSine(shape,rawRamp-rampStep)))
-    :seq(i, 14, compare)
-    : ((+:_*.5),!,!) // average start and end, throw away the rest
+    * ((rawDif'/rawDif)/(1-warpedSine(shape,rawRamp-rampStep)))
+    :seq(i, 18, compare)
+    : ((+:_*.5),!) // average start and end, throw away the rest
 
   with {
     start = 0;
