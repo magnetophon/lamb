@@ -101,10 +101,14 @@ with {
   };
 
   gainStep = select2(releasing
-                    , rawGainStep:min(0-smallest)
-                                  // :max(maximum)
-                    , rawGainStep:max(smallest)
-                                  // :(min(maximum))
+                    , rawGainStep
+                      :min(0-ma.EPSILON)
+                       // :min(0-smallest)
+                       // :max(maximum)
+                    , rawGainStep
+                      :max(ma.EPSILON)
+                       // :max(smallest)
+                       // :(min(maximum))
                     )
              * running
   with {
