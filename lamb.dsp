@@ -65,8 +65,8 @@ with {
   // ramp = rawRamp;
   rampStep = 1 / ma.SR / duration;
   duration = select3(attacking+releasing*2,1,attack,release);
-  attack = hslider("attack", 0.08, 0, 1, 0.01):max(1 / ma.SR);
-  release = hslider("release", 0.5, 0, 1, 0.01):max(1 / ma.SR);
+  attack = hslider("attack", 0.08, 0, 1, 0.001):max(1 / ma.SR);
+  release = hslider("release", 0.5, 0, 1, 0.001):max(1 / ma.SR);
   // TODO better value
   smallest = 1/192000;
   gain = prevGain+gainStep:max(-1):min(1);
@@ -74,14 +74,26 @@ with {
     select2(running
            , x
            , gain);
-  rawGainStep = (warpedSine(shape,rawRamp+rampStep)-warpedSine(shape,rawRamp))*fullDif;
+  rawGainStep =
+    shapeDif(shape,rawRamp,rampStep)*fullDif;
+  // (warpedSine(shape,rawRamp+rampStep)-warpedSine(shape,rawRamp))*fullDif;
+  shapeDif(shape,phase,step) =
+    warpedSine(shape,phase+trueStepNew)
+    - warpedSine(shape,phase-trueStepOld)
+  with {
+    trueStepNew = select2(phase==0 , 0, step);
+    trueStepOld = select2(phase==0 , step, 0);
+  };
+
   gainStep = select2(releasing
                     , rawGainStep:min(0-smallest)
                     , rawGainStep:max(smallest)
                     )
              * running;
   gainShapeFix = prevGain+gainStepShapeFix:max(-1):min(1);
-  rawGainStepShapeFix = (warpedSine(switchedShape,rawRamp)-warpedSine(switchedShape,rawRamp-rampStep))*fullDifShapeFix;
+  rawGainStepShapeFix =
+    shapeDif(switchedShape,rawRamp,rampStep)*fullDifShapeFix;
+  // (warpedSine(switchedShape,rawRamp)-warpedSine(switchedShape,rawRamp-rampStep))*fullDifShapeFix;
   gainStepShapeFix = select2(releasing
                             , rawGainStepShapeFix:min(0-smallest)
                             , rawGainStepShapeFix:max(smallest)
@@ -138,7 +150,8 @@ with {
   with {
     bigger = compSlope>slope(middle);
     slope(x) =
-      (warpedSine(shape,x)-warpedSine(shape,x-rampStep))
+      shapeDif(shape,x,rampStep)
+      // (warpedSine(shape,x)-warpedSine(shape,x-rampStep))
       *(dif/(1-warpedSine(shape,x)));
     middle = (start+end)*.5;
   };
@@ -450,3 +463,5 @@ meter =
 // TODO: fix too slow speed at the beginning of short duration ramps when ramp is near ramp', but not equal: make a normal step.
 // TODO: when ramp is zero, and gain<x : fade to x
 // TODO: if you make the number of shapes the user can select small, say 16, you can use 16 lookup tables for the phase corrector
+// TODO: use negative ramps when needed?
+// TODO: for the shape difs at the outer edges, where it goes out of scope, use the values at the edges
