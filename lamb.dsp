@@ -19,11 +19,11 @@ process =
 ;
 
 
-test0 = select3(
-          ((os.lf_sawpos(1)>0.3)+(os.lf_sawpos(1)>0.5)),
-          0, 1, -0.1);
+test = select3(
+         ((os.lf_sawpos(1)>hslider("POS1", 0.25, 0, 1 , 0.01))+(os.lf_sawpos(1)>hslider("POS2", 0.5, 0, 1 , 0.01))),
+         1, -1, 0);
 test1 = select2(os.lf_sawpos(1)>0.5, 0.1,0.9);
-test =
+test2 =
   ((loop~_)
   , no.lfnoise(hslider("rate", 100, 0.1, 1000, 0.1))
   )
