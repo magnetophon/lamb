@@ -93,11 +93,11 @@ with {
 
   gainStep = select2(releasing
                     , rawGainStep
-                      // :min(0-ma.EPSILON)
                       :min(smallest)
+                      :max(rawDif)
                     , rawGainStep
-                      // :max(ma.EPSILON)
                       :max(smallest)
+                      :min(rawDif)
                     )
              * running ;
 
