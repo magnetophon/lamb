@@ -75,7 +75,7 @@ with {
     hslider("release", 0.5, 0, nrRleases, 1 )/nrRleases:pow(2);
   nrRleases = 20;
   smallest = 1/192000;
-  gain = prevGain+gainStep
+  gain = prevGain+gainStepPhaseFix
          :max(-1):min(1);
   trueGain =
     select2( ((1-running)
@@ -88,19 +88,36 @@ with {
            );
   rawGainStep =
     shapeDif(shape,rawRamp,rampStep)*fullDif;
+  rawGainStepPhaseFix =
+    shapeDif(shape,ramp,rampStep)*fullDifPhaseFix;
   shapeDif(shape,phase,step) =
     warpedSine(shape,phase+step)
     - warpedSine(shape,phase);
 
+  gainStepPhaseFix =
+    select2(releasing
+           , rawGainStepPhaseFix
+             // :min(smallest)
+             // :max(border)
+           , rawGainStepPhaseFix
+             // :max(smallest)
+             // :min(border)
+           )
+    * running
+  with {
+    border = rawDif; //*warpedSine(shape,ramp);
+  };
+
   gainStep = select2(releasing
                     , rawGainStep
-                      :min(smallest)
-                      :max(rawDif)
+                      // :min(smallest)
+                      // :max(rawDif)
                     , rawGainStep
-                      :max(smallest)
-                      :min(rawDif)
+                      // :max(smallest)
+                      // :min(rawDif)
                     )
-             * running ;
+             * running;
+
 
   gainShapeFix = prevGain+gainStepShapeFix:max(-1):min(1);
   rawGainStepShapeFix =
@@ -112,6 +129,7 @@ with {
                      * running;
   rawDif = x-prevGain;
   fullDif =rawDif/(1-warpedSine(shape,rawRamp));
+  fullDifPhaseFix =rawDif/(1-warpedSine(shape,ramp));
   fullDifShapeFix =rawDif/(1-warpedSine(switchedShape,rawRamp));
   runningNotDirChange = running* (1-dirChange);
   running = (attacking | releasing) ;
@@ -147,10 +165,11 @@ with {
     ((abs(changeRate)> (maxCR/ma.SR))
      * (1-dirChange)
     )
+    // & abs((x-x')>0.001)
   ;
   // TODO: better value
-  // maxCR = hslider("maxCR", 1000, 1, 6000, 1)*10;
-  maxCR = 10000;
+  maxCR = hslider("maxCR", 1000, 1, 6000, 1)*10;
+  // maxCR = 10000;
   compare(start,end,compSlope) =
     (
       select2(bigger , start , middle)
@@ -169,15 +188,22 @@ with {
   // for a SR of 192k we need at least that many steps
   // 2^18 = 262144
   // so we need 18 compares in total
-  // at 48k, 13 seems to little, 14 works
+  //
   // test with shape minimal, so 0.3 and duration = (3/16)^2
   // (lower shapes give jumps in the phase anyway)
+  // at 48k, 13 seems to little, 14 works
+  //
+  // test with shape -0.4, and duration = (10/16)^2
+  // at 48k, 14 seems to little, 15 works
+  //
+  // 15 takes about as much CPU as 16, so better be safe than sorry for now
+  //
   // with the above settings, too low nr of compares gives a stuck ramp
   newRamp =
     (start,end)
   , shapeDif(shape,rawRamp,rampStep')
     * ((rawDif'/rawDif)/(1-warpedSine(shape,rawRamp-rampStep)))
-    :seq(i, 14, compare)
+    :seq(i, 16, compare)
     : ((+:_*.5),!) // average start and end, throw away the rest
 
   with {
@@ -300,8 +326,8 @@ with {
   warpedSine(shape,x) =
     // the raw formula is faster than the tabulated version
     // 5 to 6 % CPU
-    // warpedSineFormula(shape,x)
-    par(i, nrShapes+1, table(i) * xfadeSelector(shapeSlider,i)):>_
+    warpedSineFormula(shape,x)
+    // par(i, nrShapes+1, table(i) * xfadeSelector(shapeSlider,i)):>_
   with {
     // 4.5 to 5.5 % CPU
     // 23 goes wrong with rel=3, shape=minimum, ramp not steep enough
