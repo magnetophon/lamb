@@ -8,7 +8,9 @@ import("stdfaust.lib");
 // make a release based on:
 // place
 
+// crossfade between multiple inputs (just the gain)
 process =
+  // xfadeSelector(0.33,5)
   test:AR
        // test
        // PMI_FBFFcompressor_N_chan(strength,thresh,att,rel,knee,prePost,link,FBFF,meter,N);
@@ -114,7 +116,7 @@ with {
   runningNotDirChange = running* (1-dirChange);
   running = (attacking | releasing) ;
   dirChange = (attacking != attacking')| (releasing != releasing');
-  prevFullDif =rawDif/(1-warpedSine(shapeSlider,prevRamp));
+  prevFullDif =rawDif/(1-warpedSine(shapeSliderVal(shapeSlider),prevRamp));
   coockedDif = (prevFullDif/ ((abs(prevGain-prevGain'):max(ma.EPSILON)*ma.SR)) );
   closeEnough = (abs(coockedDif)<=(5000*ma.EPSILON));
   // prevFullDif =rawDif/shape;
@@ -279,7 +281,7 @@ with {
            );
   switchedShape =
     select2(shapeInterventionHold
-           , shapeSlider
+           , shapeSliderVal(shapeSlider)
            , ba.latch(shapeIntervention,newShape')
            );
 
@@ -296,15 +298,53 @@ with {
   };
   sineShaper(x) = (sin((x*0.5 + 0.75)*2*ma.PI)+1)*0.5;
   warpedSine(shape,x) =
+    // the raw formula is faster than the tabulated version
+    // 5 to 6 % CPU
+    // warpedSineFormula(shape,x)
+    par(i, nrShapes+1, table(i) * xfadeSelector(shapeSlider,i)):>_
+  with {
+    // 4.5 to 5.5 % CPU
+    // 23 goes wrong with rel=3, shape=minimum, ramp not steep enough
+    // SIZE = 1<<24;
+    // table(i) = ba.tabulate(0, warpedSineFormula(shapeSliderVal(i)), SIZE, 0, 1, x).val;
+    // 3 to 4 % CPU
+    SIZE = 1<<14;
+    table(i) = ba.tabulate(0, warpedSineFormula(shapeSliderVal(i)), SIZE, 0, 1, x).lin;
+    // 4.5 to 6 % CPU
+    // SIZE = 1<<9;
+    // table(i) = ba.tabulate(0, warpedSineFormula(shapeSliderVal(i)), SIZE, 0, 1, x).cub;
+    xfadeSelector(sel,nr) =
+      ((sel<=nr)*((sel-nr)+1):max(0)) + ((sel>nr)*((nr-sel)+1):max(0));
+  };
+
+
+  warpedSineFormula(shape,x) =
     sineShaper(warp(shape,knee,x)):pow(power)
   with {
     power = (4*shape/3)+(1/3);
     knee = min(2*shape,2-(2*shape));
   };
-  // lower shapes then 0.3 give jumps in the phase at low durations (d < (3/16:pow(2)))
-  shapeSlider = hslider("shape", 0.5, 0.30, 0.75, 0.01);
+  shapeSlider =
+    // half;
+    hslider("shape", 0, 0-half, half, 0.1) + half;
+  shapeSliderVal(shapeSlider) =
+    shapeSlider
+    / nrShapes
+    * range
+    + start
+    : hbargraph("shapeBG", 0.3, 0.7)
+  with {
+    range = 2* (.5-start);
+    // lower shapes then 0.3 give jumps in the phase at low durations (d < (3/16:pow(2)))
+    // also they give stuck ramps at nr of compares < 14
+    // shapeSliderVal(shapeSlider) = hslider("shape", 0.5, 0.30, 0.70, 0.01);
+    start = 0.3;
+  };
+  nrShapes = 8;
+  half = nrShapes*.5;
+
   shape =
-    select2 (attacking, shapeSlider,1-shapeSlider);
+    select2 (attacking, shapeSliderVal(shapeSlider),1-shapeSliderVal(shapeSlider));
 
 };
 };
