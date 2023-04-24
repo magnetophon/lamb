@@ -74,10 +74,12 @@ with {
   nrRleases = 20;
   smallest = 1/192000;
   gain = prevGain+
-         // select2(gainStep>0 // TODO: without this we get small glitches when the ramp resets and we where already close to target
-         // , gainStep:max(rawDif *warpedSine(shape,ramp))
-         // , gainStep:min(rawDif *warpedSine(shape,ramp)))
-         gainStep
+         select2(checkbox("cludge")
+                , gainStep
+                , select2(gainStep>0 // TODO: without this we get small glitches when the ramp resets and we where already close to target
+                         , gainStep:max(rawDif *warpedSine(shape,ramp))
+                         , gainStep:min(rawDif *warpedSine(shape,ramp)))
+                )
          :max(-1):min(1);
   trueGain =
     select2( ((1-running)
