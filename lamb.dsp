@@ -326,14 +326,18 @@ with {
   warpedSine(shape,x) =
     // the raw formula is faster than the tabulated version
     // 5 to 6 % CPU
-    warpedSineFormula(shape,x)
+    // warpedSineFormula(shape,x)
     // par(i, nrShapes+1, table(i) * xfadeSelector(shapeSlider,i)):>_
+    par(i, nrShapes+1, table(i) * ((shapeSlider)==i)):>_
   with {
+    // test with
     // 4.5 to 5.5 % CPU
     // 23 goes wrong with rel=3, shape=minimum, ramp not steep enough
     // SIZE = 1<<24;
     // table(i) = ba.tabulate(0, warpedSineFormula(shapeSliderVal(i)), SIZE, 0, 1, x).val;
     // 3 to 4 % CPU
+    // patho case: rel 1 shape -3.4
+    // patho case: rel 1 shape -1.8
     SIZE = 1<<14;
     table(i) = ba.tabulate(0, warpedSineFormula(shapeSliderVal(i)), SIZE, 0, 1, x).lin;
     // 4.5 to 6 % CPU
@@ -352,7 +356,7 @@ with {
   };
   shapeSlider =
     // half;
-    hslider("shape", 0, 0-half, half, 0.1) + half;
+    hslider("shape", 0, 0-half, half, 1) + half;
   shapeSliderVal(shapeSlider) =
     shapeSlider
     / nrShapes
