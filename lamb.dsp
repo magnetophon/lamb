@@ -40,7 +40,8 @@ with {
     // rampShapeFix
     // , gainShapeFix
   , x
-  , warpedSine(shape,rawRamp)
+  , (ramp<rampStep)
+    // , warpedSine(shape,rawRamp)
     // , (gain==x)
     // , (gain==gain')
     // , prevFullDif
@@ -98,8 +99,16 @@ with {
     : max(ma.EPSILON)
       // : max(smallest)
   with {
-    trueStepNew = select2(phase==0 , 0, step);
-    trueStepOld = select2(phase==0 , step, 0);
+    // trueStepNew = select2(phase==0 , 0, step);
+    // trueStepOld = select2(phase==0 , step, 0);
+    // trueStepNew = select2(phase==1 , step, 0);
+    // trueStepOld = select2(phase==1 , 0, step);
+    // trueStepNew = select2(phase==1 , 0, step);
+    // trueStepOld = select2(phase==1 , step, 0);
+    trueStepNew = 0;
+    trueStepOld = step;
+    // trueStepNew = 0-step;
+    // trueStepOld = 0;
   };
 
   gainStep = select2(releasing
