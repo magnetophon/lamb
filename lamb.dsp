@@ -40,7 +40,6 @@ with {
     // rampShapeFix
     // , gainShapeFix
   , x
-  , (ramp==1)
     // , warpedSine(shape,rawRamp)
     // , (gain==x)
     // , (gain==gain')
@@ -55,7 +54,7 @@ with {
     // , shapeInterventionHold
     // , newRampShapeX
     // ,(compareShape(0,1,0.5):>_)
-    // ,abs(changeRate)
+    // , abs(changeRate)
     // ,(changeRate* (warpedSine(shape,rawRamp+rampStep)/(warpedSine(shape,rawRamp):max(smallest))))
     // ,(maxCR/ma.SR)
   , intervention
@@ -168,12 +167,15 @@ with {
   // for a SR of 192k we need at least that many steps
   // 2^18 = 262144
   // so we need 18 compares in total
-  // at 48k, 13 total seems to little, 14 works
+  // at 48k, 13 seems to little, 14 works
+  // test with shape minimal, so 0.3 and duration = (3/16)^2
+  // (lower shapes give jumps in the phase anyway)
+  // with the above settings, too low nr of compares gives a stuck ramp
   newRamp =
     (start,end)
   , shapeDif(shape,rawRamp,rampStep')
     * ((rawDif'/rawDif)/(1-warpedSine(shape,rawRamp-rampStep)))
-    :seq(i, 18, compare)
+    :seq(i, 14, compare)
     : ((+:_*.5),!) // average start and end, throw away the rest
 
   with {
@@ -299,7 +301,8 @@ with {
     power = (4*shape/3)+(1/3);
     knee = min(2*shape,2-(2*shape));
   };
-  shapeSlider = hslider("shape", 0.5, 0.12, 0.75, 0.01);
+  // lower shapes then 0.3 give jumps in the phase at low durations (d < (3/16:pow(2)))
+  shapeSlider = hslider("shape", 0.5, 0.30, 0.75, 0.01);
   shape =
     select2 (attacking, shapeSlider,1-shapeSlider);
 
