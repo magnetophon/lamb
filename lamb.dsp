@@ -40,7 +40,7 @@ with {
     // rampShapeFix
     // , gainShapeFix
   , x
-  , (ramp<rampStep)
+  , (ramp==1)
     // , warpedSine(shape,rawRamp)
     // , (gain==x)
     // , (gain==gain')
@@ -74,13 +74,7 @@ with {
     hslider("release", 0.5, 0, nrRleases, 1 )/nrRleases:pow(2);
   nrRleases = 20;
   smallest = 1/192000;
-  gain = prevGain+
-         select2(checkbox("cludge")
-                , gainStep
-                , select2(gainStep>0 // TODO: without this we get small glitches when the ramp resets and we where already close to target
-                         , gainStep:max(rawDif *warpedSine(shape,ramp))
-                         , gainStep:min(rawDif *warpedSine(shape,ramp)))
-                )
+  gain = prevGain+gainStep
          :max(-1):min(1);
   trueGain =
     select2( ((1-running)
@@ -94,37 +88,18 @@ with {
   rawGainStep =
     shapeDif(shape,rawRamp,rampStep)*fullDif;
   shapeDif(shape,phase,step) =
-    warpedSine(shape,phase+trueStepNew)
-    - warpedSine(shape,phase-trueStepOld)
-    : max(ma.EPSILON)
-      // : max(smallest)
-  with {
-    // trueStepNew = select2(phase==0 , 0, step);
-    // trueStepOld = select2(phase==0 , step, 0);
-    // trueStepNew = select2(phase==1 , step, 0);
-    // trueStepOld = select2(phase==1 , 0, step);
-    // trueStepNew = select2(phase==1 , 0, step);
-    // trueStepOld = select2(phase==1 , step, 0);
-    trueStepNew = 0;
-    trueStepOld = step;
-    // trueStepNew = 0-step;
-    // trueStepOld = 0;
-  };
+    warpedSine(shape,phase+step)
+    - warpedSine(shape,phase);
 
   gainStep = select2(releasing
                     , rawGainStep
-                      :min(0-ma.EPSILON)
-                       // :min(0-smallest)
-                       // :max(maximum)
+                      // :min(0-ma.EPSILON)
+                      :min(smallest)
                     , rawGainStep
-                      :max(ma.EPSILON)
-                       // :max(smallest)
-                       // :(min(maximum))
+                      // :max(ma.EPSILON)
+                      :max(smallest)
                     )
-             * running
-  with {
-    maximum = rawDif *warpedSine(shape,rawRamp);
-  };
+             * running ;
 
   gainShapeFix = prevGain+gainStepShapeFix:max(-1):min(1);
   rawGainStepShapeFix =
