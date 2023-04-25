@@ -11,26 +11,15 @@ import("stdfaust.lib");
 // crossfade between multiple inputs (just the gain)
 process =
   // xfadeSelector(0.33,5)
-  test:AR
-       // test
-       // PMI_FBFFcompressor_N_chan(strength,thresh,att,rel,knee,prePost,link,FBFF,meter,N);
-       // (ARtest:PMI_compression_gain_mono_db(strength,thresh,att,rel,knee,prePost):ba.db2linear)
-       // , os.lf_sawpos(1)>0.5
+  hgroup("",
+         vgroup("[2]test", test)
+         :vgroup("[1]AR", AR))
+  // test
+  // PMI_FBFFcompressor_N_chan(strength,thresh,att,rel,knee,prePost,link,FBFF,meter,N);
+  // (ARtest:PMI_compression_gain_mono_db(strength,thresh,att,rel,knee,prePost):ba.db2linear)
+  // , os.lf_sawpos(1)>0.5
 ;
 
-
-test0 = select3(
-          ((os.lf_sawpos(1)>hslider("POS1", 0.25, 0, 1 , 0.01))+(os.lf_sawpos(1)>hslider("POS2", 0.5, 0, 1 , 0.01))),
-         1, -1, 0);
-test1 = select2(os.lf_sawpos(1)>0.5, 0.1,0.9);
-test =
-  ((loop~_)
-  , no.lfnoise(hslider("rate", 100, 0.1, 1000, 0.1))
-  )
-  :it.interpolate_linear(hslider("Xfade", 0, 0, 1, 0.01))
-with {
-  loop(prev,x) = no.lfnoise0(abs(prev*69)%9:pow(2)+1);
-};
 
 
 AR = loop~(_,_)
@@ -42,11 +31,11 @@ with {
     // rampShapeFix
     // , gainShapeFix
   , x
+  , (rampStep*ma.SR*.5*duration)
     // , (derDer )
     // , warpedSine(shape,rawRamp)
     // , (gain==x)
     // , (gain==gain')
-    // , prevFullDif
     // , coockedDif
     // , running
   , attacking
@@ -66,15 +55,19 @@ with {
     // , maxDerivative(ba.time/(1<<16))
   with {
   rawRamp = (prevRamp+rampStep)*running:min(1):max(0);
-  ramp = select2(intervention,rawRamp,newRamp):max(0):min(1)*runningNotDirChange;
+  ramp =
+    newRamp;
+  // select2(checkbox("ramp")
+  // , rawRamp
+  // , newRamp);
   rampStep = 1 / ma.SR / duration;
   duration = select3(attacking+releasing*2,1,attack,release);
-  // attack = hslider("attack[scale:log]", 0.08, 0, 1, 0.001);
-  attack =
-    hslider("attack", 0.5, 0, nrRleases, 1 )/nrRleases:pow(2);
-  // release = hslider("release[scale:log]", 0.5, 0.001, 1, 0.001):max(1 / ma.SR);
-  release =
-    hslider("release", 0.5, 0, nrRleases, 1 )/nrRleases:pow(2);
+  attack = hslider("attack[scale:log]", 8, 0, 1000, 0.1)*0.001;
+  release = hslider("release[scale:log]", 250, 0, 1000, 0.1)*0.001;
+  // attack =
+  // hslider("attack", 0.5, 0, nrRleases, 1 )/nrRleases:pow(2);
+  // release =
+  // hslider("release", 0.5, 0, nrRleases, 1 )/nrRleases:pow(2);
   nrRleases = 20;
   smallest = 1/192000;
   gain = prevGain+gainStepPhaseFix
@@ -84,11 +77,9 @@ with {
              | (
                ((attack==0) & (rawDif<0))
                | ((release==0) & (rawDif>0)))
-             // | (ramp==1)
-             & (1-dirChange)
-  , gain
-  , x
-);
+           , gain
+           , x
+           );
   rawGainStep =
     shapeDif(shape,rawRamp,rampStep)*fullDif;
   rawGainStepPhaseFix =
@@ -100,34 +91,15 @@ with {
   gainStepPhaseFix =
     select2(releasing
            , rawGainStepPhaseFix
-             // :min(0-smallest)
              :min(0)
              :max(border)
            , rawGainStepPhaseFix
-             // :max(smallest)
              :max(0)
              :min(border)
            )
-    // * running
   with {
-    border = rawDif // fix overshoot at the end
-             // <:select2(checkbox("border")
-             //          ,_
-             //          ,_*warpedSine(shape,ramp))
-             ;
+    border = rawDif; // fix overshoot at the end
   };
-
-  gainStep = select2(releasing
-                    , rawGainStep
-                      // :min(smallest)
-                      // :max(rawDif)
-                    , rawGainStep
-                      // :max(smallest)
-                      // :min(rawDif)
-                    )
-             // * running
-  ;
-
 
   gainShapeFix = prevGain+gainStepShapeFix:max(-1):min(1);
   rawGainStepShapeFix =
@@ -144,56 +116,11 @@ with {
   runningNotDirChange = running* (1-dirChange);
   running = (attacking | releasing) ;
   dirChange = (attacking != attacking')| (releasing != releasing');
-  prevFullDif =rawDif/(1-warpedSine(shapeSliderVal(shapeSlider),prevRamp));
-  coockedDif = (prevFullDif/ ((abs(prevGain-prevGain'):max(ma.EPSILON)*ma.SR)) );
-  closeEnough = (abs(coockedDif)<=(5000*ma.EPSILON));
-  // prevFullDif =rawDif/shape;
   releasing =
-    rawDif>smallest;
-  // rawDif>0;
-  // (coockedDif>closeEnough);
+    rawDif>0;
   attacking =
-    // rawDif<(0-smallest);
     rawDif<0;
-  // (coockedDif<(0-closeEnough));
-  // TODO find the point (in the correct half of the graph) where the slope is the same
-  // retrigger the ramp there
-  // use a multi step process, each time refining further
-  // correct half means: same half of the ramp we are on
-  // half means: where f''(x) == 0 (slope of the slope, the steepest point)
-  // in case of a simple sine shaper, it's 0.5, so don't worry for now
 
-
-  // changeRate = ((gainStep/gainStep')-1)
-  changeRate =
-    // ((gainStep:max(smallest)/(gainStep':max(smallest)))-1)
-    ((gainStep:max(ma.EPSILON)/(gainStep':max(ma.EPSILON)))-1)
-    // / (fullDif:max(ma.EPSILON))
-    // / duration
-    * (warpedSine(shape,rawRamp+rampStep):max(ma.EPSILON)/(warpedSine(shape,rawRamp):max(ma.EPSILON)))
-    * running;
-
-  derDerG = abs(abs(gainStep-gainStep')-abs(gainStep-gainStep')');
-
-  derDer = abs(abs(gainStep-gainStep')-abs(gainStep-gainStep')')
-           * (release:pow(hslider("deaderRelPow", 0.25, 0, 10, 0.01)))
-           * ma.SR
-           // * (abs(rawDif)>0.001)
-           // * (1-dirChange)
-           *running
-           * hslider("deader", 0.83, 0, 10, 0.01)
-  ;
-
-  intervention =
-    1;tmpa=
-        // (derDer>1)
-        (abs(changeRate)> maxCR)
-        * (1-dirChange)
-  ;
-  // TODO: better value
-  // maxCR = hslider("maxCR", 4800, 1, 6000, 10)*10;
-  // maxCR = hslider("maxCR", 0.01, 0, 1, 0.001);
-  maxCR = 0.01;
   compare(start,end,compSlope) =
     (
       select2(bigger , start , middle)
@@ -225,12 +152,15 @@ with {
   //
   // 15 takes about as much CPU as 16, so better be safe than sorry for now
   //
-  // with the above settings, too low nr of compares gives a stuck ramp
+  // at 406.5 ms, we get a too slow ramp with 18 compares
+  // 20 is ok, 22 is closer, 21 is good enough TM and cheaper
+  //
+  // with the above settings, too low nr of compares gives a stuck or too slow ramp
   newRamp =
     (start,end)
   , shapeDif(shape,rawRamp,rampStep')
-    * ((rawDif'/rawDif)/(1-warpedSine(shape,rawRamp-rampStep)))
-    :seq(i, 16, compare)
+    * ((rawDif'/rawDif)/(1-warpedSine(shape',rawRamp-rampStep)))
+    :seq(i, 21, compare)
     : ((+:_*.5),!) // average start and end, throw away the rest
   with {
     start = 0;
@@ -352,23 +282,35 @@ with {
   };
   sineShaper(x) = (sin((x*0.5 + 0.75)*2*ma.PI)+1)*0.5;
   warpedSine(shape,x) =
-    // the raw formula is faster than the tabulated version
-    // 5 to 6 % CPU
+    // at low number of compares the raw formula is faster than the tabulated version
+    // 16 compares: 5 to 6 % CPU
+    // when doing contant phase recalculations, we need higher precision in the newramp function
+    // cause we get wrong ramp durations (to steep or not steep enough) otherwise
+    // 21 compares seems to work well enough in all cases so far
+    // at the higher number of compares (21) we get 11-12% CPU for the raw formaula
     // warpedSineFormula(shape,x)
-    // par(i, nrShapes+1, table(i) * xfadeSelector(shapeSlider,i)):>_
-    par(i, nrShapes+1, table(i) * ((shapeSlider)==i)):>_
+    // the tables do much better
+    par(i, nrShapes+1, table(i) * xfadeSelector(shapeSlider,i)):>_
+    // this one is only slightly cheaper, but less user freindly
+    // par(i, nrShapes+1, table(i) * ((shapeSlider)==i)):>_
   with {
-    // test with
-    // 4.5 to 5.5 % CPU
+    // with 16 compares: 4.5 to 5.5 % CPU
+    // with 21 compares: 12 - 17 % CPU!
     // 23 goes wrong with rel=3, shape=minimum, ramp not steep enough
+    // SIZE =24 hangs the ramp with rel=406.5 ms, any shape
+    // SIZE>24 doesn't compile, even with -quad
     // SIZE = 1<<24;
     // table(i) = ba.tabulate(0, warpedSineFormula(shapeSliderVal(i)), SIZE, 0, 1, x).val;
-    // 3 to 4 % CPU
+
+    // 16 compares: 3 to 4 % CPU
+    // 21 compares: 4.5 to 5.5 % CPU
+    // test with
     // patho case: rel 1 shape -3.4
     // patho case: rel 1 shape -1.8
     SIZE = 1<<16;
     table(i) = ba.tabulate(0, warpedSineFormula(shapeSliderVal(i)), SIZE, 0, 1, x).lin;
-    // 4.5 to 6 % CPU
+    // 16 compares: 4.5 -6%CPU
+    // 21 compares: 7 % CPU
     // SIZE = 1<<9;
     // table(i) = ba.tabulate(0, warpedSineFormula(shapeSliderVal(i)), SIZE, 0, 1, x).cub;
     xfadeSelector(sel,nr) =
@@ -383,8 +325,8 @@ with {
     knee = min(2*shape,2-(2*shape));
   };
   shapeSlider =
-    // half;
-    hslider("shape", 0, 0-half, half, 1) + half;
+    // hslider("shape", 0, 0-half, half, 1) + half;
+    hslider("shape", 0, 0-half, half, 0.01) + half;
   shapeSliderVal(shapeSlider) =
     shapeSlider
     / nrShapes
@@ -512,6 +454,30 @@ meter =
                    "v:[10]meters/[unit:dB]", -12, 0)
                 ));
 
+///////////////////////////////////////////////////////////////////////////////
+//                                    test                                   //
+///////////////////////////////////////////////////////////////////////////////
+
+test = (select3(hslider("test", 2, 0, 2, 1)
+               , test0
+               , test1
+               , test2
+               )
+
+       , no.lfnoise(hslider("rate", 100, 0.1, 1000, 0.1))
+       )
+       :it.interpolate_linear(hslider("Xfade", 0, 0, 1, 0.01))
+;
+
+test0 = select2(os.lf_sawpos(0.5)>0.5, -1,1);
+test1 = select3(
+          ((os.lf_sawpos(1)>hslider("POS1", 0.25, 0, 1 , 0.01))+(os.lf_sawpos(1)>hslider("POS2", 0.5, 0, 1 , 0.01))),
+          1, -1, 0);
+test2 =
+  (loop~_)
+with {
+  loop(prev,x) = no.lfnoise0(abs(prev*69)%9:pow(2)+1);
+};
 // TODO:
 // will algo
 // variable rms size
