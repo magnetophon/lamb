@@ -9,21 +9,26 @@ import("stdfaust.lib");
 // place
 
 // crossfade between multiple inputs (just the gain)
-process =
-  // xfadeSelector(0.33,5)
+process(x) =
   hgroup("",
          vgroup("[2]test", test)
-         :vgroup("[1]AR", AR))
+         :vgroup("[1]AR",
+                 AR
+                ))
   // test
   // PMI_FBFFcompressor_N_chan(strength,thresh,att,rel,knee,prePost,link,FBFF,meter,N);
   // (ARtest:PMI_compression_gain_mono_db(strength,thresh,att,rel,knee,prePost):ba.db2linear)
   // , os.lf_sawpos(1)>0.5
 ;
-
+mysel(x)=         (checkbox("AR")*
+                   (si.onePoleSwitching(hslider("rel simple", 8, 0, 1000, 0.1)*0.001
+                                       ,hslider("att simple", 8, 0, 1000, 0.1)*0.001,x))
+                  , (1-checkbox("AR"))*AR(x):(!,_,!)):>_,x;
 
 
 AR = loop~(_,_)
           // :(!,si.bus(4))
+          // :(!,_)
 with {
   loop(prevRamp,prevGain,x) =
     ramp
@@ -31,14 +36,14 @@ with {
     // rampShapeFix
     // , gainShapeFix
   , x
-  , (rampStep*ma.SR*.5*duration)
+    // , (rampStep*ma.SR*.5*duration)
     // , (derDer )
     // , warpedSine(shape,rawRamp)
     // , (gain==x)
     // , (gain==gain')
     // , coockedDif
     // , running
-  , attacking
+    // , attacking
     // , releasing
     // , (abs(rawGainStep)/2)
     // , switchedShape
@@ -62,8 +67,8 @@ with {
   // , newRamp);
   rampStep = 1 / ma.SR / duration;
   duration = select3(attacking+releasing*2,1,attack,release);
-  attack = hslider("attack[scale:log]", 8, 0, 1000, 0.1)*0.001;
-  release = hslider("release[scale:log]", 250, 0, 1000, 0.1)*0.001;
+  attack = hslider("[1]attack time[scale:log]", 8, 0, 1000, 0.1)*0.001;
+  release = hslider("[3]release time[scale:log]", 250, 0, 1000, 0.1)*0.001;
   // attack =
   // hslider("attack", 0.5, 0, nrRleases, 1 )/nrRleases:pow(2);
   // release =
@@ -265,7 +270,7 @@ with {
            );
   switchedShape =
     select2(shapeInterventionHold
-           , shapeSliderVal(shapeSlider)
+           , shape
            , ba.latch(shapeIntervention,newShape')
            );
 
@@ -291,8 +296,8 @@ with {
     // warpedSineFormula(shape,x)
     // the tables do much better
     par(i, nrShapes+1, table(i) * xfadeSelector(shapeSlider,i)):>_
-    // this one is only slightly cheaper, but less user freindly
-    // par(i, nrShapes+1, table(i) * ((shapeSlider)==i)):>_
+                                                                 // this one is only slightly cheaper, but less user freindly
+                                                                 // par(i, nrShapes+1, table(i) * ((shapeSlider)==i)):>_
   with {
     // with 16 compares: 4.5 to 5.5 % CPU
     // with 21 compares: 12 - 17 % CPU!
@@ -325,14 +330,20 @@ with {
     knee = min(2*shape,2-(2*shape));
   };
   shapeSlider =
-    // hslider("shape", 0, 0-half, half, 1) + half;
-    hslider("shape", 0, 0-half, half, 0.01) + half;
+    // select2(releasing, 1-slider)
+    select2(releasing
+           , half-hslider("[2]attack shape", 0, 0-half, half, 0.1)
+           , half+hslider("[4]release shape", 0, 0-half, half, 0.1));
+
+  nrShapes = 8;
+  half = nrShapes*.5;
+
   shapeSliderVal(shapeSlider) =
     shapeSlider
     / nrShapes
     * range
     + start
-    : hbargraph("shapeBG", 0.3, 0.7)
+    // : hbargraph("shapeBG", 0.3, 0.7)
   with {
     range = 2* (.5-start);
     // lower shapes then 0.3 give jumps in the phase at low durations (d < (3/16:pow(2)))
@@ -340,12 +351,9 @@ with {
     // shapeSliderVal(shapeSlider) = hslider("shape", 0.5, 0.30, 0.70, 0.01);
     start = 0.3;
   };
-  nrShapes = 8;
-  half = nrShapes*.5;
 
   shape =
-    select2 (attacking, shapeSliderVal(shapeSlider),1-shapeSliderVal(shapeSlider));
-
+    shapeSliderVal(shapeSlider);
 };
 };
 
