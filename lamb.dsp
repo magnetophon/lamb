@@ -9,14 +9,15 @@ import("stdfaust.lib");
 // place
 
 // crossfade between multiple inputs (just the gain)
-process(x) =
+process =
   hgroup("",
          vgroup("[2]test", test)
          :vgroup("[1]AR",
-                 AR
-                ))
+          AR
+         ))
   // test
-  // PMI_FBFFcompressor_N_chan(strength,thresh,att,rel,knee,prePost,link,FBFF,meter,N);
+  // ARtest<:
+  // PMI_FBFFcompressor_N_chan(strength,thresh,att,rel,knee,prePost,link,FBFF,meter,N)
   // (ARtest:PMI_compression_gain_mono_db(strength,thresh,att,rel,knee,prePost):ba.db2linear)
   // , os.lf_sawpos(1)>0.5
 ;
@@ -32,95 +33,29 @@ AR = loop~(_,_)
 with {
   loop(prevRamp,prevGain,x) =
     ramp
-  , trueGain
-    // rampShapeFix
-    // , gainShapeFix
+  , gain
   , x
-    // , (rampStep*ma.SR*.5*duration)
-    // , (derDer )
-    // , warpedSine(shape,rawRamp)
-    // , (gain==x)
-    // , (gain==gain')
-    // , coockedDif
-    // , running
-    // , attacking
-    // , releasing
-    // , (abs(rawGainStep)/2)
-    // , switchedShape
-    // , newShape'
-    // , shapeIntervention
-    // , shapeInterventionHold
-    // , newRampShapeX
-    // ,(compareShape(0,1,0.5):>_)
-    // , abs(changeRate)
-    // ,(changeRate* (warpedSine(shape,rawRamp+rampStep)/(warpedSine(shape,rawRamp):max(smallest))))
-    // ,(maxCR/ma.SR)
-    // , intervention
-    // , (maxDerTable(shape) :hbargraph("MD", 0, 1))
-    // , maxDerivative(ba.time/(1<<16))
+  , (x==gain)
   with {
-  rawRamp = (prevRamp+rampStep)*running:min(1):max(0);
-  ramp =
-    newRamp;
-  // select2(checkbox("ramp")
-  // , rawRamp
-  // , newRamp);
+  rawRamp = (prevRamp+rampStep);
   rampStep = 1 / ma.SR / duration;
   duration = select3(attacking+releasing*2,1,attack,release);
   attack = hslider("[1]attack time[scale:log]", 8, 0, 1000, 0.1)*0.001;
   release = hslider("[3]release time[scale:log]", 250, 0, 1000, 0.1)*0.001;
-  // attack =
-  // hslider("attack", 0.5, 0, nrRleases, 1 )/nrRleases:pow(2);
-  // release =
-  // hslider("release", 0.5, 0, nrRleases, 1 )/nrRleases:pow(2);
-  nrRleases = 20;
-  smallest = 1/192000;
-  gain = prevGain+gainStepPhaseFix
-         :max(-1):min(1);
-  trueGain =
-    select2( (1-running)
-             | (
-               ((attack==0) & (rawDif<0))
-               | ((release==0) & (rawDif>0)))
-           , gain
-           , x
-           );
+  gain = prevGain+gainStep ;
   rawGainStep =
-    shapeDif(shape,rawRamp,rampStep)*fullDif;
-  rawGainStepPhaseFix =
-    shapeDif(shape,ramp,rampStep)*fullDifPhaseFix;
+    shapeDif(shape,ramp,rampStep)*fullDif;
   shapeDif(shape,phase,step) =
     warpedSine(shape,phase+step)
     - warpedSine(shape,phase);
-
-  gainStepPhaseFix =
+  gainStep =
     select2(releasing
-           , rawGainStepPhaseFix
-             :min(0)
-             :max(border)
-           , rawGainStepPhaseFix
-             :max(0)
-             :min(border)
-           )
-  with {
-    border = rawDif; // fix overshoot at the end
-  };
+           , rawGainStep :max(rawDif)
+           , rawGainStep :min(rawDif)
+           ) ;
 
-  gainShapeFix = prevGain+gainStepShapeFix:max(-1):min(1);
-  rawGainStepShapeFix =
-    shapeDif(switchedShape,rawRamp,rampStep)*fullDifShapeFix;
-  gainStepShapeFix = select2(releasing
-                            , rawGainStepShapeFix:min(0-smallest):max(rawDif)
-                            , rawGainStepShapeFix:max(smallest):min(rawDif)
-                            )
-                     * running;
   rawDif = x-prevGain;
-  fullDif =rawDif/(1-warpedSine(shape,rawRamp));
-  fullDifPhaseFix =rawDif/(1-warpedSine(shape,ramp));
-  fullDifShapeFix =rawDif/(1-warpedSine(switchedShape,rawRamp));
-  runningNotDirChange = running* (1-dirChange);
-  running = (attacking | releasing) ;
-  dirChange = (attacking != attacking')| (releasing != releasing');
+  fullDif =rawDif/(1-warpedSine(shape,ramp));
   releasing =
     rawDif>0;
   attacking =
@@ -139,12 +74,6 @@ with {
       *(1/(1-warpedSine(shape,x)));
     middle = (start+end)*.5;
   };
-  // each compare halves the range,
-  // so if we want the perfect newRamp value,
-  // for a SR of 192k we need at least that many steps
-  // 2^18 = 262144
-  // so we need 18 compares in total
-  //
   // test with shape minimal, so 0.3 and duration = (3/16)^2
   // (lower shapes give jumps in the phase anyway)
   // at 48k, 13 seems to little, 14 works
@@ -158,10 +87,10 @@ with {
   // 15 takes about as much CPU as 16, so better be safe than sorry for now
   //
   // at 406.5 ms, we get a too slow ramp with 18 compares
-  // 20 is ok, 22 is closer, 21 is good enough TM and cheaper
+  // 20 is ok, 22 is closer, 21 is "good enough"TM and cheaper
   //
   // with the above settings, too low nr of compares gives a stuck or too slow ramp
-  newRamp =
+  ramp =
     (start,end)
   , shapeDif(shape,rawRamp,rampStep')
     * ((rawDif'/rawDif)/(1-warpedSine(shape',rawRamp-rampStep)))
@@ -171,110 +100,6 @@ with {
     start = 0;
     end = 1;
   };
-
-  maxDerTable(shape) =
-    // hslider("start", 0.2, 0, 1, 0.01)
-    // maxDerivative(rampStep,shape)
-    // maxDerivative(1/SIZE,shape)
-    // ba.tabulate(0, maxDerivative(1/SIZE), SIZE, 0, 1, shape).val
-    0
-    // rdtable(SIZE,maxDerivative(1/SIZE,ba.time/SIZE),int(shape*SIZE))
-    // + rampStep
-    // 100/ma.SR
-  with {
-    SIZE = 1<<9;
-    // SIZE = 1<<10 gives ocasional error values, presumably cause the dif becomes too small
-    // more than 10 gives only errors
-  };
-
-  maxDerivative(stepsize,shape) =
-    (0,1,shape,stepsize)
-    : seq(i, 32, compareDer)//32 is overkill, but it's for a table, so it's OK
-    : ((+:_*.5),!,!) // average start and end, throw away the rest
-      * (shape!=0) // TODO: will this bite me in the *ss later on? is it even needed?
-      // in any case, without this, it spits out a too high value.
-    :select2(shape>(1-ma.EPSILON),_,1)
-  ;
-  compareDer(start,end,shape,stepsize) =
-    (
-      select2(bigger , start , middle)
-    , select2(bigger , middle , end)
-    , shape
-    , stepsize
-    )
-  with {
-    bigger = secondDerivative(shape,middle) > 0;
-    derivative(shape,x) = warpedSine(shape,x+stepsize)-warpedSine(shape,x);
-    secondDerivative(shape,x) = derivative(shape,x+stepsize)-derivative(shape,x);
-    middle = (start+end)*.5;
-  };
-
-
-  compareShape(start,end,dif,compSlope) =
-    (
-      select2(bigger , start , middle)
-    , select2(bigger , middle , end)
-    , dif
-    , compSlope
-    )
-  with {
-    bigger = compSlope>slope;
-    slope =
-      (warpedSine(middle,x)-warpedSine(middle,x-rampStep))
-      *(dif/(1-warpedSine(middle,x)));
-    middle = (start+end)*.5;
-    x = maxDerTable(middle);
-  };
-  inewShape =
-    0.5;tmp=
-          (start,end,rawDif)
-        , (warpedSine(shape,rawRamp-rampStep)-warpedSine(shape,rawRamp-(2*rampStep)))
-          * (rawDif'/(1-warpedSine(shape,rawRamp-rampStep)))
-          :seq(i, 14, compareShape)
-          : ((+:_*.5),!,!) // average start and end, throw away the rest
-            // * ((ramp<(thres*2)) | ((ramp > (0.5-thres)) & (ramp < (0.5+thres))  ))
-            // * releasing
-
-            // <: select2(_<=0.0001,_,-1)
-            // <: select2(_>=(1-0.0001),_,-1)
-            // : select2(releasing,-1,_)
-        with {
-    start = 0.1;
-    // end = 0.5;
-    end = 0.9;
-    // thres = (hslider("thres", 1, 0, 2, 0.01)/ma.SR)*10;
-    // end = shape;
-  };
-  inewRampShapeX = maxDerTable(newShape');
-
-  shapeIntervention =
-    intervention
-    &(ramp<thres)
-    // * releasing
-    * running
-  ;
-
-  shapeInterventionHold =
-    loop~_ with {
-    loop(prev) =
-      select2((shapeIntervention| (shapeIntervention'))
-             , (prev*((ramp>ramp') ))
-             , 1);
-  };
-
-  thres = hslider("thres", 1, 0, 1, 0.01)/rampStep/ma.SR*0.1;
-  rampShapeFix =
-    select2(shapeIntervention
-           , ramp
-           , newRampShapeX
-           );
-  switchedShape =
-    select2(shapeInterventionHold
-           , shape
-           , ba.latch(shapeIntervention,newShape')
-           );
-
-  // };
   // ******************************************** the curves: ******************************
   kneeCurve(shape,knee,x) =
     select3( (x>shape-(knee*.5)) + (x>shape+(knee*.5))
@@ -378,8 +203,8 @@ PMI_compression_gain_mono_db(strength,thresh,att,rel,knee,prePost) =
   PMI(PMItime) : ba.linear2db : gain_computer(strength,thresh,knee)
                                 // : ba.bypass1(prePost,ba.db2linear:my_AR(rel,att,r1,a1):ba.linear2db)
                                 // : ba.bypass1((1-prePost),my_AR(rel,att,r1,a1))
-  : ba.bypass1(prePost,ba.db2linear:my_AR(rel,att,r1,a1):ba.linear2db)
-  : ba.bypass1((1-prePost),my_AR(rel,att,r1,a1))
+  : ba.bypass1(prePost,ba.db2linear:AR:ba.linear2db)
+  : ba.bypass1((1-prePost),AR)
     // : my_AR(0,att,0,a1)
     // : my_AR(rel,0,r1,0)
 with {
@@ -450,8 +275,8 @@ r1P = hslider("[13]der release",200,1,1000,1);
 
 ARtest = toggle(soft,loud) with {
   toggle(a,b) = select2(block,b,a);
-  block = os.lf_sawpos(1)>0.5;
-  soft = sine*0.001;
+  block = os.lf_sawpos(0.5)>0.5;
+  soft = sine*0.1;
   loud = sine;
   sine = os.osc(5000);
 };
@@ -472,7 +297,7 @@ test = (select3(hslider("test", 2, 0, 2, 1)
                , test2
                )
 
-       , no.lfnoise(hslider("rate", 100, 0.1, 1000, 0.1))
+       , no.lfnoise(hslider("rate", 100, 0.1, 20000, 0.1))
        )
        :it.interpolate_linear(hslider("Xfade", 0, 0, 1, 0.01))
 ;
@@ -522,6 +347,9 @@ with {
 // no scaling area under curve
 // https://www.desmos.com/calculator/wjtyrllnhd
 // https://www.desmos.com/calculator/apeaxg6yxm
+// add negative phase:
+// https://www.desmos.com/calculator/nbf4dbuuj5
+
 
 // TODO: stop ramp if we are not there yet on the steepest point.
 // steepest => derivative of the derivative approaches 0.
@@ -547,3 +375,5 @@ with {
 // or when we're doing the release, and for the attack we need to change direction
 //   (needs a shape that folows the sine, so at negative phases we have negative speed)
 // TODO: for the shape difs at the outer edges, where it goes out of scope, use the values at the edges
+// TODO: turnaround:
+// when attacking and the going into release, keep attack ramp going untill speed is 0, then switch to release ramp
