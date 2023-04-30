@@ -10,14 +10,14 @@ import("stdfaust.lib");
 
 // crossfade between multiple inputs (just the gain)
 process =
-  // hgroup("",
-  // vgroup("[2]test", test)
-  // :vgroup("[1]AR",
-  // AR
-  // ))
+  hgroup("",
+         vgroup("[2]test", test)
+         :vgroup("[1]AR",
+                 AR
+                ))
   // test
   // ARtest<:
-  PMI_FBFFcompressor_N_chan(strength,thresh,att,rel,knee,prePost,link,FBFF,meter,N)
+  // PMI_FBFFcompressor_N_chan(strength,thresh,att,rel,knee,prePost,link,FBFF,meter,N)
   // (ARtest:PMI_compression_gain_mono_db(strength,thresh,att,rel,knee,prePost):ba.db2linear)
   // , os.lf_sawpos(1)>0.5
 ;
@@ -29,13 +29,13 @@ mysel(x)=         (checkbox("AR")*
 
 AR = loop~(_,_)
           // :(!,si.bus(4))
-          :(!,_)
+          // :(!,_)
 with {
   loop(prevRamp,prevGain,x) =
     ramp
   , gain
-    // , x
-    // , (x:si.onePoleSwitching(releaseOP,attackOP))
+  , x
+  , (x:si.onePoleSwitching(releaseOP,attackOP))
     // , (x==gain)
   with {
   rampStep = 1 / ma.SR / duration;
