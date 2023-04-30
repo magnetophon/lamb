@@ -23,6 +23,8 @@ import("stdfaust.lib");
 simpleTabulate(expression,size,x) =
   ba.tabulate(0, expression, size, 0, 1, x).lin;
 
+// https://www.desmos.com/calculator/eucx9qlwir
+
 tabulate2D(expression,sizeX,sizeY,x,y) =
   table(x,y)
 with {
@@ -32,23 +34,21 @@ with {
   readIndex = (int(x*midX)+yOffset);
   midX = sizeX-1;
   midY = sizeY-1;
-  yOffset = sizeX*(floor(y*midY));
-  wfFloorY = (1+floor(wfY*midY));
+  yOffset =
+    sizeX*(floor(y*midY));
   wf = expression(wfX,wfY);
   wfX =
-    // float(ba.time%sizeX)
-    // /float(sizeX)
     float(ba.time%sizeX)
     /float(midX)
   ;
   wfY =
     float(ba.time-(ba.time%sizeX))
-    /float(midY);
+    /float(sizeX)
+    /float(midY)
+  ;
 };
 
-// midikey2hz(mk) = ba.tabulate(1, ba.midikey2hz, 512, 0, 127, mk).lin;
-// process = midikey2hz(ba.time), ba.midikey2hz(ba.time);
-sineShaper(x) = (sin((x*.5 + 0.75)*2*ma.PI)+1)*0.5;
+sineShaper(x) = (sin((x*4.5 + 0.75)*2*ma.PI)+1)*0.5;
 pwr(x) = pow(2,x);
 pwrSine(x,y)=
   sineShaper(x
@@ -58,7 +58,7 @@ pwrSine(x,y)=
 
 x = hslider("x", 0, 0, 1, 0.01)*midX:floor/midX;
 y = hslider("y", 0, 0, 1, 0.01)*midY:floor/midY;
-sizeX = 1<<4;
+sizeX = 1<<8;
 sizeY = 1<<4;
 midX = sizeX-1;
 midY = sizeY-1;
