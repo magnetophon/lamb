@@ -49,13 +49,19 @@ tabulate2d(C,expression,sizeX,sizeY, rx0, rx1, ry0, ry1,x,y) =
     idY = ((y-ry0)/(ry1-ry0))*midY;
 
     wfX =
-      rx0+float(ba.time%sizeX*(rx1-rx0))
+      rx0+float(ba.time%sizeX)*(rx1-rx0)
       /float(midX)
     ;
     wfY =
-      float(ba.time-(ba.time%sizeX))
-      /float(sizeX)
+      ry0+
+      ((float(ba.time-(ba.time%sizeX))
+        /float(sizeX))
+       *(ry1-ry0)
+      )
       /float(midY)
+      // float(ba.time-(ba.time%sizeX))
+      // /float(sizeX)
+      // /float(midY)
     ;
 
     // Prepare the 'float' table read index
@@ -119,17 +125,20 @@ xr = (((((hslider("x", rx0, rx0, rx1, 0.01)
 // x= hslider("x", rx0, rx0, rx1, 1.0/sizeX)*midX:floor/midX;
 x= hslider("x", rx0, rx0, rx1, 0.1);
 // idX = (x-rx0)/(rx1-rx0)*midX;
-rx0 = 0.0;
+rx0 = 0.1;
 rx1 = 4.0;
-y = hslider("y", 0, 0, 1, 0.01)*midY:floor/midY;
+ry0 = 0.3;
+ry1 = 7.0;
+y= hslider("y", ry0, ry0, ry1, 0.1);
+// y = hslider("y", , 0, 1, 0.01)*midY:floor/midY;
 // y = (float((hslider("y", 0, 0, 1, 0.01)/1.0)*midY:floor)*1.0)/midY;
-sizeX = 1<<16;
-sizeY = 1<<4;
+sizeX = 1<<12;
+sizeY = 1<<12;
 midX = sizeX-1;
 midY = sizeY-1;
 process =
   // simpleTabulate(pwr,4,hslider("x", 0, 0, 1, 0.01))
-  tabulate2d(0,pwrSine,sizeX,sizeY,rx0,rx1,0,1,x,y).val
+  tabulate2d(0,pwrSine,sizeX,sizeY,rx0,rx1,ry0,ry1,x,y).val
 , pwrSine(x,y)
   // hgroup("",
   // vgroup("[2]test", test)
