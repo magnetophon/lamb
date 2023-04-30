@@ -25,17 +25,29 @@ simpleTabulate(expression,size,x) =
 
 // https://www.desmos.com/calculator/eucx9qlwir
 
-tabulate2d(expression,sizeX,sizeY,x,y) =
+tabulate2d(C,expression,sizeX,sizeY, rx0, rx1, ry0, ry1,x,y) =
   environment {
     size = sizeX*sizeY;
     val(x,y) =
       rdtable(size, wf, readIndex);
-    readIndex = (int(x*midX)+yOffset);
+    readIndex = rid(int(idX),midX, C)+yOffset;
+    // readIndex = (int(x*midX)+yOffset);
+    // Maximum X index to access
     midX = sizeX-1;
+    // Maximum Y index to access
     midY = sizeY-1;
     yOffset =
-      sizeX*(floor(y*midY));
+      // sizeX*(floor(y*midY));
+      sizeX*rid(floor(idY),midY,C);
+    // Create the table
     wf = expression(wfX,wfY);
+    // Prepare the 'float' table read index for X
+    // idX = ((x-rx0)/(rx1-rx0))*midX;
+    idX = ((x-rx0)/(rx1-rx0))*midX*(rx1-rx0);
+    // idX = (x-rx0)*midX;
+    // Prepare the 'float' table read index for Y
+    idY = ((y-ry0)/(ry1-ry0))*midY;
+
     wfX =
       float(ba.time%sizeX)
       /float(midX)
@@ -45,9 +57,43 @@ tabulate2d(expression,sizeX,sizeY,x,y) =
       /float(sizeX)
       /float(midY)
     ;
-};
 
-sineShaper(x) = (sin((x*4.5 + 0.75)*2*ma.PI)+1)*0.5;
+    // Prepare the 'float' table read index
+    // id = (x-r0)/(r1-r0)*mid;
+
+    // Limit the table read index in [0, mid] if C = 1
+    rid(x,mid, 0) = x;
+    rid(x,mid, 1) = max(0, min(x, mid));
+
+    // Tabulate an unary 'FX' function on a range [r0, r1]
+    ival = y0 with { y0 = rdtable(size, wf, rid(int(idX), C)); };
+
+    // Tabulate an unary 'FX' function over the range [r0, r1] with linear interpolation
+    lin = it.interpolate_linear(d,y0,y1)
+    with {
+      x0 = int(id);
+      x1 = x0+1;
+      d  = id-x0;
+      y0 = rdtable(S, wf, rid(x0, C));
+      y1 = rdtable(S, wf, rid(x1, C));
+    };
+
+    // Tabulate an unary 'FX' function over the range [r0, r1] with cubic interpolation
+    cub = it.interpolate_cubic(d,y0,y1,y2,y3)
+    with {
+      x0 = x1-1;
+      x1 = int(id);
+      x2 = x1+1;
+      x3 = x2+1;
+      d  = id-x1;
+      y0 = rdtable(S, wf, rid(x0, C));
+      y1 = rdtable(S, wf, rid(x1, C));
+      y2 = rdtable(S, wf, rid(x2, C));
+      y3 = rdtable(S, wf, rid(x3, C));
+    };
+  };
+
+sineShaper(x) = (sin((x*.5 + 0.75)*2*ma.PI)+1)*0.5;
 pwr(x) = pow(2,x);
 pwrSine(x,y)=
   sineShaper(x
@@ -55,15 +101,35 @@ pwrSine(x,y)=
             )
 ;
 
-x = hslider("x", 0, 0, 1, 0.01)*midX:floor/midX;
+// x = (float((hslider("x", 0.2, 0.2, 2, 0.01)/2)*midX:floor)*2.0)/midX;
+// y = (float((hslider("y", 0.3, 0.3, 3, 0.01)/3)*midY:floor)*3.0)/midY;
+// x = ((hslider("x", 0, 0, 2, 0.01)/2)*midX:floor/midX)*2;
+xs = hslider("x", rx0, rx0, rx1, 0.01)*midX:floor/midX;
+xr = (((((hslider("x", rx0, rx0, rx1, 0.01)
+          -rx0
+      )
+       /(rx1-rx0)
+      )*midX:floor/midX)
+     *(rx1-rx0)
+    )
+    +rx0)
+    *(rx1-rx0)
+
+;
+// x= hslider("x", rx0, rx0, rx1, 1.0/sizeX)*midX:floor/midX;
+x= hslider("x", rx0, rx0, rx1, 0.1);
+// idX = (x-rx0)/(rx1-rx0)*midX;
+rx0 = 0.0;
+rx1 = 2.0;
 y = hslider("y", 0, 0, 1, 0.01)*midY:floor/midY;
-sizeX = 1<<8;
+// y = (float((hslider("y", 0, 0, 1, 0.01)/1.0)*midY:floor)*1.0)/midY;
+sizeX = 1<<16;
 sizeY = 1<<4;
 midX = sizeX-1;
 midY = sizeY-1;
 process =
   // simpleTabulate(pwr,4,hslider("x", 0, 0, 1, 0.01))
-  tabulate2d(pwrSine,sizeX,sizeY,x,y).val
+  tabulate2d(0,pwrSine,sizeX,sizeY,rx0,rx1,0,1,x,y).val
 , pwrSine(x,y)
   // hgroup("",
   // vgroup("[2]test", test)
