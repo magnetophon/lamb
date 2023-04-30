@@ -25,27 +25,26 @@ simpleTabulate(expression,size,x) =
 
 // https://www.desmos.com/calculator/eucx9qlwir
 
-tabulate2D(expression,sizeX,sizeY,x,y) =
-  table(x,y)
-with {
-  size = sizeX*sizeY;
-  table(x,y) =
-    rdtable(size, wf, readIndex);
-  readIndex = (int(x*midX)+yOffset);
-  midX = sizeX-1;
-  midY = sizeY-1;
-  yOffset =
-    sizeX*(floor(y*midY));
-  wf = expression(wfX,wfY);
-  wfX =
-    float(ba.time%sizeX)
-    /float(midX)
-  ;
-  wfY =
-    float(ba.time-(ba.time%sizeX))
-    /float(sizeX)
-    /float(midY)
-  ;
+tabulate2d(expression,sizeX,sizeY,x,y) =
+  environment {
+    size = sizeX*sizeY;
+    val(x,y) =
+      rdtable(size, wf, readIndex);
+    readIndex = (int(x*midX)+yOffset);
+    midX = sizeX-1;
+    midY = sizeY-1;
+    yOffset =
+      sizeX*(floor(y*midY));
+    wf = expression(wfX,wfY);
+    wfX =
+      float(ba.time%sizeX)
+      /float(midX)
+    ;
+    wfY =
+      float(ba.time-(ba.time%sizeX))
+      /float(sizeX)
+      /float(midY)
+    ;
 };
 
 sineShaper(x) = (sin((x*4.5 + 0.75)*2*ma.PI)+1)*0.5;
@@ -64,7 +63,7 @@ midX = sizeX-1;
 midY = sizeY-1;
 process =
   // simpleTabulate(pwr,4,hslider("x", 0, 0, 1, 0.01))
-  tabulate2D(pwrSine,sizeX,sizeY,x,y)
+  tabulate2d(pwrSine,sizeX,sizeY,x,y).val
 , pwrSine(x,y)
   // hgroup("",
   // vgroup("[2]test", test)
