@@ -43,13 +43,13 @@ tabulate2d(C,expression,sizeX,sizeY, rx0, rx1, ry0, ry1,x,y) =
     wf = expression(wfX,wfY);
     // Prepare the 'float' table read index for X
     // idX = ((x-rx0)/(rx1-rx0))*midX;
-    idX = ((x-rx0)/(rx1-rx0))*midX*(rx1-rx0);
+    idX = (x-rx0)/(rx1-rx0)*midX;
     // idX = (x-rx0)*midX;
     // Prepare the 'float' table read index for Y
     idY = ((y-ry0)/(ry1-ry0))*midY;
 
     wfX =
-      float(ba.time%sizeX)
+      rx0+float(ba.time%sizeX*(rx1-rx0))
       /float(midX)
     ;
     wfY =
@@ -120,7 +120,7 @@ xr = (((((hslider("x", rx0, rx0, rx1, 0.01)
 x= hslider("x", rx0, rx0, rx1, 0.1);
 // idX = (x-rx0)/(rx1-rx0)*midX;
 rx0 = 0.0;
-rx1 = 2.0;
+rx1 = 4.0;
 y = hslider("y", 0, 0, 1, 0.01)*midY:floor/midY;
 // y = (float((hslider("y", 0, 0, 1, 0.01)/1.0)*midY:floor)*1.0)/midY;
 sizeX = 1<<16;
