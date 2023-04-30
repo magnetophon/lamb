@@ -38,7 +38,6 @@ with {
   , (x:si.onePoleSwitching(releaseOP,attackOP))
     // , (x==gain)
   with {
-  rampStep = 1 / ma.SR / duration;
   duration = select3(attacking+releasing*2,1,attack,release);
   attack = hslider("[1]attack time[scale:log]", 8, 0, 1000, 0.1)*0.001;
   release = hslider("[3]release time[scale:log]", 250, 0, 1000, 0.1)*0.001;
@@ -51,11 +50,11 @@ with {
            , rawGainStep :min(dif)
            ) with {
     rawGainStep =
-      shapeDif(shape,ramp,rampStep)*fullDif;
+      shapeDif(shape,ramp,duration)*fullDif;
     fullDif =dif/(1-warpedSine(shape,ramp));
   };
-  shapeDif(shape,phase,step) =
-    warpedSine(shape,phase+step)
+  shapeDif(shape,phase,duration) =
+    warpedSine(shape,phase+(1 / ma.SR / duration))
     - warpedSine(shape,phase);
 
   dif = x-prevGain;
@@ -73,7 +72,7 @@ with {
   with {
     bigger = compSlope>slope(middle);
     slope(x) =
-      shapeDif(shape,x,rampStep)
+      shapeDif(shape,x,duration)
       *(1/(1-warpedSine(shape,x)));
     middle = (start+end)*.5;
   };
@@ -95,13 +94,14 @@ with {
   // with the above settings, too low nr of compares gives a stuck or too slow ramp
   ramp =
     (start,end)
-  , shapeDif(shape,prevRamp+rampStep,rampStep')
+  , shapeDif(shape,prevRamp+rampStep,duration')
     * ((dif'/dif)/(1-warpedSine(shape',prevRamp)))
     :seq(i, 21, compare)
     : ((+:_*.5),!) // average start and end, throw away the rest
   with {
     start = 0;
     end = 1;
+    rampStep = 1 / ma.SR / duration;
   };
   // ******************************************** the curves: ******************************
   kneeCurve(shape,knee,x) =
