@@ -9,12 +9,63 @@ import("stdfaust.lib");
 // place
 
 // crossfade between multiple inputs (just the gain)
+
+// twoDtabulate(expression,size,x,y) =
+// par(i, Nr, expression)
+// par(i, nrShapes+1, table(i) * xfadeSelector(shapeSlider,i)):>_
+// with {
+// SIZE = 1<<16;
+// table(i) = ba.tabulate(0, warpedSineFormula(shapeSliderVal(i)), SIZE, 0, 1, x).lin;
+// xfadeSelector(sel,nr) =
+// ((sel<=nr)*((sel-nr)+1):max(0)) + ((sel>nr)*((nr-sel)+1):max(0));
+// };
+
+simpleTabulate(expression,size,x) =
+  ba.tabulate(0, expression, size, 0, 1, x).lin;
+
+tabulate2D(expression,sizeX,sizeY,x,y) =
+  table(x,y)
+with {
+  size = sizeX*sizeY;
+  table(x,y) =
+    rdtable(size, wf, readIndex);
+  readIndex = (int(x*midX)+yOffset);
+  midX = sizeX-1;
+  midY = sizeY-1;
+  yOffset = sizeX*(floor(y*midY));
+  wfFloorY = (1+floor(wfY*midY));
+  wf = expression(wfX,wfY);
+  wfX =
+    // float(ba.time%sizeX)
+    // /float(sizeX)
+    float(ba.time%sizeX)
+    /float(midX)
+  ;
+  wfY = ba.time; // placeholder
+};
+
+// midikey2hz(mk) = ba.tabulate(1, ba.midikey2hz, 512, 0, 127, mk).lin;
+// process = midikey2hz(ba.time), ba.midikey2hz(ba.time);
+sineShaper(x) = (sin((x*998.5 + 0.75)*2*ma.PI)+1)*0.5;
+pwr(x) = pow(2,x);
+pwrSine(x,y)=
+  sineShaper(x
+             // *pwr(y)
+            )
+;
+
+x = hslider("x", 0, 0, 1, 0.01);
+y = hslider("y", 0, 0, 1, 0.01);
 process =
-  hgroup("",
-         vgroup("[2]test", test)
-         :vgroup("[1]AR",
-                 AR
-                ))
+  // simpleTabulate(pwr,4,hslider("x", 0, 0, 1, 0.01))
+  tabulate2D(pwrSine,1<<24,8,x,y)
+, pwrSine(x,y)
+  // hgroup("",
+  // vgroup("[2]test", test)
+  // :vgroup("[1]AR",
+  // AR
+  // ))
+
   // test
   // ARtest<:
   // PMI_FBFFcompressor_N_chan(strength,thresh,att,rel,knee,prePost,link,FBFF,meter,N)
@@ -38,7 +89,9 @@ with {
   , (x:si.onePoleSwitching(releaseOP,attackOP))
     // , (x==gain)
   with {
-  duration = select3(attacking+releasing*2,1,attack,release);
+  duration =
+    // select3(attacking+releasing*2,1,attack,release);
+    (attack*attacking)+(release*releasing);
   attack = hslider("[1]attack time[scale:log]", 8, 0, 1000, 0.1)*0.001;
   release = hslider("[3]release time[scale:log]", 250, 0, 1000, 0.1)*0.001;
   attackOP = hslider("[5]OP attack time[scale:log]", 8, 0, 1000, 0.1)*0.001;
@@ -50,11 +103,16 @@ with {
            , rawGainStep :min(dif)
            ) with {
     rawGainStep =
-      shapeDif(shape,ramp,duration)*fullDif;
+      shapeDif(shape,ramp,duration,ma.SR)*fullDif;
     fullDif =dif/(1-warpedSine(shape,ramp));
   };
-  shapeDif(shape,phase,duration) =
-    warpedSine(shape,phase+(1 / ma.SR / duration))
+  shapeDif(shape,phase,duration,sr) =
+    shapeDifFormula(shape,phase,duration,48000);
+  shapeDifFormula(shape,phase,duration,sr) =
+    // warpedSineFormula(shape,phase+(1 / sr / duration))
+    // - warpedSineFormula(shape,phase);
+    // shapeDif(shape,phase,duration,sr) =
+    warpedSine(shape,phase+(1 / sr / duration))
     - warpedSine(shape,phase);
 
   dif = x-prevGain;
@@ -72,7 +130,7 @@ with {
   with {
     bigger = compSlope>slope(middle);
     slope(x) =
-      shapeDif(shape,x,duration)
+      shapeDif(shape,x,duration,ma.SR)
       *(1/(1-warpedSine(shape,x)));
     middle = (start+end)*.5;
   };
@@ -94,7 +152,7 @@ with {
   // with the above settings, too low nr of compares gives a stuck or too slow ramp
   ramp =
     (start,end)
-  , shapeDif(shape,prevRamp+rampStep,duration')
+  , shapeDif(shape,prevRamp+rampStep,duration',ma.SR)
     * ((dif'/dif)/(1-warpedSine(shape',prevRamp)))
     :seq(i, 21, compare)
     : ((+:_*.5),!) // average start and end, throw away the rest
