@@ -41,24 +41,30 @@ with {
     float(ba.time%sizeX)
     /float(midX)
   ;
-  wfY = ba.time; // placeholder
+  wfY =
+    float(ba.time-(ba.time%sizeX))
+    /float(midY);
 };
 
 // midikey2hz(mk) = ba.tabulate(1, ba.midikey2hz, 512, 0, 127, mk).lin;
 // process = midikey2hz(ba.time), ba.midikey2hz(ba.time);
-sineShaper(x) = (sin((x*998.5 + 0.75)*2*ma.PI)+1)*0.5;
+sineShaper(x) = (sin((x*.5 + 0.75)*2*ma.PI)+1)*0.5;
 pwr(x) = pow(2,x);
 pwrSine(x,y)=
   sineShaper(x
-             // *pwr(y)
+             *(1+y)
             )
 ;
 
-x = hslider("x", 0, 0, 1, 0.01);
-y = hslider("y", 0, 0, 1, 0.01);
+x = hslider("x", 0, 0, 1, 0.01)*midX:floor/midX;
+y = hslider("y", 0, 0, 1, 0.01)*midY:floor/midY;
+sizeX = 1<<4;
+sizeY = 1<<4;
+midX = sizeX-1;
+midY = sizeY-1;
 process =
   // simpleTabulate(pwr,4,hslider("x", 0, 0, 1, 0.01))
-  tabulate2D(pwrSine,1<<24,8,x,y)
+  tabulate2D(pwrSine,sizeX,sizeY,x,y)
 , pwrSine(x,y)
   // hgroup("",
   // vgroup("[2]test", test)
