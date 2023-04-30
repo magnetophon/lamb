@@ -10,14 +10,14 @@ import("stdfaust.lib");
 
 // crossfade between multiple inputs (just the gain)
 process =
-  hgroup("",
-         vgroup("[2]test", test)
-         :vgroup("[1]AR",
-          AR
-         ))
+  // hgroup("",
+  // vgroup("[2]test", test)
+  // :vgroup("[1]AR",
+  // AR
+  // ))
   // test
   // ARtest<:
-  // PMI_FBFFcompressor_N_chan(strength,thresh,att,rel,knee,prePost,link,FBFF,meter,N)
+  PMI_FBFFcompressor_N_chan(strength,thresh,att,rel,knee,prePost,link,FBFF,meter,N)
   // (ARtest:PMI_compression_gain_mono_db(strength,thresh,att,rel,knee,prePost):ba.db2linear)
   // , os.lf_sawpos(1)>0.5
 ;
@@ -29,37 +29,40 @@ mysel(x)=         (checkbox("AR")*
 
 AR = loop~(_,_)
           // :(!,si.bus(4))
-          // :(!,_)
+          :(!,_)
 with {
   loop(prevRamp,prevGain,x) =
     ramp
   , gain
-  , x
-  , (x==gain)
+    // , x
+    // , (x:si.onePoleSwitching(releaseOP,attackOP))
+    // , (x==gain)
   with {
-  rawRamp = (prevRamp+rampStep);
   rampStep = 1 / ma.SR / duration;
   duration = select3(attacking+releasing*2,1,attack,release);
   attack = hslider("[1]attack time[scale:log]", 8, 0, 1000, 0.1)*0.001;
   release = hslider("[3]release time[scale:log]", 250, 0, 1000, 0.1)*0.001;
+  attackOP = hslider("[5]OP attack time[scale:log]", 8, 0, 1000, 0.1)*0.001;
+  releaseOP = hslider("[6]OPrelease time[scale:log]", 250, 0, 1000, 0.1)*0.001;
   gain = prevGain+gainStep ;
-  rawGainStep =
-    shapeDif(shape,ramp,rampStep)*fullDif;
+  gainStep =
+    select2(releasing
+           , rawGainStep :max(dif)
+           , rawGainStep :min(dif)
+           ) with {
+    rawGainStep =
+      shapeDif(shape,ramp,rampStep)*fullDif;
+    fullDif =dif/(1-warpedSine(shape,ramp));
+  };
   shapeDif(shape,phase,step) =
     warpedSine(shape,phase+step)
     - warpedSine(shape,phase);
-  gainStep =
-    select2(releasing
-           , rawGainStep :max(rawDif)
-           , rawGainStep :min(rawDif)
-           ) ;
 
-  rawDif = x-prevGain;
-  fullDif =rawDif/(1-warpedSine(shape,ramp));
+  dif = x-prevGain;
   releasing =
-    rawDif>0;
+    dif>0;
   attacking =
-    rawDif<0;
+    dif<0;
 
   compare(start,end,compSlope) =
     (
@@ -92,8 +95,8 @@ with {
   // with the above settings, too low nr of compares gives a stuck or too slow ramp
   ramp =
     (start,end)
-  , shapeDif(shape,rawRamp,rampStep')
-    * ((rawDif'/rawDif)/(1-warpedSine(shape',rawRamp-rampStep)))
+  , shapeDif(shape,prevRamp+rampStep,rampStep')
+    * ((dif'/dif)/(1-warpedSine(shape',prevRamp)))
     :seq(i, 21, compare)
     : ((+:_*.5),!) // average start and end, throw away the rest
   with {
@@ -157,7 +160,7 @@ with {
   shapeSlider =
     // select2(releasing, 1-slider)
     select2(releasing
-           , half-hslider("[2]attack shape", 0, 0-half, half, 0.1)
+           , half+hslider("[2]attack shape" , 0, 0-half, half, 0.1)
            , half+hslider("[4]release shape", 0, 0-half, half, 0.1));
 
   nrShapes = 8;
@@ -377,3 +380,8 @@ with {
 // TODO: for the shape difs at the outer edges, where it goes out of scope, use the values at the edges
 // TODO: turnaround:
 // when attacking and the going into release, keep attack ramp going untill speed is 0, then switch to release ramp
+// TODO: makeup gain: implement as an offset to the wanted GR, before the smoothing, that way any automation is smoothet by us.
+// same with strength
+// TODO: link: before smoother
+// TODO: binary search as a function lin the libraries
+// TODO: auto makup gain by area under curve
