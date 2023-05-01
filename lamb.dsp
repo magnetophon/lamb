@@ -88,17 +88,53 @@ tabulate2d(C,expression,sizeX,sizeY, rx0, rx1, ry0, ry1,x,y) =
       v3 = rdtable(size, wf, rid(i3, mid, C));
     };
     // Tabulate an unary 'FX' function over the range [r0, r1] with cubic interpolation
-    cub = it.interpolate_cubic(d,y0,y1,y2,y3)
+    cub =
+      it.interpolate_cubic(
+        dy
+      , it.interpolate_cubic(dx,v0,v1,v2,v3)
+      , it.interpolate_cubic(dx,v4,v5,v6,v7)
+      , it.interpolate_cubic(dx,v8,v9,v10,v11)
+      , it.interpolate_cubic(dx,v12,v13,v14,v15)
+      )
     with {
-      x0 = x1-1;
-      x1 = int(id);
-      x2 = x1+1;
-      x3 = x2+1;
-      d  = id-x1;
-      y0 = rdtable(size, wf, rid(x0, C));
-      y1 = rdtable(size, wf, rid(x1, C));
-      y2 = rdtable(size, wf, rid(x2, C));
-      y3 = rdtable(size, wf, rid(x3, C));
+      i0  = i4-sizeX;
+      i1  = i5-sizeX;
+      i2  = i6-sizeX;
+      i3  = i7-sizeX;
+
+      i4  = i5-1;
+      i5  = rid(int(idX), midX, C)+yOffset;
+      i6  = i5+1;
+      i7  = i6+1;
+
+      i8  = i4+sizeX;
+      i9  = i5+sizeX;
+      i10 = i6+sizeX;
+      i11 = i7+sizeX;
+
+      i12 = i4+(2*sizeX);
+      i13 = i5+(2*sizeX);
+      i14 = i6+(2*sizeX);
+      i15 = i7+(2*sizeX);
+
+      dx  = idX-int(idX);
+      dy  = idY-int(idY);
+      v0  = rdtable(size, wf, rid(i0 , mid, C));
+      v1  = rdtable(size, wf, rid(i1 , mid, C));
+      v2  = rdtable(size, wf, rid(i2 , mid, C));
+      v3  = rdtable(size, wf, rid(i3 , mid, C));
+      v4  = rdtable(size, wf, rid(i4 , mid, C));
+      v5  = rdtable(size, wf, rid(i5 , mid, C));
+      v6  = rdtable(size, wf, rid(i6 , mid, C));
+      v7  = rdtable(size, wf, rid(i7 , mid, C));
+      v8  = rdtable(size, wf, rid(i8 , mid, C));
+      v9  = rdtable(size, wf, rid(i9 , mid, C));
+      v10 = rdtable(size, wf, rid(i10, mid, C));
+      v11 = rdtable(size, wf, rid(i11, mid, C));
+      v12 = rdtable(size, wf, rid(i12, mid, C));
+      v13 = rdtable(size, wf, rid(i13, mid, C));
+      v14 = rdtable(size, wf, rid(i14, mid, C));
+      v15 = rdtable(size, wf, rid(i15, mid, C));
     };
   };
 
@@ -143,7 +179,8 @@ process =
   // simpleTabulate(pwr,4,hslider("x", 0, 0, 1, 0.01))
   tabulate2d(0,pwrSine,sizeX,sizeY,rx0,rx1,ry0,ry1,x,y)
   // .val
-  .lin
+  // .lin
+  .cub
 , pwrSine(x,y)
   // hgroup("",
   // vgroup("[2]test", test)
