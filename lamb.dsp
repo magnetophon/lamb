@@ -24,7 +24,7 @@ simpleTabulate(expression,size,x) =
   ba.tabulate(0, expression, size, 0, 1, x).lin;
 
 // https://www.desmos.com/calculator/eucx9qlwir
-N = 5;
+N = 2;
 process =
   tabulateNd(N,1,si.bus(N):>_);
 // wfps(4);
@@ -59,10 +59,23 @@ with {
        ,sizeX;
       // one waveform parameter write value:
       wfp(prevSize,midX,sizeX,r0,r1) =
-        (r0+float(ba.time%sizeX)*(r1-r0)
+        (r0+float(
+            floor(ba.time/prevSize)
+            %sizeX
+            *prevSize
+          )*(r1-r0)
          /float(midX))
        ,(prevSize*sizeX);
 
+      // table creation Y:
+      wfY =
+        ry0+
+        ((float(ba.time-(ba.time%sizeX))
+          /float(sizeX))
+         *(ry1-ry0)
+        )
+        /float(midY)
+      ;
       // all waveform parameters write values:
       wfps =
         (
@@ -73,13 +86,7 @@ with {
         )
         :ro.interleave(N,4)
         : (wfp0,si.bus(4*N-4))
-          // : (wfp,si.bus(4*N-8))
-          // : (wfp,si.bus(4*N-12))
         : seq(i, N-1, si.bus(i+1),wfp, si.bus(4*N-(4*(i+2))))
-          // : seq(i, N-1, (wfp,si.bus(N-2)))
-          // : par(i, N-1, wfp)
-          // :> si.bus(N)
-          // :>_<:
         : (si.bus(N),!)
       ;
 
