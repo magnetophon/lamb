@@ -24,14 +24,15 @@ simpleTabulate(expression,size,x) =
   ba.tabulate(0, expression, size, 0, 1, x).lin;
 
 // https://www.desmos.com/calculator/eucx9qlwir
-N = 3;
+N = 2;
 process =
   tabulateNd(N,1,si.bus(N):>_);
 // wfps(4);
 tabulateNd(N,C,expression) =
   calc
   // .readIndex
-  .ri(1)
+  .wf
+  // , calc.ri
 with {
   calc =
     environment {
@@ -52,16 +53,18 @@ with {
         : par(i, N, idp) ;
 
       // one waveform parameter write value:
-      wfp(midX,sizeX,r0,r1,x) =
+      wfp(midX,sizeX,r0,r1) =
         r0+float(ba.time%sizeX)*(r1-r0)
         /float(midX);
       // all waveform parameters write values:
       wfps =
+        // from sizes
         ((bs<:(mids,bs)
          )
-        , si.bus(N*3)
+         // from r0 r1
+        , si.bus(N*2)
         )
-        :ro.interleave(N,5)
+        :ro.interleave(N,4)
         : par(i, N, wfp) ;
       // Create the table
       wf = wfps:expression;
@@ -77,40 +80,46 @@ with {
       // (sizes,r0s,r1s,xs)
       =
         // from sizes
-        (sizesMidMidsFromSizes
+        (midSizesMidsFromSizes
          // from r0s,r1s,xs
         , si.bus(N*3))
-        :
-        // (
-        //   // sizes mid mids
-        //   (si.bus(1+(N*2))
-        //    // from r0s,r1s,xs
-        //   , si.bus(N*3))
-        // )
-        (
-          // from sizes, mid
-          si.bus(N+1)
-          // from mids:
-        , ( bs<:si.bus(N*2) )
-          // from r0s,r1s,xs
+        : (
+        // from sizes, mid
+        si.bus(N+1)
+        // from mids:
+      , ( bs<:si.bus(N*2) )
+        // from r0s,r1s,xs
         , si.bus(N*3)
-        )
-        :
+      ) :
         // from sizes, mid,mids
         (si.bus(1+2*N)
         ,ids)  // takes (midX,r0,r1,x)
+        // output:
+        // mid, sizes, mids, ids
+        : ri
+          // output:
+          // mid, total size, read index
       ;
-      sizesMidMidsFromSizes = bs<:(bs,mid,mids);
+      midSizesMidsFromSizes = bs<:(mid,bs,mids);
 
-      ri(0,prevSize,prevID,sizeX,midX,idX) =
-        (rid(int(idX),midX,C)+prevID)
-      , sizeX;
-      ri(N,prevSize,prevID,sizeX,midX,idX) =
-        ( (prevSize*sizeX*
+      ri =
+        // mid
+        _
+      , (
+        ro.interleave(N,3)
+        : (ri0, si.bus(3*(N-1)))
+        : seq(i, N-1, riN, si.bus(3*(N-i-2)))
+      );
+
+      ri0(sizeX,midX,idX) =
+        sizeX
+      , (rid(int(idX),midX,C));
+
+      riN(prevSize,prevID,sizeX,midX,idX) =
+        (prevSize*sizeX)
+      , ( (prevSize*sizeX*
            rid(floor(idX),midX,C))
-          +prevID)
-      , (prevSize*sizeX)
-      ;
+          +prevID) ;
 
       readIndexF
       // (sizes,mid,mids,ids)
@@ -258,13 +267,13 @@ pwrSine(x,y)=
 xs = hslider("x", rx0, rx0, rx1, 0.01)*midX:floor/midX;
 xr = (((((hslider("x", rx0, rx0, rx1, 0.01)
           -rx0
+         )
+         /(rx1-rx0)
+        )*midX:floor/midX)
+       *(rx1-rx0)
       )
-       /(rx1-rx0)
-      )*midX:floor/midX)
+      +rx0)
      *(rx1-rx0)
-    )
-    +rx0)
-    *(rx1-rx0)
 
 ;
 // x= hslider("x", rx0, rx0, rx1, 1.0/sizeX)*midX:floor/midX;
