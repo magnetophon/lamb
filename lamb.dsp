@@ -24,8 +24,41 @@ simpleTabulate(expression,size,x) =
   ba.tabulate(0, expression, size, 0, 1, x).lin;
 
 // https://www.desmos.com/calculator/eucx9qlwir
+process =
+  // tabulateNd(4,0,0);
+  ids(5);
+ids(N) =
+  // si.bus(N*4)
+  ro.interleave(N,4)
+  : par(i, N, id)
+;
+id(mid,r0,r1,x) = (x-r0)/(r1-r0)*mid;
 
-tabulate2d(C,expression,sizeX,sizeY, rx0, rx1, ry0, ry1,x,y) =
+tabulateNd(N,C,expression) =
+  calc
+  .size(N)
+with {
+  calc =
+    environment {
+      params(N) =
+        si.bus(4*N):>
+        si.bus(N)
+        : par(i, N, _*C*i)
+          // :expression
+      ;
+      // total size of the table: s(0) * s(1)  ...  * s(N-2) * s(N-1)
+      // N in, 1 out
+      size(1) = _;
+      size(N) = _*size(N-1);
+      // Maximum indexes to access
+      // N in, N out
+      mids(N) = par(i, N, _-1);
+      // Maximum total index to access
+      mid = size-1;
+    };
+};
+
+tabulate2d(C,expression,sizeX,sizeY, rx0, ry0, rx1, ry1,x,y) =
   environment {
     size = sizeX*sizeY;
     // Maximum X index to access
@@ -171,15 +204,17 @@ ry1 = 7.0;
 y= hslider("y", ry0, ry0, ry1, 0.01);
 // y = hslider("y", , 0, 1, 0.01)*midY:floor/midY;
 // y = (float((hslider("y", 0, 0, 1, 0.01)/1.0)*midY:floor)*1.0)/midY;
-sizeX = 1<<10;
-sizeY = 1<<10;
+sizeX = 1<<8;
+sizeY = 1<<8;
 midX = sizeX-1;
 midY = sizeY-1;
-process =
-  tabulate2d(0,pwrSine,sizeX,sizeY,rx0,rx1,ry0,ry1,x,y).val
-, tabulate2d(0,pwrSine,sizeX,sizeY,rx0,rx1,ry0,ry1,x,y).lin
-, tabulate2d(0,pwrSine,sizeX,sizeY,rx0,rx1,ry0,ry1,x,y).cub
-, pwrSine(x,y)
+// process =
+oldProc =
+  tabulateNd(N,0,pwrSine)
+  // tabulate2d(0,pwrSine,sizeX,sizeY,rx0,ry0,rx1,ry1,x,y).val
+  // , tabulate2d(0,pwrSine,sizeX,sizeY,rx0,ry0,rx1,ry1,x,y).lin
+  // , tabulate2d(0,pwrSine,sizeX,sizeY,rx0,ry0,rx1,ry1,x,y).cub
+  // , pwrSine(x,y)
   // hgroup("",
   // vgroup("[2]test", test)
   // :vgroup("[1]AR",
