@@ -25,36 +25,64 @@ simpleTabulate(expression,size,x) =
 
 // https://www.desmos.com/calculator/eucx9qlwir
 process =
-  // tabulateNd(4,0,0);
-  ids(5);
-ids(N) =
-  // si.bus(N*4)
-  ro.interleave(N,4)
-  : par(i, N, id)
-;
-id(mid,r0,r1,x) = (x-r0)/(r1-r0)*mid;
-
+  tabulateNd(1,0,si.bus(1):>_);
+// wfps(4);
 tabulateNd(N,C,expression) =
   calc
-  .size(N)
+  .ids
 with {
   calc =
     environment {
-      params(N) =
-        si.bus(4*N):>
-        si.bus(N)
-        : par(i, N, _*C*i)
-          // :expression
-      ;
       // total size of the table: s(0) * s(1)  ...  * s(N-2) * s(N-1)
       // N in, 1 out
       size(1) = _;
       size(N) = _*size(N-1);
       // Maximum indexes to access
       // N in, N out
-      mids(N) = par(i, N, _-1);
+      mids = par(i, N, _-1);
       // Maximum total index to access
       mid = size-1;
+      // Prepare the 'float' table read index for one parameter
+      idp(mid,r0,r1,x) = (x-r0)/(r1-r0)*mid;
+      // Prepare the 'float' table read index for all parameters
+      ids =
+        (mids,si.bus(N*3))
+        : ro.interleave(N,4)
+        : par(i, N, idp) ;
+
+      // one waveform parameter write value:
+      wfp(midX,sizeX,r0,r1,x) =
+        r0+float(ba.time%sizeX)*(r1-r0)
+        /float(midX);
+      // all waveform parameters write values:
+      wfps =
+        ((bs<:(mids,bs)
+         )
+        , si.bus(N*3)
+        )
+        :ro.interleave(N,5)
+        : par(i, N, wfp) ;
+      // Create the table
+      wf = wfps:expression;
+
+      // Limit the table read index in [0, mid] if C = 1
+      rid(x,mid, 0) = x;
+      rid(x,mid, 1) = max(0, min(x, mid));
+
+      // Tabulate an unary 'FX' function on a range [r0, r1]
+      val =
+        rdtable(size, wf, readIndex);
+      readIndex =
+        rid(
+          rid(int(idX),midX, C)
+          +yOffset
+        , mid, C);
+      yOffset =
+        sizeX*rid(floor(idY),midY,C);
+
+
+      // shortcut
+      bs = si.bus(N);
     };
 };
 
