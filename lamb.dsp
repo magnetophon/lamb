@@ -26,13 +26,16 @@ simpleTabulate(expression,size,x) =
 // https://www.desmos.com/calculator/eucx9qlwir
 N = 2;
 process =
-  tabulateNd(N,1,si.bus(N):>_);
+  tabulateNd(N,1,pwrSine,sizeX,sizeY,rx0,ry0,rx1,ry1,x,y);
+// tabulateNd(N,1, pwrSine,4,4,0,0,1,1,0.3,0.8);
+// tabulateNd(N,1, si.bus(N):>_);
 // wfps(4);
 tabulateNd(N,C,expression) =
   calc
   // .readIndex
-  .wf
+  // .wf
   // , calc.ri
+  .val
 with {
   calc =
     environment {
@@ -99,7 +102,12 @@ with {
 
       // Tabulate an unary 'FX' function on a range [r0, r1]
       val =
-        rdtable(size, wf, readIndex);
+        ( (si.bus(3*N)<:si.bus(6*N)), bs )
+        : (wf, readIndex)
+        : (ro.cross(2),_)
+          // : rdtable
+          // rdtable(size(N), wf, readIndex)
+      ;
       readIndex
       // (sizes,r0s,r1s,xs)
       =
@@ -123,7 +131,11 @@ with {
         : ri
           // output:
           // mid, total size, read index
+        : riPost
       ;
+      riPost(mid,size,ri) =
+        size
+      , rid(ri,mid,C);
       midSizesMidsFromSizes = bs<:(mid,bs,mids);
 
       ri =
@@ -144,20 +156,6 @@ with {
       , ( (prevSize*sizeX*
            rid(floor(idX),midX,C))
           +prevID) ;
-
-      readIndexF
-      // (sizes,mid,mids,ids)
-      =
-        rid(
-          rid(int(id),midX, C)
-          +offset
-        , mid, C);
-      offset
-      //(sizes,ids,mids)
-      =
-        // 0; tmp=
-        sizeX*rid(floor(idY),midY,C);
-
 
       // shortcut
       bs = si.bus(N);
