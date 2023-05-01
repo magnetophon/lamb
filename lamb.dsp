@@ -28,30 +28,23 @@ simpleTabulate(expression,size,x) =
 tabulate2d(C,expression,sizeX,sizeY, rx0, rx1, ry0, ry1,x,y) =
   environment {
     size = sizeX*sizeY;
-    val(x,y) =
-      rdtable(size, wf, readIndex);
-    readIndex = rid(int(idX),midX, C)+yOffset;
-    // readIndex = (int(x*midX)+yOffset);
     // Maximum X index to access
     midX = sizeX-1;
     // Maximum Y index to access
     midY = sizeY-1;
-    yOffset =
-      // sizeX*(floor(y*midY));
-      sizeX*rid(floor(idY),midY,C);
+    // Maximum total index to access
+    mid = size-1;
     // Create the table
     wf = expression(wfX,wfY);
     // Prepare the 'float' table read index for X
-    // idX = ((x-rx0)/(rx1-rx0))*midX;
     idX = (x-rx0)/(rx1-rx0)*midX;
-    // idX = (x-rx0)*midX;
     // Prepare the 'float' table read index for Y
     idY = ((y-ry0)/(ry1-ry0))*midY;
-
+    // table creation X:
     wfX =
       rx0+float(ba.time%sizeX)*(rx1-rx0)
-      /float(midX)
-    ;
+      /float(midX);
+    // table creation Y:
     wfY =
       ry0+
       ((float(ba.time-(ba.time%sizeX))
@@ -59,31 +52,41 @@ tabulate2d(C,expression,sizeX,sizeY, rx0, rx1, ry0, ry1,x,y) =
        *(ry1-ry0)
       )
       /float(midY)
-      // float(ba.time-(ba.time%sizeX))
-      // /float(sizeX)
-      // /float(midY)
     ;
-
-    // Prepare the 'float' table read index
-    // id = (x-r0)/(r1-r0)*mid;
 
     // Limit the table read index in [0, mid] if C = 1
     rid(x,mid, 0) = x;
     rid(x,mid, 1) = max(0, min(x, mid));
 
     // Tabulate an unary 'FX' function on a range [r0, r1]
-    ival = y0 with { y0 = rdtable(size, wf, rid(int(idX), C)); };
+    val(x,y) =
+      rdtable(size, wf, readIndex);
+    readIndex =
+      rid(
+        rid(int(idX),midX, C)
+        +yOffset
+      , mid, C);
+    yOffset =
+      sizeX*rid(floor(idY),midY,C);
 
     // Tabulate an unary 'FX' function over the range [r0, r1] with linear interpolation
-    lin = it.interpolate_linear(d,y0,y1)
+    lin =
+      it.interpolate_linear(
+        dy
+      , it.interpolate_linear(dx,v0,v1)
+      , it.interpolate_linear(dx,v2,v3))
     with {
-      x0 = int(id);
-      x1 = x0+1;
-      d  = id-x0;
-      y0 = rdtable(S, wf, rid(x0, C));
-      y1 = rdtable(S, wf, rid(x1, C));
+      i0 = rid(int(idX), midX, C)+yOffset;
+      i1 = i0+1;
+      i2 = i0+sizeX;
+      i3 = i1+sizeX;
+      dx  = idX-int(idX);
+      dy  = idY-int(idY);
+      v0 = rdtable(size, wf, rid(i0, mid, C));
+      v1 = rdtable(size, wf, rid(i1, mid, C));
+      v2 = rdtable(size, wf, rid(i2, mid, C));
+      v3 = rdtable(size, wf, rid(i3, mid, C));
     };
-
     // Tabulate an unary 'FX' function over the range [r0, r1] with cubic interpolation
     cub = it.interpolate_cubic(d,y0,y1,y2,y3)
     with {
@@ -92,10 +95,10 @@ tabulate2d(C,expression,sizeX,sizeY, rx0, rx1, ry0, ry1,x,y) =
       x2 = x1+1;
       x3 = x2+1;
       d  = id-x1;
-      y0 = rdtable(S, wf, rid(x0, C));
-      y1 = rdtable(S, wf, rid(x1, C));
-      y2 = rdtable(S, wf, rid(x2, C));
-      y3 = rdtable(S, wf, rid(x3, C));
+      y0 = rdtable(size, wf, rid(x0, C));
+      y1 = rdtable(size, wf, rid(x1, C));
+      y2 = rdtable(size, wf, rid(x2, C));
+      y3 = rdtable(size, wf, rid(x3, C));
     };
   };
 
@@ -133,12 +136,14 @@ y= hslider("y", ry0, ry0, ry1, 0.1);
 // y = hslider("y", , 0, 1, 0.01)*midY:floor/midY;
 // y = (float((hslider("y", 0, 0, 1, 0.01)/1.0)*midY:floor)*1.0)/midY;
 sizeX = 1<<12;
-sizeY = 1<<12;
+sizeY = 1<<10;
 midX = sizeX-1;
 midY = sizeY-1;
 process =
   // simpleTabulate(pwr,4,hslider("x", 0, 0, 1, 0.01))
-  tabulate2d(0,pwrSine,sizeX,sizeY,rx0,rx1,ry0,ry1,x,y).val
+  tabulate2d(0,pwrSine,sizeX,sizeY,rx0,rx1,ry0,ry1,x,y)
+  // .val
+  .lin
 , pwrSine(x,y)
   // hgroup("",
   // vgroup("[2]test", test)
