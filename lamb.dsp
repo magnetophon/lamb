@@ -24,12 +24,13 @@ simpleTabulate(expression,size,x) =
   ba.tabulate(0, expression, size, 0, 1, x).lin;
 
 // https://www.desmos.com/calculator/eucx9qlwir
+N = 3;
 process =
-  tabulateNd(1,0,si.bus(1):>_);
+  tabulateNd(N,1,si.bus(N):>_);
 // wfps(4);
 tabulateNd(N,C,expression) =
   calc
-  .ids
+  .readIndex
 with {
   calc =
     environment {
@@ -41,13 +42,12 @@ with {
       // N in, N out
       mids = par(i, N, _-1);
       // Maximum total index to access
-      mid = size-1;
+      mid = size(N)-1;
       // Prepare the 'float' table read index for one parameter
-      idp(mid,r0,r1,x) = (x-r0)/(r1-r0)*mid;
+      idp(midX,r0,r1,x) = (x-r0)/(r1-r0)*midX;
       // Prepare the 'float' table read index for all parameters
       ids =
-        (mids,si.bus(N*3))
-        : ro.interleave(N,4)
+        ro.interleave(N,4)
         : par(i, N, idp) ;
 
       // one waveform parameter write value:
@@ -72,17 +72,47 @@ with {
       // Tabulate an unary 'FX' function on a range [r0, r1]
       val =
         rdtable(size, wf, readIndex);
-      readIndex =
-        rid(
-          rid(int(idX),midX, C)
-          +yOffset
-        , mid, C);
-      yOffset =
-        sizeX*rid(floor(idY),midY,C);
+      readIndex
+      // (sizes,r0s,r1s,xs)
+      =
+        // from sizes
+        (sizesMidMidsFromSizes
+         // from r0s,r1s,xs
+        , si.bus(N*3))
+        :
+        // (
+        //   // sizes mid mids
+        //   (si.bus(1+(N*2))
+        //    // from r0s,r1s,xs
+        //   , si.bus(N*3))
+        // )
+        (
+          // from sizes, mid
+          si.bus(N+1)
+          // from mids:
+        , ( bs<:si.bus(N*2) )
+          // from r0s,r1s,xs
+        , si.bus(N*3)
+        )
+        :
+        // from sizes, mid,mids
+        (si.bus(1+2*N) ,ids)  // (midX,r0,r1,x)
+        ;
+        sizesMidMidsFromSizes = bs<:(bs,mid,mids);
+        readIndexF(sizeX,mid,midX,id) =
+          rid(
+            rid(int(id),midX, C)
+            +offset
+          , mid, C);
+        offset
+        //(sizes,ids,mids)
+        =
+          // 0; tmp=
+          sizeX*rid(floor(idY),midY,C);
 
 
-      // shortcut
-      bs = si.bus(N);
+        // shortcut
+        bs = si.bus(N);
     };
 };
 
@@ -485,7 +515,6 @@ sel(a,b,x) = select2(x,a,b);
 aG(x) = vgroup("[0]a", x);
 bG(x) = vgroup("[1]b", x);
 
-N = 2;
 B = si.bus(2);
 ab = checkbox("[0]a/b");
 bypass = AB(bypassP);
