@@ -30,7 +30,8 @@ process =
 // wfps(4);
 tabulateNd(N,C,expression) =
   calc
-  .readIndex
+  // .readIndex
+  .ri(1)
 with {
   calc =
     environment {
@@ -96,23 +97,37 @@ with {
         )
         :
         // from sizes, mid,mids
-        (si.bus(1+2*N) ,ids)  // (midX,r0,r1,x)
-        ;
-        sizesMidMidsFromSizes = bs<:(bs,mid,mids);
-        readIndexF(sizeX,mid,midX,id) =
-          rid(
-            rid(int(id),midX, C)
-            +offset
-          , mid, C);
-        offset
-        //(sizes,ids,mids)
-        =
-          // 0; tmp=
-          sizeX*rid(floor(idY),midY,C);
+        (si.bus(1+2*N)
+        ,ids)  // takes (midX,r0,r1,x)
+      ;
+      sizesMidMidsFromSizes = bs<:(bs,mid,mids);
+
+      ri(0,prevSize,prevID,sizeX,midX,idX) =
+        (rid(int(idX),midX,C)+prevID)
+      , sizeX;
+      ri(N,prevSize,prevID,sizeX,midX,idX) =
+        ( (prevSize*sizeX*
+           rid(floor(idX),midX,C))
+          +prevID)
+      , (prevSize*sizeX)
+      ;
+
+      readIndexF
+      // (sizes,mid,mids,ids)
+      =
+        rid(
+          rid(int(id),midX, C)
+          +offset
+        , mid, C);
+      offset
+      //(sizes,ids,mids)
+      =
+        // 0; tmp=
+        sizeX*rid(floor(idY),midY,C);
 
 
-        // shortcut
-        bs = si.bus(N);
+      // shortcut
+      bs = si.bus(N);
     };
 };
 
