@@ -49,34 +49,48 @@ tabulateNd(N,C,expression) =
   // .wf
   // , calc.ri
   // .val
-  .lin(1,2,0.5)
+  // .linBlock(1,2,4,0.5)
+  .lin
 with {
   calc =
     environment {
 
-      lin(1,prevSize,idX) =
-        si.bus(4*N)<:
-        it.interpolate_linear(
-          dx,v0,v1
-        )
-      with {
-      dx  = idX-int(idX);
-      v0 =
-        si.bus(4*N)<:
+      lin =
         (
-          totalSize,
-          wf,
-          rid(readIndex, totalSize-1, C))
-        :rdtable
-         // :>_
+          (_,_,1)
+        , (si.bus(N*4)<:si.bus(N*8))
+
+          )
+        :
+        (linBlock,si.bus(4*N))
+        //   )
+        //   // :linBlock(4,0.5,1)
+        //   // : (_,linBlock)
+        // )
       ;
-      v1 =
-        si.bus(4*N)<:
-        (totalSize,wf, rid(readIndex+prevSize, totalSize-1, C))
-        :rdtable
-         // :>_
-      ;
-    };
+
+      linBlock(sizeX,idX,prevSize) =
+        (si.bus(4*N)<:
+         it.interpolate_linear(
+           dx,v0,v1
+         ))
+      , (prevSize*sizeX)
+      with {
+        dx  = idX-int(idX);
+        v0 =
+          si.bus(4*N)<:
+          (
+            totalSize, wf, rid(readIndex, totalSize-1, C))
+          // :rdtable
+          :>_
+        ;
+        v1 =
+          si.bus(4*N)<:
+          (totalSize,wf, rid(readIndex+prevSize, totalSize-1, C))
+          // :rdtable
+          :>_
+        ;
+      };
       // total size of the table: s(0) * s(1)  ...  * s(N-2) * s(N-1)
       // N in, 1 out
       size(1) = _;
@@ -152,11 +166,6 @@ with {
         // from sizes
         (si.bus(N)
         ,ids);  // takes (midX,r0,r1,x)
-
-      // lin =
-      // si.bus(N*4)<:
-      // (totalSize,wf,readIndex,sizesIds)
-      // ;
 
       // shortcut
       bs = si.bus(N);
