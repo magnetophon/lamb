@@ -25,15 +25,48 @@ simpleTabulate(expression,size,x) =
 
 // https://www.desmos.com/calculator/eucx9qlwir
 N = 2;
+lin3 =
+  it.interpolate_linear(
+    dz
+  , it.interpolate_linear(
+      dy
+    , it.interpolate_linear(dx,v0,v1)
+    , it.interpolate_linear(dx,v2,v3))
+  , it.interpolate_linear (
+      dy
+    , it.interpolate_linear(dx,v4,v5)
+    , it.interpolate_linear(dx,v6,v7)))
+with {
+  dx = 0.5;
+  dy = 0.5;
+  dz = 0.5;
+  v = 0.8;
+};
+
+lin2 =
+  it.interpolate_linear(
+    dy
+  , it.interpolate_linear(dx,v0,v1)
+  , it.interpolate_linear(dx,v2,v3))
+with {
+  i0 = rid(int(idX), midX, C)+yOffset;
+  i1 = i0+1;
+  i2 = i0+sizeX;
+  i3 = i1+sizeX;
+  dx  = idX-int(idX);
+  dy  = idY-int(idY);
+  v0 = rdtable(size, wf, rid(i0, mid, C));
+  v1 = rdtable(size, wf, rid(i1, mid, C));
+  v2 = rdtable(size, wf, rid(i2, mid, C));
+  v3 = rdtable(size, wf, rid(i3, mid, C));
+};
 process =
-  tabulateNd(N,0,pwrSine,sizeX,sizeY,rx0,ry0,rx1,ry1,x,y)
-  // , tabulateNd(4,1,si.bus(4):>_,sizeX,sizeY,sizeX,sizeY)
-  // tabulateNd(N,0,pwrSine);
-, tabulate2d(0,pwrSine,sizeX,sizeY,rx0,ry0,rx1,ry1,x,y).val(x,y)
-, pwrSine(x,y);
-// tabulateNd(N,1, pwrSine,4,4,0,0,1,1,0.3,0.8);
-// tabulateNd(N,1, si.bus(N):>_);
-// wfps(4);
+  // tabulateNd(N,0,pwrSine,sizeX,sizeY,rx0,ry0,rx1,ry1,x,y)
+  // , tabulate2d(0,pwrSine,sizeX,sizeY,rx0,ry0,rx1,ry1,x,y).val(x,y)
+  // , pwrSine(x,y);
+  tabulateNd(3,0,pwrSineDiv,sizeX,sizeY,sizeY,rx0,ry0,0,rx1,ry1,1,x,y,z)
+, pwrSineDiv(x,y,z);
+
 tabulateNd(N,C,expression) =
   calc
   // .readIndex
@@ -271,13 +304,12 @@ tabulate2d(C,expression,sizeX,sizeY, rx0, ry0, rx1, ry1,x,y) =
     };
   };
 
-sineShaper(x) = (sin((x*2.5 + 0.75)*2*ma.PI)+1)*0.5;
+sineShaper(x) = (sin((x*.5 + 0.75)*2*ma.PI)+1)*0.5;
 pwr(x) = pow(2,x);
 pwrSine(x,y)=
-  sineShaper(x
-             *(1+y)
-            )
-;
+  sineShaper(x *(1+(y/ry1))) ;
+pwrSineDiv(x,y,z) = pwrSine(x,y)/(1+z);
+
 
 // x = (float((hslider("x", 0.2, 0.2, 2, 0.01)/2)*midX:floor)*2.0)/midX;
 // y = (float((hslider("y", 0.3, 0.3, 3, 0.01)/3)*midY:floor)*3.0)/midY;
@@ -296,16 +328,17 @@ xr = (((((hslider("x", rx0, rx0, rx1, 0.01)
 ;
 // x= hslider("x", rx0, rx0, rx1, 1.0/sizeX)*midX:floor/midX;
 x= hslider("x", rx0, rx0, rx1, 0.01);
+y= hslider("y", ry0, ry0, ry1, 0.01);
+z= hslider("z", 0, 0, 1, 0.01);
 // idX = (x-rx0)/(rx1-rx0)*midX;
 rx0 = 0.1;
-rx1 = 4.0;
+rx1 = 1.0;
 ry0 = 0.3;
-ry1 = 7.0;
-y= hslider("y", ry0, ry0, ry1, 0.01);
+ry1 = 0.7;
 // y = hslider("y", , 0, 1, 0.01)*midY:floor/midY;
 // y = (float((hslider("y", 0, 0, 1, 0.01)/1.0)*midY:floor)*1.0)/midY;
-sizeX = 1<<12;
-sizeY = 1<<12;
+sizeX = 1<<9;
+sizeY = 1<<9;
 midX = sizeX-1;
 midY = sizeY-1;
 // process =
