@@ -39,6 +39,7 @@ process =
   // , pwrSine(x,y);
   tabulateNd(3,1,pwrSineDiv,sizeX,sizeY,sizeY,rx0,ry0,0,rx1,ry1,1,x,y,z)
   // tabulateNd(3,1,pwrSineDiv)
+  // tabulateNd(2,1,pwrSine)
 , pwrSineDiv(x,y,z);
 
 tabulateNd(N,C,expression) =
@@ -47,6 +48,7 @@ tabulateNd(N,C,expression) =
   // .wf
   // , calc.ri
   .val
+  // .lin
 with {
   calc =
     environment {
@@ -57,7 +59,6 @@ with {
       // Maximum indexes to access
       // N in, N out
       // Maximum total index to access
-      mid = size(N)-1;
       // Prepare the 'float' table read index for one parameter
       idp(sizeX,r0,r1,x) = (x-r0)/(r1-r0)*(sizeX-1);
       // Prepare the 'float' table read index for all parameters
@@ -84,7 +85,7 @@ with {
       ;
 
       // Create the table
-      wf = wfps:expression;
+      wf = (wfps,par(i, N, !)):expression;
 
       // Limit the table read index in [0, mid] if C = 1
       rid(x,mid, 0) = x;
@@ -92,13 +93,13 @@ with {
 
       // Tabulate an unary 'FX' function on a range [r0, r1]
       val =
-        ( (si.bus(3*N)<:si.bus(6*N)), bs )
-        :
-        ( (bs<:si.bus(2*N)) , si.bus(6*N) )
-        // :
-        : (size(N),wf,readIndex)
+        si.bus(N*4)<:
+        (sizeWf,readIndex)
         : rdtable
       ;
+      sizeWf =
+        ((bs<:si.bus(N*2)) , si.bus(N*3) )
+        : (size(N),wf);
       readIndex
       // (sizes,r0s,r1s,xs)
       =
@@ -129,6 +130,13 @@ with {
         // from sizes
         (si.bus(N)
         ,ids);  // takes (midX,r0,r1,x)
+
+      lin =
+        // size(N)
+        // ,
+        (wf)
+        // ,readIndex,sizesIds
+      ;
 
       // shortcut
       bs = si.bus(N);
