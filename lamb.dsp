@@ -21,8 +21,8 @@ lin(1)=
   )
   with {
   dx  = idX-int(idX);
-  v0 = rdtable(sizeWf, rid(i0, size(N)-1, C));
-  v1 = rdtable(sizeWf, rid(i1, size(N)-1, C));
+  v0 = rdtable(totalSize,wf, rid(readIndex, totalSize-1, C));
+  v1 = rdtable(totalSize,wf, rid(readIndex+prevSize, totalSize-1, C));
 };
 
 
@@ -58,8 +58,8 @@ tabulateNd(N,C,expression) =
   // .readIndex
   // .wf
   // , calc.ri
-  .val
-  // .lin
+  // .val
+  .lin
 with {
   calc =
     environment {
