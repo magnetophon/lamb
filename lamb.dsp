@@ -15,16 +15,6 @@ import("stdfaust.lib");
 // we have:
 // size,wf,ri,sizes,ids
 
-lin(1)=
-  it.interpolate_linear(
-    dx,v0,v1
-  )
-  with {
-  dx  = idX-int(idX);
-  v0 = rdtable(totalSize,wf, rid(readIndex, totalSize-1, C));
-  v1 = rdtable(totalSize,wf, rid(readIndex+prevSize, totalSize-1, C));
-};
-
 
 lin2d =
   it.interpolate_linear(
@@ -45,12 +35,12 @@ with {
 };
 process =
   // lin(1);
-  // tabulateNd(2,0,pwrSine,sizeX,sizeY,rx0,ry0,rx1,ry1,x,y)
+  tabulateNd(2,0,pwrSine,sizeX,sizeY,rx0,ry0,rx1,ry1,x,y)
   // tabulate2d(0,pwrSine,sizeX,sizeY,rx0,ry0,rx1,ry1,x,y).val(x,y)
   // , pwrSine(x,y);
-  tabulateNd(3,1,pwrSineDiv,sizeX,sizeY,sizeY,rx0,ry0,0,rx1,ry1,1,x,y,z)
+  // tabulateNd(3,1,pwrSineDiv,sizeX,sizeY,sizeY,rx0,ry0,0,rx1,ry1,1,x,y,z)
   // tabulateNd(3,1,pwrSineDiv)
-  // tabulateNd(2,1,pwrSine)
+  // tabulateNd(2,1,pwrSine,sizeX,sizeY)
 , pwrSineDiv(x,y,z);
 
 tabulateNd(N,C,expression) =
@@ -59,10 +49,34 @@ tabulateNd(N,C,expression) =
   // .wf
   // , calc.ri
   // .val
-  .lin
+  .lin(1,2,0.5)
 with {
   calc =
     environment {
+
+      lin(1,prevSize,idX) =
+        si.bus(4*N)<:
+        it.interpolate_linear(
+          dx,v0,v1
+        )
+      with {
+      dx  = idX-int(idX);
+      v0 =
+        si.bus(4*N)<:
+        (
+          totalSize,
+          wf,
+          rid(readIndex, totalSize-1, C))
+        :rdtable
+         // :>_
+      ;
+      v1 =
+        si.bus(4*N)<:
+        (totalSize,wf, rid(readIndex+prevSize, totalSize-1, C))
+        :rdtable
+         // :>_
+      ;
+    };
       // total size of the table: s(0) * s(1)  ...  * s(N-2) * s(N-1)
       // N in, 1 out
       size(1) = _;
@@ -139,10 +153,10 @@ with {
         (si.bus(N)
         ,ids);  // takes (midX,r0,r1,x)
 
-      lin =
-        si.bus(N*4)<:
-        (totalSize,wf,readIndex,sizesIds)
-      ;
+      // lin =
+      // si.bus(N*4)<:
+      // (totalSize,wf,readIndex,sizesIds)
+      // ;
 
       // shortcut
       bs = si.bus(N);
