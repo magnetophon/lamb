@@ -87,17 +87,11 @@ with {
         ro.interleave(N,4)
         : par(i, N, idp) ;
 
-      // first waveform parameter write value:
-      wfp0(midX,sizeX,r0,r1) =
-        (r0+float(ba.time%sizeX)*(r1-r0)
-         /float(midX))
-       ,sizeX;
       // one waveform parameter write value:
       wfp(prevSize,midX,sizeX,r0,r1) =
         r0+
         ((float(
              floor(ba.time%(prevSize*sizeX)/prevSize)
-             // *prevSize
            )*(r1-r0)
          )
          /float(midX))
@@ -112,8 +106,8 @@ with {
         , si.bus(N*2)
         )
         :ro.interleave(N,4)
-        : (wfp0,si.bus(4*N-4))
-        : seq(i, N-1, si.bus(i+1),wfp, si.bus(4*N-(4*(i+2))))
+        : (1,si.bus(4*N))
+        : seq(i, N, si.bus(i),wfp, si.bus(4*N-(4*(i+1))))
         : (si.bus(N),!)
       ;
 
