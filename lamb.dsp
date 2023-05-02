@@ -5,56 +5,26 @@ declare license "AGPLv3";
 
 import("stdfaust.lib");
 
-// make a release based on:
-// place
-
-// crossfade between multiple inputs (just the gain)
-
-// twoDtabulate(expression,size,x,y) =
-// par(i, Nr, expression)
-// par(i, nrShapes+1, table(i) * xfadeSelector(shapeSlider,i)):>_
-// with {
-// SIZE = 1<<16;
-// table(i) = ba.tabulate(0, warpedSineFormula(shapeSliderVal(i)), SIZE, 0, 1, x).lin;
-// xfadeSelector(sel,nr) =
-// ((sel<=nr)*((sel-nr)+1):max(0)) + ((sel>nr)*((nr-sel)+1):max(0));
-// };
 
 simpleTabulate(expression,size,x) =
   ba.tabulate(0, expression, size, 0, 1, x).lin;
 
-// https://www.desmos.com/calculator/eucx9qlwir
 N = 2;
 il(v0,v1,x) = it.interpolate_linear(x,v0,v1);
-// lin(1) = il;
 lin(1) = it.interpolate_linear;
-// lin(n,x) = it.interpolate_linear(x,lin(N-1),lin(N-1));
-lin(2) =
-  (_,
-   (((si.bus(3)<:si.bus(6)),si.bus(3))
-    : (si.bus(3),ro.crossnn(3) ))
-  )
-  :(ro.crossNM(1,3),si.bus(6))
-  :
-  il(lin(1),lin(1),_);
-lin(3) =
-  (_,
-   (((si.bus(7)<:si.bus(14)),si.bus(7))
-    : (si.bus(7),ro.crossnn(7) ))
-  )
-  :
-  il(lin(2),lin(2));
 lin(N) =
   (_,
-   (((si.bus(3*(N-1))<:si.bus(6*(N-1))),si.bus(3*(N-1)))
-    : (si.bus(3*(N-1)),ro.crossnn(3*(N-1)) ))
+   (( (si.bus(prevNrIn)<:si.bus(prevNrIn*2)) , si.bus(prevNrIn))
+    : (si.bus(prevNrIn),ro.crossnn(prevNrIn) ))
   )
-  :
-  il(lin(N-1),lin(N-1));
-// lin(N,x) = it.interpolate_linear(x,lin(N-1),5);
+  :(ro.crossNM(1,prevNrIn),si.bus(prevNrIn*2))
+  : il(lin(N-1),lin(N-1),_)
+with {
+  prevNrIn = inputs(lin(N-1));
+};
 process =
   // lin(3,hslider("cr", 0, 0, 1, 0.01));
-  lin(2);
+  lin(3);
 // (hslider("xf", 0, 0, 1, 0.01)
 // , hslider("v0", 0, 0, 1, 0.01)
 // , hslider("v1", 0, 0, 1, 0.01))
@@ -728,3 +698,4 @@ with {
 // TODO: link: before smoother
 // TODO: binary search as a function lin the libraries
 // TODO: auto makup gain by area under curve
+
