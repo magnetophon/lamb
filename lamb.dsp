@@ -11,7 +11,12 @@ simpleTabulate(expression,size,x) =
 
 N = 2;
 il(v0,v1,x) = it.interpolate_linear(x,v0,v1);
+// inputs: dv,v0,v1
 lin(1) = it.interpolate_linear;
+// inputs for N=2:
+// dy dx v0 v1 dx v2 v3
+// inputs for N=3:
+// dz dy dx v0 v1 dx v2 v3 dy dx v4 v5 dx v6 v7
 lin(N) =
   (_,
    (( (si.bus(prevNrIn)<:si.bus(prevNrIn*2)) , si.bus(prevNrIn))
@@ -140,13 +145,9 @@ with {
         _
       , (
         ro.interleave(N,3)
-        : (ri0, si.bus(3*(N-1)))
-        : seq(i, N-1, riN, si.bus(3*(N-i-2)))
+        : (1,0,si.bus(3*N))
+        : seq(i, N, riN, si.bus(3*(N-i-1)))
       );
-
-      ri0(sizeX,midX,idX) =
-        sizeX
-      , (rid(int(idX),midX,C));
 
       riN(prevSize,prevID,sizeX,midX,idX) =
         (prevSize*sizeX)
