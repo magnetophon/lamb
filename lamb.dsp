@@ -25,47 +25,45 @@ simpleTabulate(expression,size,x) =
 
 // https://www.desmos.com/calculator/eucx9qlwir
 N = 2;
-lin3 =
-  it.interpolate_linear(
-    dz
-  , it.interpolate_linear(
-      dy
-    , it.interpolate_linear(dx,v0,v1)
-    , it.interpolate_linear(dx,v2,v3))
-  , it.interpolate_linear (
-      dy
-    , it.interpolate_linear(dx,v4,v5)
-    , it.interpolate_linear(dx,v6,v7)))
-with {
-  dx = 0.5;
-  dy = 0.5;
-  dz = 0.5;
-  v = 0.8;
-};
-
-lin2 =
-  it.interpolate_linear(
-    dy
-  , it.interpolate_linear(dx,v0,v1)
-  , it.interpolate_linear(dx,v2,v3))
-with {
-  i0 = rid(int(idX), midX, C)+yOffset;
-  i1 = i0+1;
-  i2 = i0+sizeX;
-  i3 = i1+sizeX;
-  dx  = idX-int(idX);
-  dy  = idY-int(idY);
-  v0 = rdtable(size, wf, rid(i0, mid, C));
-  v1 = rdtable(size, wf, rid(i1, mid, C));
-  v2 = rdtable(size, wf, rid(i2, mid, C));
-  v3 = rdtable(size, wf, rid(i3, mid, C));
-};
+il(v0,v1,x) = it.interpolate_linear(x,v0,v1);
+// lin(1) = il;
+lin(1) = it.interpolate_linear;
+// lin(n,x) = it.interpolate_linear(x,lin(N-1),lin(N-1));
+lin(2) =
+  (_,
+   (((si.bus(3)<:si.bus(6)),si.bus(3))
+    : (si.bus(3),ro.crossnn(3) ))
+  )
+  :(ro.crossNM(1,3),si.bus(6))
+  :
+  il(lin(1),lin(1),_);
+lin(3) =
+  (_,
+   (((si.bus(7)<:si.bus(14)),si.bus(7))
+    : (si.bus(7),ro.crossnn(7) ))
+  )
+  :
+  il(lin(2),lin(2));
+lin(N) =
+  (_,
+   (((si.bus(3*(N-1))<:si.bus(6*(N-1))),si.bus(3*(N-1)))
+    : (si.bus(3*(N-1)),ro.crossnn(3*(N-1)) ))
+  )
+  :
+  il(lin(N-1),lin(N-1));
+// lin(N,x) = it.interpolate_linear(x,lin(N-1),5);
 process =
-  // tabulateNd(N,0,pwrSine,sizeX,sizeY,rx0,ry0,rx1,ry1,x,y)
-  // , tabulate2d(0,pwrSine,sizeX,sizeY,rx0,ry0,rx1,ry1,x,y).val(x,y)
-  // , pwrSine(x,y);
-  tabulateNd(3,0,pwrSineDiv,sizeX,sizeY,sizeY,rx0,ry0,0,rx1,ry1,1,x,y,z)
-, pwrSineDiv(x,y,z);
+  // lin(3,hslider("cr", 0, 0, 1, 0.01));
+  lin(2);
+// (hslider("xf", 0, 0, 1, 0.01)
+// , hslider("v0", 0, 0, 1, 0.01)
+// , hslider("v1", 0, 0, 1, 0.01))
+// :lin(1);
+// tabulateNd(N,0,pwrSine,sizeX,sizeY,rx0,ry0,rx1,ry1,x,y)
+// , tabulate2d(0,pwrSine,sizeX,sizeY,rx0,ry0,rx1,ry1,x,y).val(x,y)
+// , pwrSine(x,y);
+// tabulateNd(3,0,pwrSineDiv,sizeX,sizeY,sizeY,rx0,ry0,0,rx1,ry1,1,x,y,z)
+// , pwrSineDiv(x,y,z);
 
 tabulateNd(N,C,expression) =
   calc
