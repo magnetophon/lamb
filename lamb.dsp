@@ -26,7 +26,11 @@ simpleTabulate(expression,size,x) =
 // https://www.desmos.com/calculator/eucx9qlwir
 N = 2;
 process =
-  tabulateNd(N,1,pwrSine,sizeX,sizeY,rx0,ry0,rx1,ry1,x,y);
+  tabulateNd(N,0,pwrSine,sizeX,sizeY,rx0,ry0,rx1,ry1,x,y)
+  // , tabulateNd(4,1,si.bus(4):>_,sizeX,sizeY,sizeX,sizeY)
+  // tabulateNd(N,0,pwrSine);
+, tabulate2d(0,pwrSine,sizeX,sizeY,rx0,ry0,rx1,ry1,x,y).val(x,y)
+, pwrSine(x,y);
 // tabulateNd(N,1, pwrSine,4,4,0,0,1,1,0.3,0.8);
 // tabulateNd(N,1, si.bus(N):>_);
 // wfps(4);
@@ -62,22 +66,23 @@ with {
        ,sizeX;
       // one waveform parameter write value:
       wfp(prevSize,midX,sizeX,r0,r1) =
-        (r0+float(
-            floor(ba.time/prevSize)
-            %sizeX
-            *prevSize
-          )*(r1-r0)
+        r0+
+        ((float(
+             floor(ba.time/prevSize)
+             // *prevSize
+           )*(r1-r0)
+         )
          /float(midX))
-       ,(prevSize*sizeX);
+        ,(prevSize*sizeX);
 
-      // table creation Y:
-      wfY =
-        ry0+
-        ((float(ba.time-(ba.time%sizeX))
-          /float(sizeX))
-         *(ry1-ry0)
-        )
-        /float(midY)
+         // table creation Y:
+         wfY =
+           ry0+
+           ((float(ba.time-(ba.time%sizeX))
+             /float(sizeX))
+            *(ry1-ry0)
+           )
+           /float(midY)
       ;
       // all waveform parameters write values:
       wfps =
@@ -103,10 +108,11 @@ with {
       // Tabulate an unary 'FX' function on a range [r0, r1]
       val =
         ( (si.bus(3*N)<:si.bus(6*N)), bs )
-        : (wf, readIndex)
-        : (ro.cross(2),_)
-          // : rdtable
-          // rdtable(size(N), wf, readIndex)
+        :
+        ( (bs<:si.bus(2*N)) , si.bus(6*N) )
+        // :
+        : (size(N),wf,readIndex)
+        : rdtable
       ;
       readIndex
       // (sizes,r0s,r1s,xs)
@@ -134,8 +140,7 @@ with {
         : riPost
       ;
       riPost(mid,size,ri) =
-        size
-      , rid(ri,mid,C);
+        rid(ri,mid,C);
       midSizesMidsFromSizes = bs<:(mid,bs,mids);
 
       ri =
@@ -153,7 +158,7 @@ with {
 
       riN(prevSize,prevID,sizeX,midX,idX) =
         (prevSize*sizeX)
-      , ( (prevSize*sizeX*
+      , ( (prevSize*
            rid(floor(idX),midX,C))
           +prevID) ;
 
@@ -308,8 +313,8 @@ ry1 = 7.0;
 y= hslider("y", ry0, ry0, ry1, 0.01);
 // y = hslider("y", , 0, 1, 0.01)*midY:floor/midY;
 // y = (float((hslider("y", 0, 0, 1, 0.01)/1.0)*midY:floor)*1.0)/midY;
-sizeX = 1<<8;
-sizeY = 1<<8;
+sizeX = 1<<12;
+sizeY = 1<<12;
 midX = sizeX-1;
 midY = sizeY-1;
 // process =
