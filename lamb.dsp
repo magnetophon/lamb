@@ -37,11 +37,11 @@ process =
   // lin(1);
   tabulateNd(2,0,pwrSine,sizeX,sizeY,rx0,ry0,rx1,ry1,x,y)
   // tabulate2d(0,pwrSine,sizeX,sizeY,rx0,ry0,rx1,ry1,x,y).val(x,y)
-  // , pwrSine(x,y);
-  // tabulateNd(3,1,pwrSineDiv,sizeX,sizeY,sizeY,rx0,ry0,0,rx1,ry1,1,x,y,z)
-  // tabulateNd(3,1,pwrSineDiv)
-  // tabulateNd(2,1,pwrSine,sizeX,sizeY)
-, pwrSineDiv(x,y,z);
+, pwrSine(x,y);
+// tabulateNd(3,1,pwrSineDiv,sizeX,sizeY,sizeY,rx0,ry0,0,rx1,ry1,1,x,y,z)
+// tabulateNd(3,1,pwrSineDiv)
+// tabulateNd(2,1,pwrSine,sizeX,sizeY)
+// , pwrSineDiv(x,y,z);
 
 tabulateNd(N,C,expression) =
   calc
@@ -56,20 +56,22 @@ with {
     environment {
 
       lin =
+        (0,1,si.bus(4*N+2)):
+        linBlock;
+      linBlock =
+        (_,_),
         (
-          (_,_,1)
-        , (si.bus(N*4)<:si.bus(N*8))
-
+          (
+            (si.bus(2),0,1)
+          , (si.bus(N*4)<:si.bus(N*8))
           )
-        :
-        (linBlock,si.bus(4*N))
-        //   )
-        //   // :linBlock(4,0.5,1)
-        //   // : (_,linBlock)
-        // )
+          : (linElement,si.bus(4*N))
+            // : linElement
+            // : (linElement ,si.bus(4*N))
+        )
       ;
 
-      linBlock(sizeX,idX,prevSize) =
+      linElement(sizeX,idX,prevVal,prevSize) =
         (si.bus(4*N)<:
          it.interpolate_linear(
            dx,v0,v1
