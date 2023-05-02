@@ -37,7 +37,8 @@ process =
   // tabulateNd(N,0,pwrSine,sizeX,sizeY,rx0,ry0,rx1,ry1,x,y)
   // tabulate2d(0,pwrSine,sizeX,sizeY,rx0,ry0,rx1,ry1,x,y).val(x,y)
   // , pwrSine(x,y);
-  tabulateNd(3,0,pwrSineDiv,sizeX,sizeY,sizeY,rx0,ry0,0,rx1,ry1,1,x,y,z)
+  tabulateNd(3,1,pwrSineDiv,sizeX,sizeY,sizeY,rx0,ry0,0,rx1,ry1,1,x,y,z)
+  // tabulateNd(3,1,pwrSineDiv)
 , pwrSineDiv(x,y,z);
 
 tabulateNd(N,C,expression) =
@@ -55,37 +56,30 @@ with {
       size(N) = _*size(N-1);
       // Maximum indexes to access
       // N in, N out
-      mids = par(i, N, _-1);
       // Maximum total index to access
       mid = size(N)-1;
       // Prepare the 'float' table read index for one parameter
-      idp(midX,r0,r1,x) = (x-r0)/(r1-r0)*midX;
+      idp(sizeX,r0,r1,x) = (x-r0)/(r1-r0)*(sizeX-1);
       // Prepare the 'float' table read index for all parameters
       ids =
         ro.interleave(N,4)
         : par(i, N, idp) ;
 
       // one waveform parameter write value:
-      wfp(prevSize,midX,sizeX,r0,r1) =
+      wfp(prevSize,sizeX,r0,r1) =
         r0+
         ((float(
              floor(ba.time%(prevSize*sizeX)/prevSize)
            )*(r1-r0)
          )
-         /float(midX))
+         /float(sizeX-1))
        ,(prevSize*sizeX);
 
       // all waveform parameters write values:
       wfps =
-        (
-          // from sizes
-          (bs<:(mids,bs))
-          // from r0 r1
-        , si.bus(N*2)
-        )
-        :ro.interleave(N,4)
-        : (1,si.bus(4*N))
-        : seq(i, N, si.bus(i),wfp, si.bus(4*N-(4*(i+1))))
+        ro.interleave(N,3)
+        : (1,si.bus(3*N))
+        : seq(i, N, si.bus(i),wfp, si.bus(3*N-(3*(i+1))))
         : (si.bus(N),!)
       ;
 
@@ -108,48 +102,37 @@ with {
       readIndex
       // (sizes,r0s,r1s,xs)
       =
-        // from sizes
-        (midSizesMidsFromSizes
-         // from r0s,r1s,xs
-        , si.bus(N*3))
-        : (
-        // from sizes, mid
-        si.bus(N+1)
-        // from mids:
-      , ( bs<:si.bus(N*2) )
-        // from r0s,r1s,xs
-      , si.bus(N*3)
-      ) :
-        // from sizes, mid,mids
-        (si.bus(1+2*N)
-        ,ids)  // takes (midX,r0,r1,x)
-        // output:
-        // mid, sizes, mids, ids
+        sizesIds
         : ri
-          // output:
-          // mid, total size, read index
         : riPost
       ;
-      riPost(mid,size,ri) =
-        rid(ri,mid,C);
-      midSizesMidsFromSizes = bs<:(mid,bs,mids);
+      riPost(size,ri) =
+        rid(ri,size-1,C);
       ri =
-        // mid
-        _
-      , (
-        ro.interleave(N,3)
-        : (1,0,si.bus(3*N))
-        : seq(i, N, riN, si.bus(3*(N-i-1)))
-      );
+        ro.interleave(N,2)
+        : (1,0,si.bus(2*N))
+        : seq(i, N, riN, si.bus(2*(N-i-1))) ;
 
-      riN(prevSize,prevID,sizeX,midX,idX) =
+      riN(prevSize,prevID,sizeX,idX) =
         (prevSize*sizeX)
       , ( (prevSize*
-           rid(floor(idX),midX,C))
+           rid(floor(idX),(sizeX-1),C))//TODO: sizeX*prevSize?
           +prevID) ;
+
+      sizesIds =
+        (
+          // from sizes
+          ( bs<:si.bus(N*2) )
+          // from r0s,r1s,xs
+        , si.bus(N*3)
+        ) :
+        // from sizes
+        (si.bus(N)
+        ,ids);  // takes (midX,r0,r1,x)
 
       // shortcut
       bs = si.bus(N);
+
     };
 };
 
