@@ -8,9 +8,11 @@ import("stdfaust.lib");
 
 // a lin needs:
 // N times:
-// idX,prevSize, midX
+// idX,prevSize, sizeX
 // one time:
-// offSet, wf, mid
+// size, wf, readIndex
+
+// lin()
 
 lin2d =
   it.interpolate_linear(
@@ -30,32 +32,8 @@ with {
   v3 = rdtable(size, wf, rid(i3, mid, C));
 };
 N = 2;
-il(v0,v1,x) = it.interpolate_linear(x,v0,v1);
-// inputs: dv,v0,v1
-lin(1) = it.interpolate_linear;
-// inputs for N=2:
-// dy dx v0 v1 dx v2 v3
-// inputs for N=3:
-// dz dy dx v0 v1 dx v2 v3 dy dx v4 v5 dx v6 v7
-lin(N) =
-  (_,
-   (
-     // ((_<:(_,_)),si.bus(prevNrIn*2-2))
-     // : (_,ro.crossNM(1,prevNrIn-1),si.bus(prevNrIn-1))
-     // :
-     ( (si.bus(prevNrIn)<:si.bus(prevNrIn*2)) , si.bus(prevNrIn))
-     : (si.bus(prevNrIn),ro.crossnn(prevNrIn) ))
-  )
-  :(ro.crossNM(1,prevNrIn)
-   ,si.bus(prevNrIn*2)
-    // , (!,si.bus(prevNrIn-1))
-   )
-  : il(lin(N-1),lin(N-1),_)
-with {
-  prevNrIn = inputs(lin(N-1));
-};
 process =
-  // lin(3);
+  // lin(1);
   // tabulateNd(N,0,pwrSine,sizeX,sizeY,rx0,ry0,rx1,ry1,x,y)
   // tabulate2d(0,pwrSine,sizeX,sizeY,rx0,ry0,rx1,ry1,x,y).val(x,y)
   // , pwrSine(x,y);
@@ -714,3 +692,28 @@ with {
 // TODO: link: before smoother
 // TODO: binary search as a function lin the libraries
 // TODO: auto makup gain by area under curve
+
+il(v0,v1,x) = it.interpolate_linear(x,v0,v1);
+// inputs: dv,v0,v1
+OLDlin(1) = it.interpolate_linear;
+// inputs for N=2:
+// dy dx v0 v1 dx v2 v3
+// inputs for N=3:
+// dz dy dx v0 v1 dx v2 v3 dy dx v4 v5 dx v6 v7
+OLDlin(N) =
+  (_,
+   (
+     // ((_<:(_,_)),si.bus(prevNrIn*2-2))
+     // : (_,ro.crossNM(1,prevNrIn-1),si.bus(prevNrIn-1))
+     // :
+     ( (si.bus(prevNrIn)<:si.bus(prevNrIn*2)) , si.bus(prevNrIn))
+     : (si.bus(prevNrIn),ro.crossnn(prevNrIn) ))
+  )
+  :(ro.crossNM(1,prevNrIn)
+   ,si.bus(prevNrIn*2)
+    // , (!,si.bus(prevNrIn-1))
+   )
+  : il(lin(N-1),lin(N-1),_)
+with {
+  prevNrIn = inputs(lin(N-1));
+};
