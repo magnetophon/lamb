@@ -6,9 +6,29 @@ declare license "AGPLv3";
 import("stdfaust.lib");
 
 
-simpleTabulate(expression,size,x) =
-  ba.tabulate(0, expression, size, 0, 1, x).lin;
+// a lin needs:
+// N times:
+// idX,prevSize, midX
+// one time:
+// offSet, wf, mid
 
+lin2d =
+  it.interpolate_linear(
+    dy
+  , it.interpolate_linear(dx,v0,v1)
+  , it.interpolate_linear(dx,v2,v3))
+with {
+  i0 = rid(int(idX), midX, C)+yOffset;
+  i1 = i0+1;
+  i2 = i0+sizeX;
+  i3 = i1+sizeX;
+  dx  = idX-int(idX);
+  dy  = idY-int(idY);
+  v0 = rdtable(size, wf, rid(i0, mid, C));
+  v1 = rdtable(size, wf, rid(i1, mid, C));
+  v2 = rdtable(size, wf, rid(i2, mid, C));
+  v3 = rdtable(size, wf, rid(i3, mid, C));
+};
 N = 2;
 il(v0,v1,x) = it.interpolate_linear(x,v0,v1);
 // inputs: dv,v0,v1
@@ -19,26 +39,28 @@ lin(1) = it.interpolate_linear;
 // dz dy dx v0 v1 dx v2 v3 dy dx v4 v5 dx v6 v7
 lin(N) =
   (_,
-   (( (si.bus(prevNrIn)<:si.bus(prevNrIn*2)) , si.bus(prevNrIn))
-    : (si.bus(prevNrIn),ro.crossnn(prevNrIn) ))
+   (
+     // ((_<:(_,_)),si.bus(prevNrIn*2-2))
+     // : (_,ro.crossNM(1,prevNrIn-1),si.bus(prevNrIn-1))
+     // :
+     ( (si.bus(prevNrIn)<:si.bus(prevNrIn*2)) , si.bus(prevNrIn))
+     : (si.bus(prevNrIn),ro.crossnn(prevNrIn) ))
   )
-  :(ro.crossNM(1,prevNrIn),si.bus(prevNrIn*2))
+  :(ro.crossNM(1,prevNrIn)
+   ,si.bus(prevNrIn*2)
+    // , (!,si.bus(prevNrIn-1))
+   )
   : il(lin(N-1),lin(N-1),_)
 with {
   prevNrIn = inputs(lin(N-1));
 };
 process =
-  // lin(3,hslider("cr", 0, 0, 1, 0.01));
-  lin(3);
-// (hslider("xf", 0, 0, 1, 0.01)
-// , hslider("v0", 0, 0, 1, 0.01)
-// , hslider("v1", 0, 0, 1, 0.01))
-// :lin(1);
-// tabulateNd(N,0,pwrSine,sizeX,sizeY,rx0,ry0,rx1,ry1,x,y)
-// , tabulate2d(0,pwrSine,sizeX,sizeY,rx0,ry0,rx1,ry1,x,y).val(x,y)
-// , pwrSine(x,y);
-// tabulateNd(3,0,pwrSineDiv,sizeX,sizeY,sizeY,rx0,ry0,0,rx1,ry1,1,x,y,z)
-// , pwrSineDiv(x,y,z);
+  // lin(3);
+  // tabulateNd(N,0,pwrSine,sizeX,sizeY,rx0,ry0,rx1,ry1,x,y)
+  // tabulate2d(0,pwrSine,sizeX,sizeY,rx0,ry0,rx1,ry1,x,y).val(x,y)
+  // , pwrSine(x,y);
+  tabulateNd(3,0,pwrSineDiv,sizeX,sizeY,sizeY,rx0,ry0,0,rx1,ry1,1,x,y,z)
+, pwrSineDiv(x,y,z);
 
 tabulateNd(N,C,expression) =
   calc
@@ -139,7 +161,6 @@ with {
       riPost(mid,size,ri) =
         rid(ri,mid,C);
       midSizesMidsFromSizes = bs<:(mid,bs,mids);
-
       ri =
         // mid
         _
@@ -699,4 +720,3 @@ with {
 // TODO: link: before smoother
 // TODO: binary search as a function lin the libraries
 // TODO: auto makup gain by area under curve
-
