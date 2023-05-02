@@ -68,22 +68,13 @@ with {
       wfp(prevSize,midX,sizeX,r0,r1) =
         r0+
         ((float(
-             floor(ba.time/prevSize)
+             floor(ba.time%(prevSize*sizeX)/prevSize)
              // *prevSize
            )*(r1-r0)
          )
          /float(midX))
-        ,(prevSize*sizeX);
+       ,(prevSize*sizeX);
 
-         // table creation Y:
-         wfY =
-           ry0+
-           ((float(ba.time-(ba.time%sizeX))
-             /float(sizeX))
-            *(ry1-ry0)
-           )
-           /float(midY)
-      ;
       // all waveform parameters write values:
       wfps =
         (
