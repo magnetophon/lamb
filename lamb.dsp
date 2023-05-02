@@ -11,8 +11,20 @@ import("stdfaust.lib");
 // idX,prevSize, sizeX
 // one time:
 // size, wf, readIndex
+//
+// we have:
+// size,wf,ri,sizes,ids
 
-// lin()
+lin(1)=
+  it.interpolate_linear(
+    dx,v0,v1
+  )
+  with {
+  dx  = idX-int(idX);
+  v0 = rdtable(sizeWf, rid(i0, size(N)-1, C));
+  v1 = rdtable(sizeWf, rid(i1, size(N)-1, C));
+};
+
 
 lin2d =
   it.interpolate_linear(
@@ -31,10 +43,9 @@ with {
   v2 = rdtable(size, wf, rid(i2, mid, C));
   v3 = rdtable(size, wf, rid(i3, mid, C));
 };
-N = 2;
 process =
   // lin(1);
-  // tabulateNd(N,0,pwrSine,sizeX,sizeY,rx0,ry0,rx1,ry1,x,y)
+  // tabulateNd(2,0,pwrSine,sizeX,sizeY,rx0,ry0,rx1,ry1,x,y)
   // tabulate2d(0,pwrSine,sizeX,sizeY,rx0,ry0,rx1,ry1,x,y).val(x,y)
   // , pwrSine(x,y);
   tabulateNd(3,1,pwrSineDiv,sizeX,sizeY,sizeY,rx0,ry0,0,rx1,ry1,1,x,y,z)
@@ -56,6 +67,7 @@ with {
       // N in, 1 out
       size(1) = _;
       size(N) = _*size(N-1);
+      totalSize = size(N),par(i, N*3, !);
       // Maximum indexes to access
       // N in, N out
       // Maximum total index to access
@@ -94,12 +106,8 @@ with {
       // Tabulate an unary 'FX' function on a range [r0, r1]
       val =
         si.bus(N*4)<:
-        (sizeWf,readIndex)
-        : rdtable
-      ;
-      sizeWf =
-        ((bs<:si.bus(N*2)) , si.bus(N*3) )
-        : (size(N),wf);
+        (totalSize,wf,readIndex)
+        : rdtable;
       readIndex
       // (sizes,r0s,r1s,xs)
       =
@@ -132,15 +140,12 @@ with {
         ,ids);  // takes (midX,r0,r1,x)
 
       lin =
-        // size(N)
-        // ,
-        (wf)
-        // ,readIndex,sizesIds
+        si.bus(N*4)<:
+        (totalSize,wf,readIndex,sizesIds)
       ;
 
       // shortcut
       bs = si.bus(N);
-
     };
 };
 
