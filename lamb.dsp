@@ -56,12 +56,8 @@ with {
 };
 
 cubifier(base,ins) =
-  ins<:
-  // si.bus(insLn*4)
-  par(i, 4,
-      par(j, insLn, _+off(i))
-
-     )
+  ins<: par(i, 4,
+            par(j, insLn, _+off(i)))
 with
 {
   insLn = outputs(ins);
@@ -69,16 +65,13 @@ with
   off(1) = 0;
   off(2) = 1*base;
   off(3) = 2*base;
-
 };
-fun =sin(4);
 process =
-  // vecOp(v0, +);
-  // cubifier(4,(-1,-,1,2))
-  cubifier(1,_)
-  :
-  cubifier(4,si.bus(4))
-;
+  // this has 2 inputs and works as intended:
+  cubifier(1,_) : cubifier(8,si.bus(4));
+// this has one input but should have 2:
+// cubifier(_,_) : cubifier(_,si.bus(4)) ;
+
 v0 = (0 , 1 , 2 , 3);
 v1 = (4 , 5 , 6 , 7);
 v2 = (8 , 9 , 10 , 11);
