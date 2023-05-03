@@ -33,15 +33,20 @@ with {
   v2 = rdtable(size, wf, rid(i2, mid, C));
   v3 = rdtable(size, wf, rid(i3, mid, C));
 };
+
+int2bin(n,maxN) = par(j, maxNrBits(maxN-1), int(floor((n)/(pow2(j))))%2);
+maxNrBits(n) = int2nrOfBits(n);
+int2nrOfBits(n) = int(floor(log(n)/log(2))+1);
+pow2(i) = 1<<i;
 process =
+  // int2bin(10,16);
   // lin(1);
-  tabulateNd(2,0,pwrSine,sizeX,sizeY,rx0,ry0,rx1,ry1,x,y)
-  // tabulate2d(0,pwrSine,sizeX,sizeY,rx0,ry0,rx1,ry1,x,y).val(x,y)
-, pwrSine(x,y);
-// tabulateNd(3,1,pwrSineDiv,sizeX,sizeY,sizeY,rx0,ry0,0,rx1,ry1,1,x,y,z)
-// tabulateNd(3,1,pwrSineDiv)
-// tabulateNd(2,1,pwrSine,sizeX,sizeY)
-// , pwrSineDiv(x,y,z);
+  // tabulateNd(2,0,pwrSine,sizeX,sizeY,rx0,ry0,rx1,ry1,x,y)
+  // , pwrSine(x,y);
+  // tabulateNd(3,1,pwrSineDiv)
+  // tabulateNd(3,1,pwrSine,sizeX,sizeY)
+  tabulateNd(3,1,pwrSineDiv,sizeX,sizeY,sizeY,rx0,ry0,0,rx1,ry1,1,x,y,z)
+, pwrSineDiv(x,y,z);
 
 tabulateNd(N,C,expression) =
   calc
@@ -50,15 +55,68 @@ tabulateNd(N,C,expression) =
   // , calc.ri
   // .val
   // .linBlock(1,2,4,0.5)
-  .lin
+  // .linOLD
+  // .table(0)
+  // .lin
+  // .offset(1)
+  .sizes
 with {
   calc =
     environment {
-
+      z=pow(2,N);
       lin =
-        (0,1,si.bus(4*N+2)):
-        linBlock;
-      linBlock =
+        si.bus(4*N)<:
+        (
+          offset(0)
+        , (readIndex<:si.bus(z))
+        )
+        // : ro.interleave(z,2)
+      ;
+      sizes =
+        (1,si.bus(N),par(i, 3*N, !))
+        : seq(i, N,
+              ((si.bus(i),(_<:(_,_)), si.bus(N-i-0))
+               :(si.bus(i+1),*,si.bus(N-i-1))));
+
+      offsets =
+        0,1,(
+          sizes:
+          seq(i, 1, offset(i)));
+      // offset(0,sizesX,prev) = 0,1,si.bus(N+1);
+      // offset(1,prev) = 1,si.bus(N+1);
+      // offset(2,prev) = 2,si.bus(N+1);
+      // offset(i,prev) = 2,si.bus(N+1);
+      offset(i) =
+        ((_<:(_,_)),si.bus(N-i))
+        :
+        (si.bus(i+1),(*,si.bus(N-i-1)))
+      ;
+      linOLD2 =
+        (par(i, z, 0.33), (si.bus(4*N)<:si.bus(4*N*z)))
+        : (si.bus(z),ro.interleave(4*N,z))
+        : ro.interleave(z,4*N+1)
+        :
+        (
+          par(i, z, table)
+          // par(i, z, si.bus(inputs(table)):>_)
+        )
+      ;
+      table(prevSize) =
+        si.bus(4*N)<:
+        (
+          // totalSize
+          (512*512)
+        , wf, rid(readIndex+prevSize, totalSize-1, C))
+        :rdtable
+         // :>_
+      ;
+
+      linOLD =
+        // (0,1,0,1,0.3,4,si.bus(4*N+2)):
+        linBlock(2);
+      // (0,1,si.bus(4*N+2)):
+      // linBlock(1);
+      linBlock(1) =
         (_,_),
         (
           (
@@ -66,8 +124,33 @@ with {
           , (si.bus(N*4)<:si.bus(N*8))
           )
           : (linElement,si.bus(4*N))
-            // : linElement
-            // : (linElement ,si.bus(4*N))
+        )
+      ;
+      linBlock(2) =
+        (si.bus(2*2)),
+        (
+          // (si.bus(N*4+4)<:si.bus(N*8+8)):
+          (linElement,linElement)
+        )
+      ;
+      linBlockOLD(9) =
+        (si.bus(2*2)),
+        (
+          (
+            (si.bus(4))
+          , (si.bus(N*4)<:si.bus(N*8))
+          )
+          : (linElement,si.bus(4*N))
+        )
+      ;
+      linBlock(i) =
+        (si.bus(2*i)),
+        (
+          (
+            (si.bus(2),0,1)
+          , (si.bus(N*4)<:si.bus(N*8))
+          )
+          : (linElement,si.bus(4*N))
         )
       ;
 
