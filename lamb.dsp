@@ -56,60 +56,28 @@ with {
 };
 
 
-cubifier(ins) =
-  ins
-  :
-  ((_<:si.bus(insLn*4))
-  , (bs<:si.bus(insLn*4)))
-  : ro.interleave(insLn*4,2)
-  :par(i, 4,
-       par(j, insLn, off(i)+_))
-with
-{
-  insLn = outputs(ins)-1;
-  bs = si.bus(insLn);
-  off(0,base) = -1*base;
-  off(1,base) = 0;
-  off(2,base) = 1*base;
-  off(3,base) = 2*base;
-};
 process =
-// this has 1 input and works as intended:
+  // this has 1 input and works as intended:
   // cubifier((4,-1,0,1,2));
-  (4,1,0):
-  (_,cubifier(si.bus(2)))
-  :cubifier(si.bus(5));
-// (4,-1,0,1,2):cubifier(si.bus(5));
-// : cubifier(8,si.bus(4));
-// this has one input but should have 2:
-// cubifier(_,_) : cubifier(_,si.bus(4)) ;
-
-v0 = (0 , 1 , 2 , 3);
-v1 = (4 , 5 , 6 , 7);
-v2 = (8 , 9 , 10 , 11);
-v3 = (12 , 13 , 14 , 15);
-v4 = (+(16) , _ , 18 , *(19));
-vv = (v0 , v1 , v2 , v3);
-vecOp(vectorsList, op) =
-  vectorsList : seq(i, vecDim - 1, vecOp2D , vecBus(vecDim - 2 - i))
-with {
-  vecBus(0) = par(i, vecLen, 0 : !);
-  vecBus(dim) = par(i, dim, si.bus(vecLen));
-  vecOp2D = ro.interleave(vecLen, 2) : par(i, vecLen, op);
-  vecDim = outputs(vectorsList) / vecLen;
-  vecLen = outputs(ba.take(1, vectorsList));
-};
-
-// lin(1);
-// tabulateNd(3,1,pwrSineDiv)
-// tabulateNd(3,1,pwrSine,sizeX,sizeY,sizeY)
-// tabulateNd(3,1,pwrSine,4,4,4)
-// tabulateNd(2,1,pwrSine,4,4)
-// tabulate2d(0,pwrSine,sizeX,sizeY,rx0,ry0,rx1,ry1,x,y).val
-// tabulateNd(2,0,pwrSine,sizeX,sizeY,rx0,ry0,rx1,ry1,x,y)
-// , pwrSine(x,y);
-// tabulateNd(3,1,pwrSineDiv,sizeX,sizeY,sizeY,rx0,ry0,0,rx1,ry1,1,x,y,z)
-// , pwrSineDiv(x,y,z);
+  // (256,16,1,0)
+  // :cubifiers;
+  // (_,_,cubifier(si.bus(2)))
+  // :(_,cubifier(si.bus(5)))
+  // :cubifier(si.bus(17));
+  // (4,-1,0,1,2):cubifier(si.bus(5));
+  // : cubifier(8,si.bus(4));
+  // this has one input but should have 2:
+  // cubifier(_,_) : cubifier(_,si.bus(4)) ;
+  // lin(1);
+  // tabulateNd(3,1,pwrSineDiv)
+  // tabulateNd(3,1,pwrSine,sizeX,sizeY,sizeY)
+  // tabulateNd(3,1,pwrSine,4,4,4)
+  // tabulateNd(2,1,pwrSine,4,4)
+  // tabulate2d(0,pwrSine,sizeX,sizeY,rx0,ry0,rx1,ry1,x,y).val
+  // tabulateNd(2,0,pwrSine,sizeX,sizeY,rx0,ry0,rx1,ry1,x,y)
+  // , pwrSine(x,y);
+  tabulateNd(3,1,pwrSineDiv,sizeX,sizeY,sizeY,rx0,ry0,0,rx1,ry1,1,x,y,z)
+, pwrSineDiv(x,y,z);
 
 tabulateNd(N,C,expression) =
   // calc.cub
@@ -117,7 +85,6 @@ tabulateNd(N,C,expression) =
   ( calc.val
   , calc.lin
   , calc.cub)
-
 with {
   calc =
     environment {
@@ -156,18 +123,16 @@ with {
         : par(i, nrReadIndexes, _*(i==n)):>_
       ;
       readIndexes =
-        si.bus(N*4)
-        <:((readIndex<:si.bus(nrReadIndexes))
-          , offsets)
-        : ro.interleave(nrReadIndexes,2)
-        : par(i, nrReadIndexes, +)
-      ;
+        ((baseOffsets:ro.cross(N))
+        , readIndex)
+        :cubifiers;
+
       offsets =
         // si.bus(N)
-        baseOffsets
-        <: par(i, nrReadIndexes,
-               par(j, N, switch(i,j)):>_
-              )
+        baseOffsets:ro.cross(N)
+                    <: par(i, nrReadIndexes,
+                           par(j, N, switch(i,j)):>_
+                          )
       with {
         switch(i,j) = _*int2bin(j,i,nrReadIndexes);
         int2bin(i,n,maxN) = int(floor((n)/(pow2(i))))%2;
@@ -179,6 +144,28 @@ with {
         : seq(i, N-1,
               ((si.bus(i),(_<:(_,_)), si.bus(N-i-1))
                :(si.bus(i+1),*,si.bus(N-i-2)))) ;
+
+      cubifier(ins) =
+        ins
+        :
+        ((_<:si.bus(insLn*4))
+        , (bs<:si.bus(insLn*4)))
+        : ro.interleave(insLn*4,2)
+        :par(i, 4,
+             par(j, insLn, off(i)+_))
+      with
+      {
+        insLn = outputs(ins)-1;
+        bs = si.bus(insLn);
+        off(0,base) = -1*base;
+        off(1,base) = 0;
+        off(2,base) = 1*base;
+        off(3,base) = 2*base;
+      };
+      cubifiers =
+        seq(i, N,
+            si.bus(N-i-1),cubifier(si.bus(pow(4,i)+1)));
+
       // } ;
       lin =
         si.bus(N*4)<:
@@ -464,8 +451,8 @@ ry0 = 0.3;
 ry1 = 0.7;
 // y = hslider("y", , 0, 1, 0.01)*midY:floor/midY;
 // y = (float((hslider("y", 0, 0, 1, 0.01)/1.0)*midY:floor)*1.0)/midY;
-sizeX = 1<<4;
-sizeY = 1<<4;
+sizeX = 1<<3;
+sizeY = 1<<3;
 midX = sizeX-1;
 midY = sizeY-1;
 // process =
@@ -824,7 +811,8 @@ with {
 // https://www.desmos.com/calculator/apeaxg6yxm
 // add negative phase:
 // https://www.desmos.com/calculator/nbf4dbuuj5
-
+// derivative/speedDif:
+// https://www.desmos.com/calculator/j7wk2oedsi
 
 // TODO: stop ramp if we are not there yet on the steepest point.
 // steepest => derivative of the derivative approaches 0.
