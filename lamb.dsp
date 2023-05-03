@@ -5,6 +5,56 @@ declare license "AGPLv3";
 
 import("stdfaust.lib");
 
+// Tabulate an unary 'FX' function over the range [r0, r1] with cubic interpolation
+cub2d =
+  it.interpolate_cubic(
+    dy
+  , it.interpolate_cubic(dx,v0,v1,v2,v3)
+  , it.interpolate_cubic(dx,v4,v5,v6,v7)
+  , it.interpolate_cubic(dx,v8,v9,v10,v11)
+  , it.interpolate_cubic(dx,v12,v13,v14,v15)
+  )
+with {
+  i0  = i4-sizeX;
+  i1  = i5-sizeX;
+  i2  = i6-sizeX;
+  i3  = i7-sizeX;
+
+  i4  = i5-1;
+  i5  = rid(int(idX), midX, C)+yOffset;
+  i6  = i5+1;
+  i7  = i6+1;
+
+  i8  = i4+sizeX;
+  i9  = i5+sizeX;
+  i10 = i6+sizeX;
+  i11 = i7+sizeX;
+
+  i12 = i4+(2*sizeX);
+  i13 = i5+(2*sizeX);
+  i14 = i6+(2*sizeX);
+  i15 = i7+(2*sizeX);
+
+  dx  = idX-int(idX);
+  dy  = idY-int(idY);
+  v0  = rdtable(size, wf, rid(i0 , mid, C));
+  v1  = rdtable(size, wf, rid(i1 , mid, C));
+  v2  = rdtable(size, wf, rid(i2 , mid, C));
+  v3  = rdtable(size, wf, rid(i3 , mid, C));
+  v4  = rdtable(size, wf, rid(i4 , mid, C));
+  v5  = rdtable(size, wf, rid(i5 , mid, C));
+  v6  = rdtable(size, wf, rid(i6 , mid, C));
+  v7  = rdtable(size, wf, rid(i7 , mid, C));
+  v8  = rdtable(size, wf, rid(i8 , mid, C));
+  v9  = rdtable(size, wf, rid(i9 , mid, C));
+  v10 = rdtable(size, wf, rid(i10, mid, C));
+  v11 = rdtable(size, wf, rid(i11, mid, C));
+  v12 = rdtable(size, wf, rid(i12, mid, C));
+  v13 = rdtable(size, wf, rid(i13, mid, C));
+  v14 = rdtable(size, wf, rid(i14, mid, C));
+  v15 = rdtable(size, wf, rid(i15, mid, C));
+};
+
 process =
   // lin(1);
   // tabulateNd(3,1,pwrSineDiv)
