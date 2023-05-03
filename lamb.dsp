@@ -55,17 +55,56 @@ with {
   v15 = rdtable(size, wf, rid(i15, mid, C));
 };
 
+cubifier(base,ins) =
+  ins<:
+  // si.bus(insLn*4)
+  par(i, 4,
+      par(j, insLn, _+off(i))
+
+     )
+with
+{
+  insLn = outputs(ins);
+  off(0) = -1*base;
+  off(1) = 0;
+  off(2) = 1*base;
+  off(3) = 2*base;
+
+};
+fun =sin(4);
 process =
-  // lin(1);
-  // tabulateNd(3,1,pwrSineDiv)
-  // tabulateNd(3,1,pwrSine,sizeX,sizeY,sizeY)
-  // tabulateNd(3,1,pwrSine,4,4,4)
-  // tabulateNd(2,1,pwrSine,4,4)
-  // tabulate2d(0,pwrSine,sizeX,sizeY,rx0,ry0,rx1,ry1,x,y).val
-  // tabulateNd(2,0,pwrSine,sizeX,sizeY,rx0,ry0,rx1,ry1,x,y)
-  // , pwrSine(x,y);
-  tabulateNd(3,1,pwrSineDiv,sizeX,sizeY,sizeY,rx0,ry0,0,rx1,ry1,1,x,y,z)
-, pwrSineDiv(x,y,z);
+  // vecOp(v0, +);
+  // cubifier(4,(-1,-,1,2))
+  cubifier(1,_)
+  :
+  cubifier(4,si.bus(4))
+;
+v0 = (0 , 1 , 2 , 3);
+v1 = (4 , 5 , 6 , 7);
+v2 = (8 , 9 , 10 , 11);
+v3 = (12 , 13 , 14 , 15);
+v4 = (+(16) , _ , 18 , *(19));
+vv = (v0 , v1 , v2 , v3);
+vecOp(vectorsList, op) =
+  vectorsList : seq(i, vecDim - 1, vecOp2D , vecBus(vecDim - 2 - i))
+with {
+  vecBus(0) = par(i, vecLen, 0 : !);
+  vecBus(dim) = par(i, dim, si.bus(vecLen));
+  vecOp2D = ro.interleave(vecLen, 2) : par(i, vecLen, op);
+  vecDim = outputs(vectorsList) / vecLen;
+  vecLen = outputs(ba.take(1, vectorsList));
+};
+
+// lin(1);
+// tabulateNd(3,1,pwrSineDiv)
+// tabulateNd(3,1,pwrSine,sizeX,sizeY,sizeY)
+// tabulateNd(3,1,pwrSine,4,4,4)
+// tabulateNd(2,1,pwrSine,4,4)
+// tabulate2d(0,pwrSine,sizeX,sizeY,rx0,ry0,rx1,ry1,x,y).val
+// tabulateNd(2,0,pwrSine,sizeX,sizeY,rx0,ry0,rx1,ry1,x,y)
+// , pwrSine(x,y);
+// tabulateNd(3,1,pwrSineDiv,sizeX,sizeY,sizeY,rx0,ry0,0,rx1,ry1,1,x,y,z)
+// , pwrSineDiv(x,y,z);
 
 tabulateNd(N,C,expression) =
   // calc.cub
