@@ -5,79 +5,13 @@ declare license "AGPLv3";
 
 import("stdfaust.lib");
 
-// Tabulate an unary 'FX' function over the range [r0, r1] with cubic interpolation
-cub2d =
-  it.interpolate_cubic(
-    dy
-  , it.interpolate_cubic(dx,v0,v1,v2,v3)
-  , it.interpolate_cubic(dx,v4,v5,v6,v7)
-  , it.interpolate_cubic(dx,v8,v9,v10,v11)
-  , it.interpolate_cubic(dx,v12,v13,v14,v15)
-  )
-with {
-  i0  = i4-sizeX;
-  i1  = i5-sizeX;
-  i2  = i6-sizeX;
-  i3  = i7-sizeX;
-
-  i4  = i5-1;
-  i5  = rid(int(idX), midX, C)+yOffset;
-  i6  = i5+1;
-  i7  = i6+1;
-
-  i8  = i4+sizeX;
-  i9  = i5+sizeX;
-  i10 = i6+sizeX;
-  i11 = i7+sizeX;
-
-  i12 = i4+(2*sizeX);
-  i13 = i5+(2*sizeX);
-  i14 = i6+(2*sizeX);
-  i15 = i7+(2*sizeX);
-
-  dx  = idX-int(idX);
-  dy  = idY-int(idY);
-  v0  = rdtable(size, wf, rid(i0 , mid, C));
-  v1  = rdtable(size, wf, rid(i1 , mid, C));
-  v2  = rdtable(size, wf, rid(i2 , mid, C));
-  v3  = rdtable(size, wf, rid(i3 , mid, C));
-  v4  = rdtable(size, wf, rid(i4 , mid, C));
-  v5  = rdtable(size, wf, rid(i5 , mid, C));
-  v6  = rdtable(size, wf, rid(i6 , mid, C));
-  v7  = rdtable(size, wf, rid(i7 , mid, C));
-  v8  = rdtable(size, wf, rid(i8 , mid, C));
-  v9  = rdtable(size, wf, rid(i9 , mid, C));
-  v10 = rdtable(size, wf, rid(i10, mid, C));
-  v11 = rdtable(size, wf, rid(i11, mid, C));
-  v12 = rdtable(size, wf, rid(i12, mid, C));
-  v13 = rdtable(size, wf, rid(i13, mid, C));
-  v14 = rdtable(size, wf, rid(i14, mid, C));
-  v15 = rdtable(size, wf, rid(i15, mid, C));
-};
-
-
 process =
-  // this has 1 input and works as intended:
-  // cubifier((4,-1,0,1,2));
-  // (256,16,1,0)
-  // :cubifiers;
-  // (_,_,cubifier(si.bus(2)))
-  // :(_,cubifier(si.bus(5)))
-  // :cubifier(si.bus(17));
-  // (4,-1,0,1,2):cubifier(si.bus(5));
-  // : cubifier(8,si.bus(4));
-  // this has one input but should have 2:
-  // cubifier(_,_) : cubifier(_,si.bus(4)) ;
-  // lin(1);
-  // tabulateNd(3,1,pwrSineDiv)
-  // tabulateNd(3,1,pwrSine,sizeX,sizeY,sizeY)
-  // tabulateNd(3,1,pwrSine,4,4,4)
-  // tabulateNd(2,1,pwrSine,4,4)
-  // tabulate2d(0,pwrSine,sizeX,sizeY,rx0,ry0,rx1,ry1,x,y).val
   // tabulateNd(2,0,pwrSine,sizeX,sizeY,rx0,ry0,rx1,ry1,x,y)
   // , pwrSine(x,y);
-  tabulateNd(3,1,pwrSineDiv,sizeX,sizeY,sizeY,rx0,ry0,0,rx1,ry1,1,x,y,z)
-, pwrSineDiv(x,y,z);
+  // tabulateNd(3,1,pwrSineDiv,sizeX,sizeY,sizeY,rx0,ry0,0,rx1,ry1,1,x,y,z)
+  // , pwrSineDiv(x,y,z);
+  tabulateNd(4,1,fourD,sizeX,sizeY,sizeY,sizeY,rx0,ry0,0,1,rx1,ry1,1,2,x,y,z,p)
+, fourD(x,y,z,p);
 
 tabulateNd(N,C,expression) =
   // calc.cub
@@ -305,124 +239,12 @@ with {
     };
 };
 
-tabulate2d(C,expression,sizeX,sizeY, rx0, ry0, rx1, ry1,x,y) =
-  environment {
-    size = sizeX*sizeY;
-    // Maximum X index to access
-    midX = sizeX-1;
-    // Maximum Y index to access
-    midY = sizeY-1;
-    // Maximum total index to access
-    mid = size-1;
-    // Create the table
-    wf = expression(wfX,wfY);
-    // Prepare the 'float' table read index for X
-    idX = (x-rx0)/(rx1-rx0)*midX;
-    // Prepare the 'float' table read index for Y
-    idY = ((y-ry0)/(ry1-ry0))*midY;
-    // table creation X:
-    wfX =
-      rx0+float(ba.time%sizeX)*(rx1-rx0)
-      /float(midX);
-    // table creation Y:
-    wfY =
-      ry0+
-      ((float(ba.time-(ba.time%sizeX))
-        /float(sizeX))
-       *(ry1-ry0)
-      )
-      /float(midY)
-    ;
-
-    // Limit the table read index in [0, mid] if C = 1
-    rid(x,mid, 0) = x;
-    rid(x,mid, 1) = max(0, min(x, mid));
-
-    // Tabulate an unary 'FX' function on a range [r0, r1]
-    val(x,y) =
-      rdtable(size, wf, readIndex);
-    readIndex =
-      rid(
-        rid(int(idX),midX, C)
-        +yOffset
-      , mid, C);
-    yOffset =
-      sizeX*rid(floor(idY),midY,C);
-
-    // Tabulate an unary 'FX' function over the range [r0, r1] with linear interpolation
-    lin =
-      it.interpolate_linear(
-        dy
-      , it.interpolate_linear(dx,v0,v1)
-      , it.interpolate_linear(dx,v2,v3))
-    with {
-      i0 = rid(int(idX), midX, C)+yOffset;
-      i1 = i0+1;
-      i2 = i0+sizeX;
-      i3 = i1+sizeX;
-      dx  = idX-int(idX);
-      dy  = idY-int(idY);
-      v0 = rdtable(size, wf, rid(i0, mid, C));
-      v1 = rdtable(size, wf, rid(i1, mid, C));
-      v2 = rdtable(size, wf, rid(i2, mid, C));
-      v3 = rdtable(size, wf, rid(i3, mid, C));
-    };
-    // Tabulate an unary 'FX' function over the range [r0, r1] with cubic interpolation
-    cub =
-      it.interpolate_cubic(
-        dy
-      , it.interpolate_cubic(dx,v0,v1,v2,v3)
-      , it.interpolate_cubic(dx,v4,v5,v6,v7)
-      , it.interpolate_cubic(dx,v8,v9,v10,v11)
-      , it.interpolate_cubic(dx,v12,v13,v14,v15)
-      )
-    with {
-      i0  = i4-sizeX;
-      i1  = i5-sizeX;
-      i2  = i6-sizeX;
-      i3  = i7-sizeX;
-
-      i4  = i5-1;
-      i5  = rid(int(idX), midX, C)+yOffset;
-      i6  = i5+1;
-      i7  = i6+1;
-
-      i8  = i4+sizeX;
-      i9  = i5+sizeX;
-      i10 = i6+sizeX;
-      i11 = i7+sizeX;
-
-      i12 = i4+(2*sizeX);
-      i13 = i5+(2*sizeX);
-      i14 = i6+(2*sizeX);
-      i15 = i7+(2*sizeX);
-
-      dx  = idX-int(idX);
-      dy  = idY-int(idY);
-      v0  = rdtable(size, wf, rid(i0 , mid, C));
-      v1  = rdtable(size, wf, rid(i1 , mid, C));
-      v2  = rdtable(size, wf, rid(i2 , mid, C));
-      v3  = rdtable(size, wf, rid(i3 , mid, C));
-      v4  = rdtable(size, wf, rid(i4 , mid, C));
-      v5  = rdtable(size, wf, rid(i5 , mid, C));
-      v6  = rdtable(size, wf, rid(i6 , mid, C));
-      v7  = rdtable(size, wf, rid(i7 , mid, C));
-      v8  = rdtable(size, wf, rid(i8 , mid, C));
-      v9  = rdtable(size, wf, rid(i9 , mid, C));
-      v10 = rdtable(size, wf, rid(i10, mid, C));
-      v11 = rdtable(size, wf, rid(i11, mid, C));
-      v12 = rdtable(size, wf, rid(i12, mid, C));
-      v13 = rdtable(size, wf, rid(i13, mid, C));
-      v14 = rdtable(size, wf, rid(i14, mid, C));
-      v15 = rdtable(size, wf, rid(i15, mid, C));
-    };
-  };
-
 sineShaper(x) = (sin((x*.5 + 0.75)*2*ma.PI)+1)*0.5;
 pwr(x) = pow(2,x);
 pwrSine(x,y)=
   sineShaper(x *(1+(y/ry1))) ;
 pwrSineDiv(x,y,z) = pwrSine(x,y)/(1+z);
+fourD(x,y,z,p) = pwrSine(pow(x,p),y)/(1+z);
 
 
 // x = (float((hslider("x", 0.2, 0.2, 2, 0.01)/2)*midX:floor)*2.0)/midX;
@@ -444,6 +266,7 @@ xr = (((((hslider("x", rx0, rx0, rx1, 0.01)
 x= hslider("x", rx0, rx0, rx1, 0.01);
 y= hslider("y", ry0, ry0, ry1, 0.01);
 z= hslider("z", 0, 0, 1, 0.01);
+p = hslider("p", 1, 1, 2, 0.01);
 // idX = (x-rx0)/(rx1-rx0)*midX;
 rx0 = 0.1;
 rx1 = 1.0;
@@ -451,8 +274,8 @@ ry0 = 0.3;
 ry1 = 0.7;
 // y = hslider("y", , 0, 1, 0.01)*midY:floor/midY;
 // y = (float((hslider("y", 0, 0, 1, 0.01)/1.0)*midY:floor)*1.0)/midY;
-sizeX = 1<<3;
-sizeY = 1<<3;
+sizeX = 1<<8;
+sizeY = 1<<6;
 midX = sizeX-1;
 midY = sizeY-1;
 // process =
