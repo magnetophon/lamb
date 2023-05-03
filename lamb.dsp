@@ -38,10 +38,10 @@ process =
 // lin(1);
   // tabulateNd(3,1,pwrSineDiv)
   // tabulateNd(3,1,pwrSine,sizeX,sizeY,sizeY)
-  tabulateNd(3,1,pwrSine,4,4,4)
+  // tabulateNd(3,1,pwrSine,4,4,4)
   // tabulateNd(2,0,pwrSine,sizeX,sizeY,rx0,ry0,rx1,ry1,x,y)
   // , pwrSine(x,y);
-  // tabulateNd(3,1,pwrSineDiv,sizeX,sizeY,sizeY,rx0,ry0,0,rx1,ry1,1,x,y,z)
+  tabulateNd(3,1,pwrSineDiv,sizeX,sizeY,sizeY,rx0,ry0,0,rx1,ry1,1,x,y,z)
 , pwrSineDiv(x,y,z);
 
 tabulateNd(N,C,expression) =
@@ -54,31 +54,46 @@ tabulateNd(N,C,expression) =
   // .linOLD
   // .table(0)
   // .lin
-  .offsets
+  // .readIndexes
+  .tableParameters
 with {
   calc =
     environment {
-      z=pow(2,N);
-      lin =
-        si.bus(4*N)<:
-        (
-          offset(0)
-        , (readIndex<:si.bus(z))
-        )
-        // : ro.interleave(z,2)
+      ix = si.bus(N*4)<: par(i, N, index(i));
+      // work around for https://github.com/grame-cncm/faust/issues/890
+      // since the table size can not come from interleaved numbers,
+      // the other parameters cannot be interleaved either
+      tableParameters =
+        si.bus(N*4)<: par(i, nrReadIndexes,
+                          table(i)
+                         );
+      table(i) = si.bus(N*4)<:
+                 (totalSize , wf , index(i))
+                 :rdtable;
+
+      index(n) =
+        readIndexes
+        : par(i, nrReadIndexes, _*(i==n)):>_
+      ;
+      readIndexes =
+        si.bus(N*4)
+        <:((readIndex<:si.bus(nrReadIndexes))
+          , offsets)
+        : ro.interleave(nrReadIndexes,2)
+        : par(i, nrReadIndexes, +)
       ;
       offsets =
         // si.bus(N)
         baseOffsets
-        <: par(i, nrOffsets,
+        <: par(i, nrReadIndexes,
                par(j, N, switch(i,j)):>_
               )
       with {
-        nrOffsets = pow(2,N);
-        switch(i,j) = _*int2bin(j,i,nrOffsets);
+        switch(i,j) = _*int2bin(j,i,nrReadIndexes);
         int2bin(i,n,maxN) = int(floor((n)/(pow2(i))))%2;
         pow2(i) = 1<<i;
       };
+      nrReadIndexes = pow(2,N);
       baseOffsets =
         (1,si.bus(N-1),!,par(i, 3*N, !))
         : seq(i, N-1,
@@ -95,7 +110,7 @@ with {
           // par(i, z, si.bus(inputs(table)):>_)
         )
       ;
-      table(prevSize) =
+      tableOLD(prevSize) =
         si.bus(4*N)<:
         (
           // totalSize
@@ -197,57 +212,57 @@ with {
 
       // all waveform parameters write values:
       wfps =
-        ro.interleave(N,3)
-        : (1,si.bus(3*N))
-        : seq(i, N, si.bus(i),wfp, si.bus(3*N-(3*(i+1))))
-        : (si.bus(N),!)
-      ;
+         ro.interleave(N,3)
+         : (1,si.bus(3*N))
+         : seq(i, N, si.bus(i),wfp, si.bus(3*N-(3*(i+1))))
+         : (si.bus(N),!)
+       ;
 
-      // Create the table
-      wf = (wfps,par(i, N, !)):expression;
+       // Create the table
+       wf = (wfps,par(i, N, !)):expression;
 
-      // Limit the table read index in [0, mid] if C = 1
-      rid(x,mid, 0) = x;
-      rid(x,mid, 1) = max(0, min(x, mid));
+       // Limit the table read index in [0, mid] if C = 1
+       rid(x,mid, 0) = x;
+       rid(x,mid, 1) = max(0, min(x, mid));
 
-      // Tabulate an unary 'FX' function on a range [r0, r1]
-      val =
-        si.bus(N*4)<:
-        (totalSize,wf,readIndex)
-        : rdtable;
-      readIndex
-      // (sizes,r0s,r1s,xs)
-      =
-        sizesIds
-        : ri
-        : riPost
-      ;
-      riPost(size,ri) =
-        rid(ri,size-1,C);
-      ri =
-        ro.interleave(N,2)
-        : (1,0,si.bus(2*N))
-        : seq(i, N, riN, si.bus(2*(N-i-1))) ;
+       // Tabulate an unary 'FX' function on a range [r0, r1]
+       val =
+         si.bus(N*4)<:
+         (totalSize,wf,readIndex)
+         : rdtable;
+       readIndex
+       // (sizes,r0s,r1s,xs)
+       =
+         sizesIds
+         : ri
+         : riPost
+       ;
+       riPost(size,ri) =
+         rid(ri,size-1,C);
+       ri =
+         ro.interleave(N,2)
+         : (1,0,si.bus(2*N))
+         : seq(i, N, riN, si.bus(2*(N-i-1))) ;
 
-      riN(prevSize,prevID,sizeX,idX) =
-        (prevSize*sizeX)
-      , ( (prevSize*
-           rid(floor(idX),(sizeX-1),C))//TODO: sizeX*prevSize?
-          +prevID) ;
+       riN(prevSize,prevID,sizeX,idX) =
+         (prevSize*sizeX)
+       , ( (prevSize*
+            rid(floor(idX),(sizeX-1),C))//TODO: sizeX*prevSize?
+           +prevID) ;
 
-      sizesIds =
-        (
-          // from sizes
-          ( bs<:si.bus(N*2) )
-          // from r0s,r1s,xs
-        , si.bus(N*3)
-        ) :
-        // from sizes
-        (si.bus(N)
-        ,ids);  // takes (midX,r0,r1,x)
+       sizesIds =
+         (
+           // from sizes
+           ( bs<:si.bus(N*2) )
+           // from r0s,r1s,xs
+         , si.bus(N*3)
+         ) :
+         // from sizes
+         (si.bus(N)
+         ,ids);  // takes (midX,r0,r1,x)
 
-      // shortcut
-      bs = si.bus(N);
+       // shortcut
+       bs = si.bus(N);
     };
 };
 
@@ -790,6 +805,7 @@ with {
 // TODO: link: before smoother
 // TODO: binary search as a function lin the libraries
 // TODO: auto makup gain by area under curve
+// TODO: make sure we use ints where we can
 
 il(v0,v1,x) = it.interpolate_linear(x,v0,v1);
 // inputs: dv,v0,v1
