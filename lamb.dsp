@@ -34,34 +34,15 @@ with {
   v3 = rdtable(size, wf, rid(i3, mid, C));
 };
 
-offsets =
-  base:
-  si.bus(nrBases)
-  <: par(i, nrOffsets,
-         par(j, nrBases, switch(i,j)):>_
-     )
-with {
-  // N=2;
-  // base = (1,4);
-  N=3;
-  base = (1,4,16,64);
-  nrBases = pow(2,N-1);
-  nrOffsets = pow(2,nrBases);
-  switch(i,j) = _*int2bin(j,i,nrOffsets);
-  int2bin(i,n,maxN) = int(floor((n)/(pow2(i))))%2;
-  pow2(i) = 1<<i;
-};
-
 process =
-  offsets;
-// int2bin(10,16);
 // lin(1);
-// tabulateNd(3,1,pwrSineDiv)
-// tabulateNd(3,1,pwrSine,sizeX,sizeY)
-// tabulateNd(2,0,pwrSine,sizeX,sizeY,rx0,ry0,rx1,ry1,x,y)
-// , pwrSine(x,y);
-// tabulateNd(3,1,pwrSineDiv,sizeX,sizeY,sizeY,rx0,ry0,0,rx1,ry1,1,x,y,z)
-// , pwrSineDiv(x,y,z);
+  // tabulateNd(3,1,pwrSineDiv)
+  // tabulateNd(3,1,pwrSine,sizeX,sizeY,sizeY)
+  tabulateNd(3,1,pwrSine,4,4,4)
+  // tabulateNd(2,0,pwrSine,sizeX,sizeY,rx0,ry0,rx1,ry1,x,y)
+  // , pwrSine(x,y);
+  // tabulateNd(3,1,pwrSineDiv,sizeX,sizeY,sizeY,rx0,ry0,0,rx1,ry1,1,x,y,z)
+, pwrSineDiv(x,y,z);
 
 tabulateNd(N,C,expression) =
   calc
@@ -73,8 +54,7 @@ tabulateNd(N,C,expression) =
   // .linOLD
   // .table(0)
   // .lin
-  // .offset(1)
-  .baseOffsets
+  .offsets
 with {
   calc =
     environment {
@@ -87,26 +67,24 @@ with {
         )
         // : ro.interleave(z,2)
       ;
-      // N+1 baseOffsets
-      baseOffsets =
-        (1,si.bus(N),par(i, 3*N, !))
-        : seq(i, N,
-              ((si.bus(i),(_<:(_,_)), si.bus(N-i-0))
-               :(si.bus(i+1),*,si.bus(N-i-1))));
-
       offsets =
-        0,1,(
-          baseOffsets:
-          seq(i, 1, offset(i)));
-      // offset(0,sizesX,prev) = 0,1,si.bus(N+1);
-      // offset(1,prev) = 1,si.bus(N+1);
-      // offset(2,prev) = 2,si.bus(N+1);
-      // offset(i,prev) = 2,si.bus(N+1);
-      offset(i) =
-        ((_<:(_,_)),si.bus(N-i))
-        :
-        (si.bus(i+1),(*,si.bus(N-i-1)))
-      ;
+        // si.bus(N)
+        baseOffsets
+        <: par(i, nrOffsets,
+               par(j, N, switch(i,j)):>_
+              )
+      with {
+        nrOffsets = pow(2,N);
+        switch(i,j) = _*int2bin(j,i,nrOffsets);
+        int2bin(i,n,maxN) = int(floor((n)/(pow2(i))))%2;
+        pow2(i) = 1<<i;
+      };
+      baseOffsets =
+        (1,si.bus(N-1),!,par(i, 3*N, !))
+        : seq(i, N-1,
+              ((si.bus(i),(_<:(_,_)), si.bus(N-i-1))
+               :(si.bus(i+1),*,si.bus(N-i-2)))) ;
+
       linOLD2 =
         (par(i, z, 0.33), (si.bus(4*N)<:si.bus(4*N*z)))
         : (si.bus(z),ro.interleave(4*N,z))
