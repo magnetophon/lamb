@@ -34,19 +34,34 @@ with {
   v3 = rdtable(size, wf, rid(i3, mid, C));
 };
 
-int2bin(n,maxN) = par(j, maxNrBits(maxN-1), int(floor((n)/(pow2(j))))%2);
-maxNrBits(n) = int2nrOfBits(n);
-int2nrOfBits(n) = int(floor(log(n)/log(2))+1);
-pow2(i) = 1<<i;
+offsets =
+  base:
+  si.bus(nrBases)
+  <: par(i, nrOffsets,
+         par(j, nrBases, switch(i,j)):>_
+     )
+with {
+  // N=2;
+  // base = (1,4);
+  N=3;
+  base = (1,4,16,64);
+  nrBases = pow(2,N-1);
+  nrOffsets = pow(2,nrBases);
+  switch(i,j) = _*int2bin(j,i,nrOffsets);
+  int2bin(i,n,maxN) = int(floor((n)/(pow2(i))))%2;
+  pow2(i) = 1<<i;
+};
+
 process =
-  // int2bin(10,16);
-  // lin(1);
-  // tabulateNd(2,0,pwrSine,sizeX,sizeY,rx0,ry0,rx1,ry1,x,y)
-  // , pwrSine(x,y);
-  // tabulateNd(3,1,pwrSineDiv)
-  // tabulateNd(3,1,pwrSine,sizeX,sizeY)
-  tabulateNd(3,1,pwrSineDiv,sizeX,sizeY,sizeY,rx0,ry0,0,rx1,ry1,1,x,y,z)
-, pwrSineDiv(x,y,z);
+  offsets;
+// int2bin(10,16);
+// lin(1);
+// tabulateNd(3,1,pwrSineDiv)
+// tabulateNd(3,1,pwrSine,sizeX,sizeY)
+// tabulateNd(2,0,pwrSine,sizeX,sizeY,rx0,ry0,rx1,ry1,x,y)
+// , pwrSine(x,y);
+// tabulateNd(3,1,pwrSineDiv,sizeX,sizeY,sizeY,rx0,ry0,0,rx1,ry1,1,x,y,z)
+// , pwrSineDiv(x,y,z);
 
 tabulateNd(N,C,expression) =
   calc
@@ -59,7 +74,7 @@ tabulateNd(N,C,expression) =
   // .table(0)
   // .lin
   // .offset(1)
-  .sizes
+  .baseOffsets
 with {
   calc =
     environment {
@@ -72,7 +87,8 @@ with {
         )
         // : ro.interleave(z,2)
       ;
-      sizes =
+      // N+1 baseOffsets
+      baseOffsets =
         (1,si.bus(N),par(i, 3*N, !))
         : seq(i, N,
               ((si.bus(i),(_<:(_,_)), si.bus(N-i-0))
@@ -80,7 +96,7 @@ with {
 
       offsets =
         0,1,(
-          sizes:
+          baseOffsets:
           seq(i, 1, offset(i)));
       // offset(0,sizesX,prev) = 0,1,si.bus(N+1);
       // offset(1,prev) = 1,si.bus(N+1);
