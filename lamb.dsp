@@ -5,37 +5,8 @@ declare license "AGPLv3";
 
 import("stdfaust.lib");
 
-
-// a lin needs:
-// N times:
-// idX,prevSize, sizeX
-// one time:
-// size, wf, readIndex
-//
-// we have:
-// size,wf,ri,sizes,ids
-
-
-lin2d =
-  it.interpolate_linear(
-    dy
-  , it.interpolate_linear(dx,v0,v1)
-  , it.interpolate_linear(dx,v2,v3))
-with {
-  i0 = rid(int(idX), midX, C)+yOffset;
-  i1 = i0+1;
-  i2 = i0+sizeX;
-  i3 = i1+sizeX;
-  dx  = idX-int(idX);
-  dy  = idY-int(idY);
-  v0 = rdtable(size, wf, rid(i0, mid, C));
-  v1 = rdtable(size, wf, rid(i1, mid, C));
-  v2 = rdtable(size, wf, rid(i2, mid, C));
-  v3 = rdtable(size, wf, rid(i3, mid, C));
-};
-
 process =
-// lin(1);
+  // lin(1);
   // tabulateNd(3,1,pwrSineDiv)
   // tabulateNd(3,1,pwrSine,sizeX,sizeY,sizeY)
   // tabulateNd(3,1,pwrSine,4,4,4)
@@ -47,19 +18,10 @@ process =
 , pwrSineDiv(x,y,z);
 
 tabulateNd(N,C,expression) =
-  calc
-  // .readIndex
-  // .wf
-  // , calc.ri
-  // .val
-  // .linBlock(1,2,4,0.5)
-  // .linOLD
-  // .table(0)
-  .lin
-  // .readIndexes
-  // .tables
-  // . mixer(0)
-  // . mixers
+  si.bus(N*4)<:
+  (calc.lin
+  ,calc.val)
+
 with {
   calc =
     environment {
@@ -80,9 +42,6 @@ with {
         (ro.cross(N),si.bus(nrReadIndexes))
         : seq(i, N,
               mixer(i));
-      dxs =
-        ids:par(i, N, _<:(_-int(_)))
-      ;
       // work around for https://github.com/grame-cncm/faust/issues/890
       // since the table size can not come from interleaved numbers,
       // the other parameters cannot be interleaved either
@@ -122,73 +81,6 @@ with {
         : seq(i, N-1,
               ((si.bus(i),(_<:(_,_)), si.bus(N-i-1))
                :(si.bus(i+1),*,si.bus(N-i-2)))) ;
-
-
-      linOLD =
-        // (0,1,0,1,0.3,4,si.bus(4*N+2)):
-        linBlock(2);
-      // (0,1,si.bus(4*N+2)):
-      // linBlock(1);
-      linBlock(1) =
-        (_,_),
-        (
-          (
-            (si.bus(2),0,1)
-          , (si.bus(N*4)<:si.bus(N*8))
-          )
-          : (linElement,si.bus(4*N))
-        )
-      ;
-      linBlock(2) =
-        (si.bus(2*2)),
-        (
-          // (si.bus(N*4+4)<:si.bus(N*8+8)):
-          (linElement,linElement)
-        )
-      ;
-      linBlockOLD(9) =
-        (si.bus(2*2)),
-        (
-          (
-            (si.bus(4))
-          , (si.bus(N*4)<:si.bus(N*8))
-          )
-          : (linElement,si.bus(4*N))
-        )
-      ;
-      linBlock(i) =
-        (si.bus(2*i)),
-        (
-          (
-            (si.bus(2),0,1)
-          , (si.bus(N*4)<:si.bus(N*8))
-          )
-          : (linElement,si.bus(4*N))
-        )
-      ;
-
-      linElement(sizeX,idX,prevVal,prevSize) =
-        (si.bus(4*N)<:
-         it.interpolate_linear(
-           dx,v0,v1
-         ))
-      , (prevSize*sizeX)
-      with {
-        dx  = idX-int(idX);
-        v0 =
-          si.bus(4*N)<:
-          (
-            totalSize, wf, rid(readIndex, totalSize-1, C))
-          // :rdtable
-          :>_
-        ;
-        v1 =
-          si.bus(4*N)<:
-          (totalSize,wf, rid(readIndex+prevSize, totalSize-1, C))
-          // :rdtable
-          :>_
-        ;
-      };
       // total size of the table: s(0) * s(1)  ...  * s(N-2) * s(N-1)
       // N in, 1 out
       size(1) = _;
