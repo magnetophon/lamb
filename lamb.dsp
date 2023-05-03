@@ -55,20 +55,32 @@ with {
   v15 = rdtable(size, wf, rid(i15, mid, C));
 };
 
-cubifier(base,ins) =
-  ins<: par(i, 4,
-            par(j, insLn, _+off(i)))
+
+cubifier(ins) =
+  ins
+  :
+  ((_<:si.bus(insLn*4))
+  , (bs<:si.bus(insLn*4)))
+  : ro.interleave(insLn*4,2)
+  :par(i, 4,
+       par(j, insLn, off(i)+_))
 with
 {
-  insLn = outputs(ins);
-  off(0) = -1*base;
-  off(1) = 0;
-  off(2) = 1*base;
-  off(3) = 2*base;
+  insLn = outputs(ins)-1;
+  bs = si.bus(insLn);
+  off(0,base) = -1*base;
+  off(1,base) = 0;
+  off(2,base) = 1*base;
+  off(3,base) = 2*base;
 };
 process =
-  // this has 2 inputs and works as intended:
-  cubifier(1,_) : cubifier(8,si.bus(4));
+// this has 1 input and works as intended:
+  // cubifier((4,-1,0,1,2));
+  (4,1,0):
+  (_,cubifier(si.bus(2)))
+  :cubifier(si.bus(5));
+// (4,-1,0,1,2):cubifier(si.bus(5));
+// : cubifier(8,si.bus(4));
 // this has one input but should have 2:
 // cubifier(_,_) : cubifier(_,si.bus(4)) ;
 
