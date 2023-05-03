@@ -61,37 +61,41 @@ process =
   // tabulateNd(3,1,pwrSine,sizeX,sizeY,sizeY)
   // tabulateNd(3,1,pwrSine,4,4,4)
   // tabulateNd(2,1,pwrSine,4,4)
+  // tabulate2d(0,pwrSine,sizeX,sizeY,rx0,ry0,rx1,ry1,x,y).val
   // tabulateNd(2,0,pwrSine,sizeX,sizeY,rx0,ry0,rx1,ry1,x,y)
-  // ,tabulate2d(0,pwrSine,sizeX,sizeY,rx0,ry0,rx1,ry1,x,y).val
   // , pwrSine(x,y);
   tabulateNd(3,1,pwrSineDiv,sizeX,sizeY,sizeY,rx0,ry0,0,rx1,ry1,1,x,y,z)
 , pwrSineDiv(x,y,z);
 
 tabulateNd(N,C,expression) =
+  // calc.cub
   si.bus(N*4)<:
-  (calc.lin
-  ,calc.val)
+  ( calc.val
+  , calc.lin
+  , calc.cub)
 
 with {
   calc =
     environment {
-      lin =
+      cub =
         si.bus(N*4)<:
         (ids,tables)
-        :mixers
-      ;
+        :mixers;
+      // with {
       mixer(i) =
         si.bus(N-i-1),
-        (((_<:si.bus(nrMixers(i)*2))
-         , (si.bus(nrMixers(i)*2))
-         ): ro.interleave(nrMixers(i)*2,2)
+        (((_<:si.bus(nrMixers(i)*4))
+         , (si.bus(nrMixers(i)*4))
+         ): ro.interleave(nrMixers(i)*4,2)
          : par(i, nrMixers(i),
-               ((_<:(_-int(_))),_,!,_):it.interpolate_linear)) ;
-      nrMixers(i) = pow(2,N-i-1);
+               ((_<:(_-int(_))),_,!,_,!,_,!,_)
+               :it.interpolate_cubic)) ;
+      nrMixers(i) = pow(4,N-i-1);
       mixers=
         (ro.cross(N),si.bus(nrReadIndexes))
-        : seq(i, N,
-              mixer(i));
+        :
+        seq(i, N,
+            mixer(i));
       // work around for https://github.com/grame-cncm/faust/issues/890
       // since the table size can not come from interleaved numbers,
       // the other parameters cannot be interleaved either
@@ -125,12 +129,70 @@ with {
         int2bin(i,n,maxN) = int(floor((n)/(pow2(i))))%2;
         pow2(i) = 1<<i;
       };
-      nrReadIndexes = pow(2,N);
+      nrReadIndexes = pow(4,N);
       baseOffsets =
         (1,si.bus(N-1),!,par(i, 3*N, !))
         : seq(i, N-1,
               ((si.bus(i),(_<:(_,_)), si.bus(N-i-1))
                :(si.bus(i+1),*,si.bus(N-i-2)))) ;
+      // } ;
+      lin =
+        si.bus(N*4)<:
+        (ids,tables)
+        :mixers
+      with {
+        mixer(i) =
+          si.bus(N-i-1),
+          (((_<:si.bus(nrMixers(i)*2))
+           , (si.bus(nrMixers(i)*2))
+           ): ro.interleave(nrMixers(i)*2,2)
+           : par(i, nrMixers(i),
+                 ((_<:(_-int(_))),_,!,_):it.interpolate_linear)) ;
+        nrMixers(i) = pow(2,N-i-1);
+        mixers=
+          (ro.cross(N),si.bus(nrReadIndexes))
+          : seq(i, N,
+                mixer(i));
+        // work around for https://github.com/grame-cncm/faust/issues/890
+        // since the table size can not come from interleaved numbers,
+        // the other parameters cannot be interleaved either
+        tables =
+          si.bus(N*4)<: par(i, nrReadIndexes,
+                            table(i)
+                           );
+        table(i) = si.bus(N*4)<:
+                   (totalSize , wf , index(i))
+                   :rdtable;
+
+        index(n) =
+          readIndexes
+          : par(i, nrReadIndexes, _*(i==n)):>_
+        ;
+        readIndexes =
+          si.bus(N*4)
+          <:((readIndex<:si.bus(nrReadIndexes))
+            , offsets)
+          : ro.interleave(nrReadIndexes,2)
+          : par(i, nrReadIndexes, +)
+        ;
+        offsets =
+          // si.bus(N)
+          baseOffsets
+          <: par(i, nrReadIndexes,
+                 par(j, N, switch(i,j)):>_
+                )
+        with {
+          switch(i,j) = _*int2bin(j,i,nrReadIndexes);
+          int2bin(i,n,maxN) = int(floor((n)/(pow2(i))))%2;
+          pow2(i) = 1<<i;
+        };
+        nrReadIndexes = pow(2,N);
+        baseOffsets =
+          (1,si.bus(N-1),!,par(i, 3*N, !))
+          : seq(i, N-1,
+                ((si.bus(i),(_<:(_,_)), si.bus(N-i-1))
+                 :(si.bus(i+1),*,si.bus(N-i-2)))) ;
+      };
       // total size of the table: s(0) * s(1)  ...  * s(N-2) * s(N-1)
       // N in, 1 out
       size(1) = _;
