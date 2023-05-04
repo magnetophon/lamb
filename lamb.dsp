@@ -14,11 +14,11 @@ process =
 
   // tabulateNd(2,0,pwrSine,sizeX,sizeY,rx0,ry0,rx1,ry1,x,y)
   // , pwrSine(x,y);
-  tabulateNd(3,1,pwrSineDiv,sizeX,sizeY,sizeY,rx0,ry0,0,rx1,ry1,1,x,y,z)
-, pwrSineDiv(x,y,z)
-;
-// tabulateNd(4,1,fourD,sizeX,sizeY,sizeY,sizeY,rx0,ry0,0,1,rx1,ry1,1,2,x,y,z,p)
-// , fourD(x,y,z,p);
+  // tabulateNd(3,1,pwrSineDiv,sizeX,sizeY,sizeY,rx0,ry0,0,rx1,ry1,1,x,y,z)
+  // , pwrSineDiv(x,y,z)
+  // ;
+  tabulateNd(4,1,fourD,sizeX,sizeY,sizeY,sizeY,rx0,ry0,0,1,rx1,ry1,1,2,x,y,z,p)
+, fourD(x,y,z,p);
 
 tabulateNd(N,C,expression) =
   // calc.lin
@@ -29,56 +29,22 @@ tabulateNd(N,C,expression) =
 with {
   calc =
     environment {
-      cub =
+      val =
         (par(i, N, int),si.bus(N*3))<:
-        (ids,tables(nrReadIndexes,readIndexes))
-        :mixers(1,nrReadIndexes)
-         // ;
-      with {
-      readIndexes =
-        si.bus(N*4) <:
-        ((baseOffsets:ro.cross(N))
-        , readIndex)
-        :cubifiers;
-      offsets =
-        baseOffsets:ro.cross(N)
-                    <: par(i, nrReadIndexes,
-                           par(j, N, switch(i,j)):>_)
-      with {
-        switch(i,j) = _*int2bin(j,i,nrReadIndexes);
-      };
-      nrReadIndexes = pow(4,N);
-      cubifier(len) =
-        ((_<:si.bus(len*4))
-        , (si.bus(len)<:si.bus(len*4)))
-        : ro.interleave(len*4,2)
-        :par(i, 4,
-             par(j, len, off(i)+_))
-      with
-      {
-        off(0,base) = -1*base;
-        off(1,base) = 0;
-        off(2,base) = 1*base;
-        off(3,base) = 2*base;
-      };
-      cubifiers =
-        seq(i, N,
-            si.bus(N-i-1),cubifier(pow(4,i)));
+        (totalSize,wf,readIndex)
+        : rdtable;
 
-    } ;
       lin =
         (par(i, N, int),si.bus(N*3))<:
         (ids,tables(nrReadIndexes,readIndexes))
         :mixers(0,nrReadIndexes)
-         // ;
       with {
         readIndexes =
           si.bus(N*4) <:
           ((readIndex<:si.bus(nrReadIndexes))
           , offsets)
           : ro.interleave(nrReadIndexes,2)
-          : par(i, nrReadIndexes, +)
-        ;
+          : par(i, nrReadIndexes, +) ;
         offsets =
           baseOffsets
           <: par(i, nrReadIndexes,
@@ -89,13 +55,43 @@ with {
         nrReadIndexes = pow(2,N);
       };
 
+      cub =
+        (par(i, N, int),si.bus(N*3))<:
+        (ids,tables(nrReadIndexes,readIndexes))
+        :mixers(1,nrReadIndexes)
+         // ;
+      with {
+        readIndexes =
+          si.bus(N*4) <:
+          ((baseOffsets:ro.cross(N))
+          , readIndex)
+          :cubifiers;
+        nrReadIndexes = pow(4,N);
+        cubifier(len) =
+          ((_<:si.bus(len*4))
+          , (si.bus(len)<:si.bus(len*4)))
+          : ro.interleave(len*4,2)
+          :par(i, 4,
+               par(j, len, off(i)+_))
+        with
+        {
+          off(0,base) = -1*base;
+          off(1,base) = 0;
+          off(2,base) = 1*base;
+          off(3,base) = 2*base;
+        };
+        cubifiers =
+          seq(i, N,
+              si.bus(N-i-1),cubifier(pow(4,i)));
+      };
+
       tables(nrReadIndexes,readIndexes) =
         si.bus(N*4)<:
         ((totalSize<:si.bus(nrReadIndexes))
         , (wf<:si.bus(nrReadIndexes))
         , readIndexes)
-         :ro.interleave(nrReadIndexes,3)
-         :par(i, nrReadIndexes, rdtable);
+        :ro.interleave(nrReadIndexes,3)
+        :par(i, nrReadIndexes, rdtable);
 
       mixers(linCub,nrReadIndexes)=
         (ro.cross(N),si.bus(nrReadIndexes))
@@ -105,6 +101,7 @@ with {
         mixerUniversal(i,2,(_,!,_),it.interpolate_linear) ;
       mixer(1,i) =
         mixerUniversal(i,4,(_,!,_,!,_,!,_),it.interpolate_cubic) ;
+
       mixerUniversal(i,mult,sieve,it) =
         si.bus(N-i-1),
         (((_<:si.bus(nrMixers(i)*mult))
@@ -159,18 +156,11 @@ with {
       rid(x,mid, 0) = int(x);
       rid(x,mid, 1) = max(int(0), min(int(x), mid));
 
-      // Tabulate an unary 'FX' function on a range [r0, r1]
-      val =
-        (par(i, N, int),si.bus(N*3))<:
-        (totalSize,wf,readIndex)
-        : rdtable;
       readIndex
       // (sizes,r0s,r1s,xs)
-      =
-        sizesIds
+      = sizesIds
         : ri
-        : riPost
-      ;
+        : riPost ;
       riPost(size,ri) =
         rid(ri,size-int(1),C);
       ri =
@@ -195,7 +185,7 @@ with {
         (si.bus(N)
         ,ids);  // takes (midX,r0,r1,x)
 
-      int2bin(i,n,maxN) = int(floor((n)/(1<<i))%2);
+      int2bin(i,n,maxN) = int(floor((n)/(1<<i))%int(2));
       // shortcut
       bs = si.bus(N);
     };
