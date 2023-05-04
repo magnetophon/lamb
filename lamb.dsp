@@ -6,6 +6,12 @@ declare license "AGPLv3";
 import("stdfaust.lib");
 
 process =
+  // hgroup("",
+  // vgroup("[2]test", test)
+  // :vgroup("[1]AR",
+  // AR
+  // ));
+
   // tabulateNd(2,0,pwrSine,sizeX,sizeY,rx0,ry0,rx1,ry1,x,y)
   // , pwrSine(x,y);
   // tabulateNd(3,1,pwrSineDiv,sizeX,sizeY,sizeY,rx0,ry0,0,rx1,ry1,1,x,y,z)
@@ -14,7 +20,7 @@ process =
 , fourD(x,y,z,p);
 
 tabulateNd(N,C,expression) =
-  // calc.cub
+  // calc.lin
   si.bus(N*4)<:
   ( calc.val
   , calc.lin
@@ -328,13 +334,16 @@ with {
     fullDif =dif/(1-warpedSine(shape,ramp));
   };
   shapeDif(shape,phase,duration,sr) =
-    shapeDifFormula(shape,phase,duration,48000);
+    // shapeDifFormula(shape,phase,duration,48000);
+    // tabulateNd(2,0,pwrSine,sizeX,sizeY,rx0,ry0,rx1,ry1,x,y)
+    tabulateNd(4,0,shapeDifFormula,8,1<<11,1<<7,1<<6,0.3,0,0,48000,0.7,1,1,192000,shape,phase,duration,ma.SR);
+  // shapeDifFormula(shape,phase,duration,48000);
   shapeDifFormula(shape,phase,duration,sr) =
-    // warpedSineFormula(shape,phase+(1 / sr / duration))
-    // - warpedSineFormula(shape,phase);
-    // shapeDif(shape,phase,duration,sr) =
-    warpedSine(shape,phase+(1 / sr / duration))
-    - warpedSine(shape,phase);
+    warpedSineFormula(shape,phase+(1 / sr / duration))
+    - warpedSineFormula(shape,phase);
+  // shapeDif(shape,phase,duration,sr) =
+  // warpedSine(shape,phase+(1 / sr / duration))
+  // - warpedSine(shape,phase);
 
   dif = x-prevGain;
   releasing =
@@ -666,6 +675,14 @@ with {
 // TODO: auto makup gain by area under curve
 // TODO: make sure we use ints where we can
 
+// some int benchmarks:
+// ba.time<:par(i, 1<<10, _%float(i+1)):>_; // slow
+// ba.time<:par(i, 1<<10, _%(i+int(1))):>_; //fast
+// ba.time<:par(i, 1<<10, _%(i+1)):>_; //fast
+// float(ba.time)<:par(i, 1<<10, _%(i+1)):>_; // slow
+// float(ba.time)<:par(i, 1<<10, int(_)%(i+1)):>_; // fast
+// ba.time<:par(i, 1<<10, _%(i+1.0)):>_; // slow
+//
 il(v0,v1,x) = it.interpolate_linear(x,v0,v1);
 // inputs: dv,v0,v1
 OLDlin(1) = it.interpolate_linear;
