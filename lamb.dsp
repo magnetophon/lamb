@@ -199,10 +199,10 @@ pwrSineDiv(x,y,z) = pwrSine(x,y)/(1+z);
 fourD(x,y,z,p) = pwrSine(pow(x,p),y)/(1+z);
 
 
-x= hslider("x", rx0, rx0, rx1, 0.01);
-y= hslider("y", ry0, ry0, ry1, 0.01);
-z= hslider("z", 0, 0, 1, 0.01);
-p = hslider("p", 1, 1, 2, 0.01);
+x= hslider("x", rx0, rx0, rx1, 0.001):si.smoo;
+y= hslider("y", ry0, ry0, ry1, 0.001):si.smoo;
+z= hslider("z", 0, 0, 1, 0.001):si.smoo;
+p = hslider("p", 1, 1, 2, 0.001):si.smoo;
 // idX = (x-rx0)/(rx1-rx0)*midX;
 rx0 = 0.1;
 rx1 = 1.0;
@@ -210,8 +210,8 @@ ry0 = 0.3;
 ry1 = 0.7;
 // y = hslider("y", , 0, 1, 0.01)*midY:floor/midY;
 // y = (float((hslider("y", 0, 0, 1, 0.01)/1.0)*midY:floor)*1.0)/midY;
-sizeX = 1<<8;
-sizeY = 1<<6;
+sizeX = 1<<3;
+sizeY = 1<<3;
 // process =
 oldProc =
   tabulateNd(N,0,pwrSine)
