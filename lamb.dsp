@@ -6,32 +6,36 @@ declare license "AGPLv3";
 import("stdfaust.lib");
 
 process =
-  // hgroup("",
-  // vgroup("[2]test", test)
-  // :vgroup("[1]AR",
-  // AR
-  // ));
+  hgroup("",
+         vgroup("[2]test", test)
+         :vgroup("[1]AR",
+                 AR
+                ));
 
   // tabulateNd(2,0,pwrSine,sizeX,sizeY,rx0,ry0,rx1,ry1,x,y)
   // , pwrSine(x,y);
-  tabulateNd(3,1,pwrSineDiv,sizeX,sizeY,sizeY,rx0,ry0,0,rx1,ry1,1,x,y,z)
-, pwrSineDiv(x,y,z);
-// tabulateNd(4,1,fourD,sizeX,sizeY,sizeY,sizeY,rx0,ry0,0,1,rx1,ry1,1,2,x,y,z,p)
-// , fourD(x,y,z,p);
+  // tabulateNd(3,1,pwrSineDiv,sizeX,sizeY,sizeY,rx0,ry0,0,rx1,ry1,1,x,y,z)
+  // , pwrSineDiv(x,y,z);
+  // tabulateNd(4,1,fourD,sizeX,sizeY,sizeY,sizeY,rx0,ry0,0,1,rx1,ry1,1,2,x,y,z,p)
+  // , fourD(x,y,z,p);
 
-tabulateNd(N,C,expression) =
-  // calc.lin
-  si.bus(N*4)<:
-  ( calc.val
-  , calc.lin
-  , calc.cub)
-with {
+  tabulateNd(N,C,expression) =
+    (par(i, N, int),si.bus(N*3))<:
+    // calc.readIndexes
+    calc.lin
+    // si.bus(N*4)<:
+    // ( calc.val
+    // , calc.lin
+    // , calc.cub)
+  with {
   calc =
     environment {
       cub =
-        si.bus(N*4)<:
+        // si.bus(N*4)<:
+        (par(i, N, int),si.bus(N*3))<:
         (ids,tables(nrReadIndexes,readIndexes))
         :mixers(1,nrReadIndexes)
+         // ;
       with {
       readIndexes =
         ((baseOffsets:ro.cross(N))
@@ -43,8 +47,7 @@ with {
                            par(j, N, switch(i,j)):>_)
       with {
         switch(i,j) = _*int2bin(j,i,nrReadIndexes);
-        int2bin(i,n,maxN) = int(floor((n)/(pow2(i))))%2;
-        pow2(i) = 1<<i;};
+      };
       nrReadIndexes = pow(4,N);
       cubifier(len) =
         ((_<:si.bus(len*4))
@@ -63,30 +66,30 @@ with {
         seq(i, N,
             si.bus(N-i-1),cubifier(pow(4,i)));
 
-      } ;
+    } ;
       lin =
-        si.bus(N*4)<:
+        // si.bus(N*4)<:
+        (par(i, N, int),si.bus(N*3))<:
         (ids,tables(nrReadIndexes,readIndexes))
         :mixers(0,nrReadIndexes)
+      ;
+      // with {
+      readIndexes =
+        si.bus(N*4)
+        <:((readIndex<:si.bus(nrReadIndexes))
+          , offsets)
+        : ro.interleave(nrReadIndexes,2)
+        : par(i, nrReadIndexes, +)
+      ;
+      offsets =
+        baseOffsets
+        <: par(i, nrReadIndexes,
+               par(j, N, switch(i,j)):>_)
       with {
-        readIndexes =
-          si.bus(N*4)
-          <:((readIndex<:si.bus(nrReadIndexes))
-            , offsets)
-          : ro.interleave(nrReadIndexes,2)
-          : par(i, nrReadIndexes, +)
-        ;
-        offsets =
-          baseOffsets
-          <: par(i, nrReadIndexes,
-                 par(j, N, switch(i,j)):>_)
-        with {
-          switch(i,j) = _*int2bin(j,i,nrReadIndexes);
-          int2bin(i,n,maxN) = int(floor((n)/(pow2(i))))%2;
-          pow2(i) = 1<<i;
-        };
-        nrReadIndexes = pow(2,N);
+        switch(i,j) = _*int2bin(j,i,nrReadIndexes);
       };
+      nrReadIndexes = pow(2,N);
+      // };
 
       // work around for https://github.com/grame-cncm/faust/issues/890
       // since the table size can not come from interleaved numbers,
@@ -129,7 +132,7 @@ with {
       size(N) = _*size(N-1);
       totalSize = size(N),par(i, N*3, !);
       baseOffsets =
-        (1,si.bus(N-1),!,par(i, 3*N, !))
+        (int(1),si.bus(N-1),par(i, 3*N+1, !))
         : seq(i, N-1,
               ((si.bus(i),(_<:(_,_)), si.bus(N-i-1))
                :(si.bus(i+1),*,si.bus(N-i-2))));
@@ -162,12 +165,13 @@ with {
       wf = (wfps,par(i, N, !)):expression;
 
       // Limit the table read index in [0, mid] if C = 1
-      rid(x,mid, 0) = x;
-      rid(x,mid, 1) = max(0, min(x, mid));
+      rid(x,mid, 0) = int(x);
+      rid(x,mid, 1) = max(0, min(x, mid)):int;
 
       // Tabulate an unary 'FX' function on a range [r0, r1]
       val =
-        si.bus(N*4)<:
+        // si.bus(N*4)<:
+        (par(i, N, int),si.bus(N*3))<:
         (totalSize,wf,readIndex)
         : rdtable;
       readIndex
@@ -201,6 +205,7 @@ with {
         (si.bus(N)
         ,ids);  // takes (midX,r0,r1,x)
 
+      int2bin(i,n,maxN) = int(floor((n)/(1<<i))%2);
       // shortcut
       bs = si.bus(N);
     };
