@@ -20,11 +20,11 @@ process =
 , fourD(x,y,z,p);
 
 tabulateNd(N,C,expression) =
-  // calc.lin
-  si.bus(N*4)<:
-  ( calc.val
-  , calc.lin
-  , calc.cub)
+  calc.lin
+  // si.bus(N*4)<:
+  // ( calc.val
+  // , calc.lin
+  // , calc.cub)
 with {
   calc =
     environment {
@@ -674,6 +674,8 @@ with {
 // TODO: binary search as a function lin the libraries
 // TODO: auto makup gain by area under curve
 // TODO: make sure we use ints where we can
+// TODO: fix the out of bound reads from tabulateNd.cub:
+// make the parameter write ranges a bit bigger than the read ranges
 
 // some int benchmarks:
 // ba.time<:par(i, 1<<10, _%float(i+1)):>_; // slow
