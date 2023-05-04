@@ -16,17 +16,10 @@ process =
   // , pwrSine(x,y);
   // tabulateNd(3,1,pwrSineDiv,sizeX,sizeY,sizeY,rx0,ry0,0,rx1,ry1,1,x,y,z)
   // , pwrSineDiv(x,y,z);
-  tabulateNd(4,1,fourD,sizeX,sizeY,sizeY,sizeY,rx0,ry0,0,1,rx1,ry1,1,2,x,y,z,p)
+  tabulateNd(4,1,fourD,sizeX,sizeY,sizeY,sizeY,rx0,ry0,0,1,rx1,ry1,1,2,x,y,z,p).lin
 , fourD(x,y,z,p);
 
 tabulateNd(N,C,expression) =
-  calc.lin
-  // si.bus(N*4)<:
-  // ( calc.val
-  // , calc.lin
-  // , calc.cub)
-with {
-  calc =
     environment {
       cub =
         si.bus(N*4)<:
@@ -239,7 +232,6 @@ with {
       // shortcut
       bs = si.bus(N);
     };
-};
 
 sineShaper(x) = (sin((x*.5 + 0.75)*2*ma.PI)+1)*0.5;
 pwr(x) = pow(2,x);
