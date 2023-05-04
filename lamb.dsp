@@ -15,14 +15,12 @@ process =
   // tabulateNd(2,0,pwrSine,sizeX,sizeY,rx0,ry0,rx1,ry1,x,y)
   // , pwrSine(x,y);
   tabulateNd(3,1,pwrSineDiv,sizeX,sizeY,sizeY,rx0,ry0,0,rx1,ry1,1,x,y,z)
-  // , pwrSineDiv(x,y,z)
+, pwrSineDiv(x,y,z)
 ;
 // tabulateNd(4,1,fourD,sizeX,sizeY,sizeY,sizeY,rx0,ry0,0,1,rx1,ry1,1,2,x,y,z,p)
 // , fourD(x,y,z,p);
 
 tabulateNd(N,C,expression) =
-  (par(i, N, int),si.bus(N*3))<:
-  // calc.readIndexes
   // calc.lin
   si.bus(N*4)<:
   ( calc.val
@@ -32,13 +30,13 @@ with {
   calc =
     environment {
       cub =
-        // si.bus(N*4)<:
         (par(i, N, int),si.bus(N*3))<:
         (ids,tables(nrReadIndexes,readIndexes))
         :mixers(1,nrReadIndexes)
          // ;
       with {
       readIndexes =
+        si.bus(N*4) <:
         ((baseOffsets:ro.cross(N))
         , readIndex)
         :cubifiers;
@@ -69,16 +67,15 @@ with {
 
     } ;
       lin =
-        // si.bus(N*4)<:
         (par(i, N, int),si.bus(N*3))<:
         (ids,tables(nrReadIndexes,readIndexes))
         :mixers(0,nrReadIndexes)
          // ;
       with {
         readIndexes =
-          si.bus(N*4)
-          <:((readIndex<:si.bus(nrReadIndexes))
-            , offsets)
+          si.bus(N*4) <:
+          ((readIndex<:si.bus(nrReadIndexes))
+          , offsets)
           : ro.interleave(nrReadIndexes,2)
           : par(i, nrReadIndexes, +)
         ;
@@ -92,20 +89,13 @@ with {
         nrReadIndexes = pow(2,N);
       };
 
-      // work around for https://github.com/grame-cncm/faust/issues/890
-      // since the table size can not come from interleaved numbers,
-      // the other parameters cannot be interleaved either
       tables(nrReadIndexes,readIndexes) =
-        si.bus(N*4)<: par(i, nrReadIndexes,
-                          table(nrReadIndexes,readIndexes,i)
-                         );
-      table(nrReadIndexes,readIndexes,i) = si.bus(N*4)<:
-                                           (totalSize , wf , index(nrReadIndexes,readIndexes,i))
-                                           :rdtable;
-
-      index(nrReadIndexes,readIndexes,n) =
-        readIndexes
-        : par(i, nrReadIndexes, _*(i==n)):>_ ;
+        si.bus(N*4)<:
+        ((totalSize<:si.bus(nrReadIndexes))
+        , (wf<:si.bus(nrReadIndexes))
+        , readIndexes)
+         :ro.interleave(nrReadIndexes,3)
+         :par(i, nrReadIndexes, rdtable);
 
       mixers(linCub,nrReadIndexes)=
         (ro.cross(N),si.bus(nrReadIndexes))
@@ -171,7 +161,6 @@ with {
 
       // Tabulate an unary 'FX' function on a range [r0, r1]
       val =
-        // si.bus(N*4)<:
         (par(i, N, int),si.bus(N*3))<:
         (totalSize,wf,readIndex)
         : rdtable;
