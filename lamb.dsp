@@ -6,28 +6,29 @@ declare license "AGPLv3";
 import("stdfaust.lib");
 
 process =
-  hgroup("",
-         vgroup("[2]test", test)
-         :vgroup("[1]AR",
-                 AR
-                ));
+  // hgroup("",
+  // vgroup("[2]test", test)
+  // :vgroup("[1]AR",
+  // AR
+  // ));
 
   // tabulateNd(2,0,pwrSine,sizeX,sizeY,rx0,ry0,rx1,ry1,x,y)
   // , pwrSine(x,y);
-  // tabulateNd(3,1,pwrSineDiv,sizeX,sizeY,sizeY,rx0,ry0,0,rx1,ry1,1,x,y,z)
-  // , pwrSineDiv(x,y,z);
-  // tabulateNd(4,1,fourD,sizeX,sizeY,sizeY,sizeY,rx0,ry0,0,1,rx1,ry1,1,2,x,y,z,p)
-  // , fourD(x,y,z,p);
+  tabulateNd(3,1,pwrSineDiv,sizeX,sizeY,sizeY,rx0,ry0,0,rx1,ry1,1,x,y,z)
+  // , pwrSineDiv(x,y,z)
+;
+// tabulateNd(4,1,fourD,sizeX,sizeY,sizeY,sizeY,rx0,ry0,0,1,rx1,ry1,1,2,x,y,z,p)
+// , fourD(x,y,z,p);
 
-  tabulateNd(N,C,expression) =
-    (par(i, N, int),si.bus(N*3))<:
-    // calc.readIndexes
-    calc.lin
-    // si.bus(N*4)<:
-    // ( calc.val
-    // , calc.lin
-    // , calc.cub)
-  with {
+tabulateNd(N,C,expression) =
+  (par(i, N, int),si.bus(N*3))<:
+  // calc.readIndexes
+  // calc.lin
+  si.bus(N*4)<:
+  ( calc.val
+  , calc.lin
+  , calc.cub)
+with {
   calc =
     environment {
       cub =
@@ -72,24 +73,24 @@ process =
         (par(i, N, int),si.bus(N*3))<:
         (ids,tables(nrReadIndexes,readIndexes))
         :mixers(0,nrReadIndexes)
-      ;
-      // with {
-      readIndexes =
-        si.bus(N*4)
-        <:((readIndex<:si.bus(nrReadIndexes))
-          , offsets)
-        : ro.interleave(nrReadIndexes,2)
-        : par(i, nrReadIndexes, +)
-      ;
-      offsets =
-        baseOffsets
-        <: par(i, nrReadIndexes,
-               par(j, N, switch(i,j)):>_)
+         // ;
       with {
-        switch(i,j) = _*int2bin(j,i,nrReadIndexes);
+        readIndexes =
+          si.bus(N*4)
+          <:((readIndex<:si.bus(nrReadIndexes))
+            , offsets)
+          : ro.interleave(nrReadIndexes,2)
+          : par(i, nrReadIndexes, +)
+        ;
+        offsets =
+          baseOffsets
+          <: par(i, nrReadIndexes,
+                 par(j, N, switch(i,j)):>_)
+        with {
+          switch(i,j) = _*int2bin(j,i,nrReadIndexes);
+        };
+        nrReadIndexes = pow(2,N);
       };
-      nrReadIndexes = pow(2,N);
-      // };
 
       // work around for https://github.com/grame-cncm/faust/issues/890
       // since the table size can not come from interleaved numbers,
@@ -166,7 +167,7 @@ process =
 
       // Limit the table read index in [0, mid] if C = 1
       rid(x,mid, 0) = int(x);
-      rid(x,mid, 1) = max(0, min(x, mid)):int;
+      rid(x,mid, 1) = max(int(0), min(int(x), mid));
 
       // Tabulate an unary 'FX' function on a range [r0, r1]
       val =
@@ -182,7 +183,7 @@ process =
         : riPost
       ;
       riPost(size,ri) =
-        rid(ri,size-1,C);
+        rid(ri,size-int(1),C);
       ri =
         ro.interleave(N,2)
         : (1,0,si.bus(2*N))
@@ -191,7 +192,7 @@ process =
       riN(prevSize,prevID,sizeX,idX) =
         (prevSize*sizeX)
       , ( (prevSize*
-           rid(floor(idX),(sizeX-1),C))//TODO: sizeX*prevSize?
+           rid(floor(idX),(sizeX-int(1)),C))//TODO: sizeX*prevSize?
           +prevID) ;
 
       sizesIds =
@@ -219,22 +220,6 @@ pwrSineDiv(x,y,z) = pwrSine(x,y)/(1+z);
 fourD(x,y,z,p) = pwrSine(pow(x,p),y)/(1+z);
 
 
-// x = (float((hslider("x", 0.2, 0.2, 2, 0.01)/2)*midX:floor)*2.0)/midX;
-// y = (float((hslider("y", 0.3, 0.3, 3, 0.01)/3)*midY:floor)*3.0)/midY;
-// x = ((hslider("x", 0, 0, 2, 0.01)/2)*midX:floor/midX)*2;
-xs = hslider("x", rx0, rx0, rx1, 0.01)*midX:floor/midX;
-xr = (((((hslider("x", rx0, rx0, rx1, 0.01)
-          -rx0
-         )
-         /(rx1-rx0)
-        )*midX:floor/midX)
-       *(rx1-rx0)
-      )
-      +rx0)
-     *(rx1-rx0)
-
-;
-// x= hslider("x", rx0, rx0, rx1, 1.0/sizeX)*midX:floor/midX;
 x= hslider("x", rx0, rx0, rx1, 0.01);
 y= hslider("y", ry0, ry0, ry1, 0.01);
 z= hslider("z", 0, 0, 1, 0.01);
@@ -248,8 +233,6 @@ ry1 = 0.7;
 // y = (float((hslider("y", 0, 0, 1, 0.01)/1.0)*midY:floor)*1.0)/midY;
 sizeX = 1<<8;
 sizeY = 1<<6;
-midX = sizeX-1;
-midY = sizeY-1;
 // process =
 oldProc =
   tabulateNd(N,0,pwrSine)
