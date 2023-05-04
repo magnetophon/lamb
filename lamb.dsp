@@ -79,18 +79,14 @@ with {
               ((si.bus(i),(_<:(_,_)), si.bus(N-i-1))
                :(si.bus(i+1),*,si.bus(N-i-2)))) ;
 
-      cubifier(ins) =
-        ins
-        :
-        ((_<:si.bus(insLn*4))
-        , (bs<:si.bus(insLn*4)))
-        : ro.interleave(insLn*4,2)
+      cubifier(len) =
+        ((_<:si.bus(len*4))
+        , (si.bus(len)<:si.bus(len*4)))
+        : ro.interleave(len*4,2)
         :par(i, 4,
-             par(j, insLn, off(i)+_))
+             par(j, len, off(i)+_))
       with
       {
-        insLn = outputs(ins)-1;
-        bs = si.bus(insLn);
         off(0,base) = -1*base;
         off(1,base) = 0;
         off(2,base) = 1*base;
@@ -98,7 +94,7 @@ with {
       };
       cubifiers =
         seq(i, N,
-            si.bus(N-i-1),cubifier(si.bus(pow(4,i)+1)));
+            si.bus(N-i-1),cubifier(pow(4,i)));
 
       // } ;
       lin =
