@@ -19,18 +19,18 @@ process =
   // tabulateNd(2,0,pwrSine,sizeX,sizeY,rx0,ry0,rx1,ry1,x,y).val
   // tabulateNd(2,0,pwrSine).val
   // , pwrSine(x,y);
-  tabulateNd(3,1,pwrSineDiv,
+  tabulateNd(1,pwrSineDiv,
              (sizeX,sizeY,sizeY,rx0,ry0,0,rx1,ry1,1,x,y,z)).val
-, tabulateNd(3,1,pwrSineDiv,
+, tabulateNd(1,pwrSineDiv,
              (sizeX,sizeY,sizeY,rx0,ry0,0,rx1,ry1,1,x,y,z)).lin
-, tabulateNd(3,1,pwrSineDiv,
+, tabulateNd(1,pwrSineDiv,
              (sizeX,sizeY,sizeY,rx0,ry0,0,rx1,ry1,1,x,y,z)).cub
 , pwrSineDiv(x,y,z) ;
 // tabulateNd(4,1,fourD,sizeX,sizeY,sizeY,sizeY,rx0,ry0,0,1,rx1,ry1,1,2,x,y,z,p)
 // , fourD(x,y,z,p);
 
 // tabulateNd(N,C,expression) =
-tabulateNd(N,C,expression,parameters) =
+tabulateNd(C,expression,parameters) =
   environment {
     val =
       parameters
@@ -46,7 +46,7 @@ tabulateNd(N,C,expression,parameters) =
       :mixers(0,nrReadIndexes)
     with {
       readIndexes =
-        si.bus(N*4) <:
+        si.bus(nParams) <:
         ((readIndex<:si.bus(nrReadIndexes))
         , offsets)
         : ro.interleave(nrReadIndexes,2)
@@ -68,7 +68,7 @@ tabulateNd(N,C,expression,parameters) =
       :mixers(1,nrReadIndexes)
     with {
       readIndexes =
-        si.bus(N*4) <:
+        si.bus(nParams) <:
         ((baseOffsets:ro.cross(N))
         , readIndex)
         :cubifiers;
@@ -91,8 +91,10 @@ tabulateNd(N,C,expression,parameters) =
             si.bus(N-i-1),cubifier(pow(4,i)));
     };
 
+    nParams = outputs(parameters);
+    N = int(nParams/4);
     tables(nrReadIndexes,readIndexes) =
-      si.bus(N*4)<:
+      si.bus(nParams)<:
       ((totalSize<:si.bus(nrReadIndexes))
       , (wf<:si.bus(nrReadIndexes))
       , readIndexes)
