@@ -5,191 +5,197 @@ declare license "AGPLv3";
 
 import("stdfaust.lib");
 
+
+
 process =
+  // PMI_FBFFcompressor_N_chan(strength,thresh,att,rel,knee,prePost,link,FBFF,meter,2);
+  //
   // hgroup("",
   // vgroup("[2]test", test)
   // :vgroup("[1]AR",
   // AR
   // ));
 
-  // tabulateNd(2,0,pwrSine,sizeX,sizeY,rx0,ry0,rx1,ry1,x,y)
+  // tabulateNd(2,0,pwrSine,sizeX,sizeY,rx0,ry0,rx1,ry1,x,y).val
+  // tabulateNd(2,0,pwrSine).val
   // , pwrSine(x,y);
-  // tabulateNd(3,1,pwrSineDiv,sizeX,sizeY,sizeY,rx0,ry0,0,rx1,ry1,1,x,y,z)
-  // , pwrSineDiv(x,y,z)
-  // ;
-  tabulateNd(4,1,fourD,sizeX,sizeY,sizeY,sizeY,rx0,ry0,0,1,rx1,ry1,1,2,x,y,z,p)
-, fourD(x,y,z,p);
+  tabulateNd(3,1,pwrSineDiv,
+             (sizeX,sizeY,sizeY,rx0,ry0,0,rx1,ry1,1,x,y,z)).val
+, tabulateNd(3,1,pwrSineDiv,
+             (sizeX,sizeY,sizeY,rx0,ry0,0,rx1,ry1,1,x,y,z)).lin
+, tabulateNd(3,1,pwrSineDiv,
+             (sizeX,sizeY,sizeY,rx0,ry0,0,rx1,ry1,1,x,y,z)).cub
+, pwrSineDiv(x,y,z) ;
+// tabulateNd(4,1,fourD,sizeX,sizeY,sizeY,sizeY,rx0,ry0,0,1,rx1,ry1,1,2,x,y,z,p)
+// , fourD(x,y,z,p);
 
-tabulateNd(N,C,expression) =
-  // calc.lin
-  si.bus(N*4)<:
-  ( calc.val
-  , calc.lin
-  , calc.cub)
-with {
-  calc =
-    environment {
-      val =
-        (par(i, N, int),si.bus(N*3))<:
-        (totalSize,wf,readIndex)
-        : rdtable;
+// tabulateNd(N,C,expression) =
+tabulateNd(N,C,expression,parameters) =
+  environment {
+    val =
+      parameters
+      : (par(i, N, int),si.bus(N*3))
+        <: (totalSize,wf,readIndex)
+      : rdtable
+    ;
 
-      lin =
-        (par(i, N, int),si.bus(N*3))<:
-        (ids,tables(nrReadIndexes,readIndexes))
-        :mixers(0,nrReadIndexes)
+    lin =
+      parameters
+      : (par(i, N, int),si.bus(N*3))
+        <: (ids,tables(nrReadIndexes,readIndexes))
+      :mixers(0,nrReadIndexes)
+    with {
+      readIndexes =
+        si.bus(N*4) <:
+        ((readIndex<:si.bus(nrReadIndexes))
+        , offsets)
+        : ro.interleave(nrReadIndexes,2)
+        : par(i, nrReadIndexes, +) ;
+      offsets =
+        baseOffsets
+        <: par(i, nrReadIndexes,
+               par(j, N, switch(i,j)):>_)
       with {
-        readIndexes =
-          si.bus(N*4) <:
-          ((readIndex<:si.bus(nrReadIndexes))
-          , offsets)
-          : ro.interleave(nrReadIndexes,2)
-          : par(i, nrReadIndexes, +) ;
-        offsets =
-          baseOffsets
-          <: par(i, nrReadIndexes,
-                 par(j, N, switch(i,j)):>_)
-        with {
-          switch(i,j) = _*int2bin(j,i,nrReadIndexes);
-        };
-        nrReadIndexes = pow(2,N);
+        switch(i,j) = _*int2bin(j,i,nrReadIndexes);
       };
-
-      cub =
-        (par(i, N, int),si.bus(N*3))<:
-        (ids,tables(nrReadIndexes,readIndexes))
-        :mixers(1,nrReadIndexes)
-         // ;
-      with {
-        readIndexes =
-          si.bus(N*4) <:
-          ((baseOffsets:ro.cross(N))
-          , readIndex)
-          :cubifiers;
-        nrReadIndexes = pow(4,N);
-        cubifier(len) =
-          ((_<:si.bus(len*4))
-          , (si.bus(len)<:si.bus(len*4)))
-          : ro.interleave(len*4,2)
-          :par(i, 4,
-               par(j, len, off(i)+_))
-        with
-        {
-          off(0,base) = -1*base;
-          off(1,base) = 0;
-          off(2,base) = 1*base;
-          off(3,base) = 2*base;
-        };
-        cubifiers =
-          seq(i, N,
-              si.bus(N-i-1),cubifier(pow(4,i)));
-      };
-
-      tables(nrReadIndexes,readIndexes) =
-        si.bus(N*4)<:
-        ((totalSize<:si.bus(nrReadIndexes))
-        , (wf<:si.bus(nrReadIndexes))
-        , readIndexes)
-        :ro.interleave(nrReadIndexes,3)
-        :par(i, nrReadIndexes, rdtable);
-
-      mixers(linCub,nrReadIndexes)=
-        (ro.cross(N),si.bus(nrReadIndexes))
-        : seq(i, N, mixer(linCub,i));
-
-      mixer(0,i) =
-        mixerUniversal(i,2,(_,!,_),it.interpolate_linear) ;
-      mixer(1,i) =
-        mixerUniversal(i,4,(_,!,_,!,_,!,_),it.interpolate_cubic) ;
-
-      mixerUniversal(i,mult,sieve,it) =
-        si.bus(N-i-1),
-        (((_<:si.bus(nrMixers(i)*mult))
-         , (si.bus(nrMixers(i)*mult))
-         ): ro.interleave(nrMixers(i)*mult,2)
-         : par(i, nrMixers(i),
-               ((_<:(_-int(_))),sieve)
-               :it))
-      with {
-        nrMixers(i) = pow(mult,N-i-1);
-      };
-
-      // total size of the table: s(0) * s(1)  ...  * s(N-2) * s(N-1)
-      // N in, 1 out
-      size(1) = _;
-      size(N) = _*size(N-1);
-      totalSize = size(N),par(i, N*3, !);
-      baseOffsets =
-        (int(1),si.bus(N-1),par(i, 3*N+1, !))
-        : seq(i, N-1,
-              ((si.bus(i),(_<:(_,_)), si.bus(N-i-1))
-               :(si.bus(i+1),*,si.bus(N-i-2))));
-      // Prepare the 'float' table read index for one parameter
-      idp(sizeX,r0,r1,x) = (x-r0)/(r1-r0)*(sizeX-1);
-      // Prepare the 'float' table read index for all parameters
-      ids =
-        ro.interleave(N,4)
-        : par(i, N, idp) ;
-
-      // one waveform parameter write value:
-      wfp(prevSize,sizeX,r0,r1) =
-        r0+
-        ((float(
-             floor(ba.time%(prevSize*sizeX)/prevSize)
-           )*(r1-r0)
-         )
-         /float(sizeX-1))
-       ,(prevSize*sizeX);
-
-      // all waveform parameters write values:
-      wfps =
-        ro.interleave(N,3)
-        : (1,si.bus(3*N))
-        : seq(i, N, si.bus(i),wfp, si.bus(3*N-(3*(i+1))))
-        : (si.bus(N),!)
-      ;
-
-      // Create the table
-      wf = (wfps,par(i, N, !)):expression;
-
-      // Limit the table read index in [0, mid] if C = 1
-      rid(x,mid, 0) = int(x);
-      rid(x,mid, 1) = max(int(0), min(int(x), mid));
-
-      readIndex
-      // (sizes,r0s,r1s,xs)
-      = sizesIds
-        : ri
-        : riPost ;
-      riPost(size,ri) =
-        rid(ri,size-int(1),C);
-      ri =
-        ro.interleave(N,2)
-        : (1,0,si.bus(2*N))
-        : seq(i, N, riN, si.bus(2*(N-i-1))) ;
-
-      riN(prevSize,prevID,sizeX,idX) =
-        (prevSize*sizeX)
-      , ( (prevSize*
-           rid(floor(idX),(sizeX-int(1)),C))//TODO: sizeX*prevSize?
-          +prevID) ;
-
-      sizesIds =
-        (
-          // from sizes
-          ( bs<:si.bus(N*2) )
-          // from r0s,r1s,xs
-        , si.bus(N*3)
-        ) :
-        // from sizes
-        (si.bus(N)
-        ,ids);  // takes (midX,r0,r1,x)
-
-      int2bin(i,n,maxN) = int(floor((n)/(1<<i))%int(2));
-      // shortcut
-      bs = si.bus(N);
+      nrReadIndexes = pow(2,N);
     };
-};
+
+    cub =
+      parameters
+      : (par(i, N, int),si.bus(N*3))
+        <: (ids,tables(nrReadIndexes,readIndexes))
+      :mixers(1,nrReadIndexes)
+    with {
+      readIndexes =
+        si.bus(N*4) <:
+        ((baseOffsets:ro.cross(N))
+        , readIndex)
+        :cubifiers;
+      nrReadIndexes = pow(4,N);
+      cubifier(len) =
+        ((_<:si.bus(len*4))
+        , (si.bus(len)<:si.bus(len*4)))
+        : ro.interleave(len*4,2)
+        :par(i, 4,
+             par(j, len, off(i)+_))
+      with
+      {
+        off(0,base) = -1*base;
+        off(1,base) = 0;
+        off(2,base) = 1*base;
+        off(3,base) = 2*base;
+      };
+      cubifiers =
+        seq(i, N,
+            si.bus(N-i-1),cubifier(pow(4,i)));
+    };
+
+    tables(nrReadIndexes,readIndexes) =
+      si.bus(N*4)<:
+      ((totalSize<:si.bus(nrReadIndexes))
+      , (wf<:si.bus(nrReadIndexes))
+      , readIndexes)
+      :ro.interleave(nrReadIndexes,3)
+      :par(i, nrReadIndexes, rdtable);
+
+    mixers(linCub,nrReadIndexes)=
+      (ro.cross(N),si.bus(nrReadIndexes))
+      : seq(i, N, mixer(linCub,i));
+
+    mixer(0,i) =
+      mixerUniversal(i,2,(_,!,_),it.interpolate_linear) ;
+    mixer(1,i) =
+      mixerUniversal(i,4,(_,!,_,!,_,!,_),it.interpolate_cubic) ;
+
+    mixerUniversal(i,mult,sieve,it) =
+      si.bus(N-i-1),
+      (((_<:si.bus(nrMixers(i)*mult))
+       , (si.bus(nrMixers(i)*mult))
+       ): ro.interleave(nrMixers(i)*mult,2)
+       : par(i, nrMixers(i),
+             ((_<:(_-int(_))),sieve)
+             :it))
+    with {
+      nrMixers(i) = pow(mult,N-i-1);
+    };
+
+    // total size of the table: s(0) * s(1)  ...  * s(N-2) * s(N-1)
+    // N in, 1 out
+    size(1) = _;
+    size(N) = _*size(N-1);
+    totalSize = size(N),par(i, N*3, !);
+    baseOffsets =
+      (int(1),si.bus(N-1),par(i, 3*N+1, !))
+      : seq(i, N-1,
+            ((si.bus(i),(_<:(_,_)), si.bus(N-i-1))
+             :(si.bus(i+1),*,si.bus(N-i-2))));
+    // Prepare the 'float' table read index for one parameter
+    idp(sizeX,r0,r1,x) = (x-r0)/(r1-r0)*(sizeX-1);
+    // Prepare the 'float' table read index for all parameters
+    ids =
+      ro.interleave(N,4)
+      : par(i, N, idp) ;
+
+    // one waveform parameter write value:
+    wfp(prevSize,sizeX,r0,r1) =
+      r0+
+      ((float(
+           floor(ba.time%(prevSize*sizeX)/prevSize)
+         )*(r1-r0)
+       )
+       /float(sizeX-1))
+     ,(prevSize*sizeX);
+
+    // all waveform parameters write values:
+    wfps =
+      ro.interleave(N,3)
+      : (1,si.bus(3*N))
+      : seq(i, N, si.bus(i),wfp, si.bus(3*N-(3*(i+1))))
+      : (si.bus(N),!)
+    ;
+
+    // Create the table
+    wf = (wfps,par(i, N, !)):expression;
+
+    // Limit the table read index in [0, mid] if C = 1
+    rid(x,mid, 0) = int(x);
+    rid(x,mid, 1) = max(int(0), min(int(x), mid));
+
+    readIndex
+    // (sizes,r0s,r1s,xs)
+    = sizesIds
+      : ri
+      : riPost ;
+    riPost(size,ri) =
+      rid(ri,size-int(1),C);
+    ri =
+      ro.interleave(N,2)
+      : (1,0,si.bus(2*N))
+      : seq(i, N, riN, si.bus(2*(N-i-1))) ;
+
+    riN(prevSize,prevID,sizeX,idX) =
+      (prevSize*sizeX)
+    , ( (prevSize*
+         rid(floor(idX),(sizeX-int(1)),C))//TODO: sizeX*prevSize?
+        +prevID) ;
+
+    sizesIds =
+      (
+        // from sizes
+        ( bs<:si.bus(N*2) )
+        // from r0s,r1s,xs
+      , si.bus(N*3)
+      ) :
+      // from sizes
+      (si.bus(N)
+      ,ids);  // takes (midX,r0,r1,x)
+
+    int2bin(i,n,maxN) = int(floor((n)/(1<<i))%int(2));
+    // shortcut
+    bs = si.bus(N);
+  };
+// };
 
 sineShaper(x) = (sin((x*.5 + 0.75)*2*ma.PI)+1)*0.5;
 pwr(x) = pow(2,x);
@@ -245,7 +251,7 @@ with {
     ramp
   , gain
   , x
-  , (x:si.onePoleSwitching(releaseOP,attackOP))
+  , (x:seq(i, 3, si.onePoleSwitching(releaseOP,attackOP)))
     // , (x==gain)
   with {
   duration =
@@ -262,20 +268,20 @@ with {
            , rawGainStep :min(dif)
            ) with {
     rawGainStep =
-      shapeDif(shape,ramp,duration,ma.SR)*fullDif;
-    fullDif =dif/(1-warpedSine(shape,ramp));
+      shapeDif(shapeSlider,ramp,duration,ma.SR)*fullDif;
+    fullDif =dif/(1-warpedSine(shapeSlider,ramp));
   };
-  shapeDif(shape,phase,duration,sr) =
-    // shapeDifFormula(shape,phase,duration,48000);
-    // tabulateNd(2,0,pwrSine,sizeX,sizeY,rx0,ry0,rx1,ry1,x,y)
-    tabulateNd(4,0,shapeDifFormula,8,1<<11,1<<7,1<<6,0.3,0,0,48000,0.7,1,1,192000,shape,phase,duration,ma.SR);
-  // shapeDifFormula(shape,phase,duration,48000);
-  shapeDifFormula(shape,phase,duration,sr) =
-    warpedSineFormula(shape,phase+(1 / sr / duration))
-    - warpedSineFormula(shape,phase);
+  shapeDifFormula(shapeSlider,phase,len) =
+    warpedSineFormula(shapeSlider,phase+len)
+    - warpedSineFormula(shapeSlider,phase);
+
   // shapeDif(shape,phase,duration,sr) =
-  // warpedSine(shape,phase+(1 / sr / duration))
-  // - warpedSine(shape,phase);
+  // tabulateNd(3,1,shapeDifFormula,nrShapes,1<<17,1<<7,0,0,1/192000/1,nrShapes,1,1/24000/(1/192000),shapeSlider,phase,(1 / ma.SR / duration));
+  shapeDif(shapeSlider,phase,duration,sr) =
+    warpedSine(shapeSlider,phase+(1 / sr / duration))
+    - warpedSine(shapeSlider,phase);
+  // warpedSineFormula(shapeSlider,phase+(1 / sr / duration))
+  // - warpedSineFormula(shapeSlider,phase);
 
   dif = x-prevGain;
   releasing =
@@ -292,8 +298,8 @@ with {
   with {
     bigger = compSlope>slope(middle);
     slope(x) =
-      shapeDif(shape,x,duration,ma.SR)
-      *(1/(1-warpedSine(shape,x)));
+      shapeDif(shapeSlider,x,duration,ma.SR)
+      *(1/(1-warpedSine(shapeSlider,x)));
     middle = (start+end)*.5;
   };
   // test with shape minimal, so 0.3 and duration = (3/16)^2
@@ -314,8 +320,8 @@ with {
   // with the above settings, too low nr of compares gives a stuck or too slow ramp
   ramp =
     (start,end)
-  , shapeDif(shape,prevRamp+rampStep,duration',ma.SR)
-    * ((dif'/dif)/(1-warpedSine(shape',prevRamp)))
+  , shapeDif(shapeSlider,prevRamp+rampStep,duration',ma.SR)
+    * ((dif'/dif)/(1-warpedSine(shapeSlider',prevRamp)))
     :seq(i, 21, compare)
     : ((+:_*.5),!) // average start and end, throw away the rest
   with {
@@ -334,18 +340,19 @@ with {
     factor = (1/shape-2)/(1/shape-1);
   };
   sineShaper(x) = (sin((x*0.5 + 0.75)*2*ma.PI)+1)*0.5;
-  warpedSine(shape,x) =
+  warpedSine(shapeSlider,x) =
     // at low number of compares the raw formula is faster than the tabulated version
     // 16 compares: 5 to 6 % CPU
     // when doing contant phase recalculations, we need higher precision in the newramp function
     // cause we get wrong ramp durations (to steep or not steep enough) otherwise
     // 21 compares seems to work well enough in all cases so far
     // at the higher number of compares (21) we get 11-12% CPU for the raw formaula
-    // warpedSineFormula(shape,x)
+    // warpedSineFormula(shapeSlider,x)
     // the tables do much better
-    par(i, nrShapes+1, table(i) * xfadeSelector(shapeSlider,i)):>_
-                                                                 // this one is only slightly cheaper, but less user freindly
-                                                                 // par(i, nrShapes+1, table(i) * ((shapeSlider)==i)):>_
+    tabulateNd(2,1, warpedSineFormula,nrShapes, SIZE,0, 0,nrShapes, 1, shapeSlider,x)
+    // par(i, nrShapes+1, table(i) * xfadeSelector(shapeSlider,i)):>_
+    // this one is only slightly cheaper, but less user freindly
+    // par(i, nrShapes+1, table(i) * ((shapeSlider)==i)):>_
   with {
     // with 16 compares: 4.5 to 5.5 % CPU
     // with 21 compares: 12 - 17 % CPU!
@@ -360,22 +367,22 @@ with {
     // test with
     // patho case: rel 1 shape -3.4
     // patho case: rel 1 shape -1.8
-    SIZE = 1<<16;
-    table(i) = ba.tabulate(0, warpedSineFormula(shapeSliderVal(i)), SIZE, 0, 1, x).lin;
+    SIZE = 1<<17; // for 2d lin
+    // SIZE = 1<<16;
+    // table(i) = ba.tabulate(0, warpedSineFormula(shapeSliderVal(i)), SIZE, 0, 1, x).lin;
     // 16 compares: 4.5 -6%CPU
     // 21 compares: 7 % CPU
     // SIZE = 1<<9;
     // table(i) = ba.tabulate(0, warpedSineFormula(shapeSliderVal(i)), SIZE, 0, 1, x).cub;
-    xfadeSelector(sel,nr) =
-      ((sel<=nr)*((sel-nr)+1):max(0)) + ((sel>nr)*((nr-sel)+1):max(0));
   };
 
 
-  warpedSineFormula(shape,x) =
+  warpedSineFormula(shapeSlider,x) =
     sineShaper(warp(shape,knee,x)):pow(power)
   with {
     power = (4*shape/3)+(1/3);
     knee = min(2*shape,2-(2*shape));
+    shape = shapeSliderVal(shapeSlider);
   };
   shapeSlider =
     // select2(releasing, 1-slider)
@@ -400,7 +407,7 @@ with {
     start = 0.3;
   };
 
-  shape =
+  ishape =
     shapeSliderVal(shapeSlider);
 };
 };
