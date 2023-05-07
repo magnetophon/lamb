@@ -38,6 +38,7 @@ tabulateNd(C,function,parameters) =
         <: (totalSize,wf,readIndex(idsGetRoundedNotFloored))
       : rdtable
         with {
+    // see: https://github.com/grame-cncm/faustlibraries/pull/152
     idsGetRoundedNotFloored =
       sizesIds:(bs,par(i, N, _+0.5));
   };
@@ -179,11 +180,11 @@ tabulateNd(C,function,parameters) =
       : (1,0,si.bus(2*N))
       : seq(i, N, riN, si.bus(2*(N-i-1))) ;
 
-    riN(prevSize,prevID,sizeX,idX) =
+    riN(prevSize,prevIX,sizeX,idX) =
       (prevSize*sizeX)
     , ( (prevSize*
          rid(int(idX),(sizeX-int(1)),C))
-        +prevID) ;
+        +prevIX) ;
 
     sizesIds =
       (
