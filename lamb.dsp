@@ -136,11 +136,11 @@ tabulateNd(C,expression,parameters) =
             ((si.bus(i),(_<:(_,_)), si.bus(N-i-1))
              :(si.bus(i+1),*,si.bus(N-i-2))));
     // Prepare the 'float' table read index for one parameter
-    idp(sizeX,r0,r1,x) = (x-r0)/(r1-r0)*(sizeX-1);
+    id(sizeX,r0,r1,x) = (x-r0)/(r1-r0)*(sizeX-1);
     // Prepare the 'float' table read index for all parameters
     ids =
       ro.interleave(N,4)
-      : par(i, N, idp) ;
+      : par(i, N, id) ;
 
     // one waveform parameter write value:
     wfp(prevSize,sizeX,r0,r1) =
