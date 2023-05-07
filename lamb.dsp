@@ -35,9 +35,12 @@ tabulateNd(C,expression,parameters) =
     val =
       parameters
       : (par(i, N, int),si.bus(N*3))
-        <: (totalSize,wf,readIndex)
+        <: (totalSize,wf,readIndex(idsGetRoundedNotFloored))
       : rdtable
-    ;
+        with {
+    idsGetRoundedNotFloored =
+      sizesIds:(bs,par(i, N, _+0.5));
+  };
 
     lin =
       parameters
@@ -47,7 +50,7 @@ tabulateNd(C,expression,parameters) =
     with {
       readIndexes =
         si.bus(nParams) <:
-        ((readIndex<:si.bus(nrReadIndexes))
+        ((readIndex(sizesIds)<:si.bus(nrReadIndexes))
         , offsets)
         : ro.interleave(nrReadIndexes,2)
         : par(i, nrReadIndexes, +) ;
@@ -70,7 +73,7 @@ tabulateNd(C,expression,parameters) =
       readIndexes =
         si.bus(nParams) <:
         ((baseOffsets:ro.cross(N))
-        , readIndex)
+        , readIndex(sizesIds))
         :cubifiers;
       nrReadIndexes = pow(4,N);
       cubifier(len) =
@@ -143,7 +146,7 @@ tabulateNd(C,expression,parameters) =
     wfp(prevSize,sizeX,r0,r1) =
       r0+
       ((float(
-           floor(ba.time%(prevSize*sizeX)/prevSize)
+           int(ba.time%(prevSize*sizeX)/prevSize)
          )*(r1-r0)
        )
        /float(sizeX-1))
@@ -164,7 +167,7 @@ tabulateNd(C,expression,parameters) =
     rid(x,mid, 0) = int(x);
     rid(x,mid, 1) = max(int(0), min(int(x), mid));
 
-    readIndex
+    readIndex(sizesIds)
     // (sizes,r0s,r1s,xs)
     = sizesIds
       : ri
@@ -179,7 +182,7 @@ tabulateNd(C,expression,parameters) =
     riN(prevSize,prevID,sizeX,idX) =
       (prevSize*sizeX)
     , ( (prevSize*
-         rid(floor(idX),(sizeX-int(1)),C))//TODO: sizeX*prevSize?
+         rid(int(idX),(sizeX-int(1)),C))
         +prevID) ;
 
     sizesIds =
@@ -193,7 +196,7 @@ tabulateNd(C,expression,parameters) =
       (si.bus(N)
       ,ids);  // takes (midX,r0,r1,x)
 
-    int2bin(i,n,maxN) = int(floor((n)/(1<<i))%int(2));
+    int2bin(i,n,maxN) = int(int((n)/(1<<i))%int(2));
     // shortcut
     bs = si.bus(N);
   };
@@ -216,8 +219,8 @@ rx0 = 0.1;
 rx1 = 1.0;
 ry0 = 0.3;
 ry1 = 0.7;
-// y = hslider("y", , 0, 1, 0.01)*midY:floor/midY;
-// y = (float((hslider("y", 0, 0, 1, 0.01)/1.0)*midY:floor)*1.0)/midY;
+// y = hslider("y", , 0, 1, 0.01)*midY:int/midY;
+// y = (float((hslider("y", 0, 0, 1, 0.01)/1.0)*midY:int)*1.0)/midY;
 sizeX = 1<<3;
 sizeY = 1<<3;
 // process =
