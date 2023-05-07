@@ -16,14 +16,14 @@ process =
   // AR
   // ));
 
-  // tabulateNd(2,0,pwrSine,sizeX,sizeY,rx0,ry0,rx1,ry1,x,y).val
+  tabulateNd(0,pwrSine,(sizeX,sizeY,rx0,ry0,rx1,ry1,x,y)).lin
   // tabulateNd(2,0,pwrSine).val
   // , pwrSine(x,y);
-  tabulateNd(1,pwrSineDiv,
+, tabulateNd(0,pwrSineDiv,
              (sizeX,sizeY,sizeY,rx0,ry0,0,rx1,ry1,1,x,y,z)).val
-, tabulateNd(1,pwrSineDiv,
+, tabulateNd(0,pwrSineDiv,
              (sizeX,sizeY,sizeY,rx0,ry0,0,rx1,ry1,1,x,y,z)).lin
-, tabulateNd(1,pwrSineDiv,
+, tabulateNd(0,pwrSineDiv,
              (sizeX,sizeY,sizeY,rx0,ry0,0,rx1,ry1,1,x,y,z)).cub
 , pwrSineDiv(x,y,z) ;
 // tabulateNd(4,1,fourD,sizeX,sizeY,sizeY,sizeY,rx0,ry0,0,1,rx1,ry1,1,2,x,y,z,p)
@@ -622,35 +622,115 @@ with {
 // TODO: fix the out of bound reads from tabulateNd.cub:
 // make the parameter write ranges a bit bigger than the read ranges
 
-// some int benchmarks:
-// ba.time<:par(i, 1<<10, _%float(i+1)):>_; // slow
-// ba.time<:par(i, 1<<10, _%(i+int(1))):>_; //fast
-// ba.time<:par(i, 1<<10, _%(i+1)):>_; //fast
-// float(ba.time)<:par(i, 1<<10, _%(i+1)):>_; // slow
-// float(ba.time)<:par(i, 1<<10, int(_)%(i+1)):>_; // fast
-// ba.time<:par(i, 1<<10, _%(i+1.0)):>_; // slow
-//
-il(v0,v1,x) = it.interpolate_linear(x,v0,v1);
-// inputs: dv,v0,v1
-OLDlin(1) = it.interpolate_linear;
-// inputs for N=2:
-// dy dx v0 v1 dx v2 v3
-// inputs for N=3:
-// dz dy dx v0 v1 dx v2 v3 dy dx v4 v5 dx v6 v7
-OLDlin(N) =
-  (_,
-   (
-     // ((_<:(_,_)),si.bus(prevNrIn*2-2))
-     // : (_,ro.crossNM(1,prevNrIn-1),si.bus(prevNrIn-1))
-     // :
-     ( (si.bus(prevNrIn)<:si.bus(prevNrIn*2)) , si.bus(prevNrIn))
-     : (si.bus(prevNrIn),ro.crossnn(prevNrIn) ))
-  )
-  :(ro.crossNM(1,prevNrIn)
-   ,si.bus(prevNrIn*2)
-    // , (!,si.bus(prevNrIn-1))
-   )
-  : il(lin(N-1),lin(N-1),_)
-with {
-  prevNrIn = inputs(lin(N-1));
-};
+tabulate2d(C,function,sizeX,sizeY, rx0, ry0, rx1, ry1,x,y) =
+  environment {
+    size = sizeX*sizeY;
+    // Maximum X index to access
+    midX = sizeX-1;
+    // Maximum Y index to access
+    midY = sizeY-1;
+    // Maximum total index to access
+    mid = size-1;
+    // Create the table
+    wf = function(wfX,wfY);
+    // Prepare the 'float' table read index for X
+    idX = (x-rx0)/(rx1-rx0)*midX;
+    // Prepare the 'float' table read index for Y
+    idY = ((y-ry0)/(ry1-ry0))*midY;
+    // table creation X:
+    wfX =
+      rx0+float(ba.time%sizeX)*(rx1-rx0)
+      /float(midX);
+    // table creation Y:
+    wfY =
+      ry0+
+      ((float(ba.time-(ba.time%sizeX))
+        /float(sizeX))
+       *(ry1-ry0)
+      )
+      /float(midY)
+    ;
+
+    // Limit the table read index in [0, mid] if C = 1
+    rid(x,mid, 0) = x;
+    rid(x,mid, 1) = max(0, min(x, mid));
+
+    // Tabulate an unary 'FX' function on a range [r0, r1]
+    val(x,y) =
+      rdtable(size, wf, readIndex);
+    readIndex =
+      rid(
+        rid(int(idX+0.5),midX, C)
+        +yOffset
+      , mid, C);
+    yOffset =
+      sizeX*rid(int(idY),midY,C);
+
+    // Tabulate an unary 'FX' function over the range [r0, r1] with linear interpolation
+    lin =
+      it.interpolate_linear(
+        dy
+      , it.interpolate_linear(dx,v0,v1)
+      , it.interpolate_linear(dx,v2,v3))
+    with {
+      i0 = rid(int(idX), midX, C)+yOffset;
+      i1 = i0+1;
+      i2 = i0+sizeX;
+      i3 = i1+sizeX;
+      dx  = idX-int(idX);
+      dy  = idY-int(idY);
+      v0 = rdtable(size, wf, rid(i0, mid, C));
+      v1 = rdtable(size, wf, rid(i1, mid, C));
+      v2 = rdtable(size, wf, rid(i2, mid, C));
+      v3 = rdtable(size, wf, rid(i3, mid, C));
+    };
+    // Tabulate an unary 'FX' function over the range [r0, r1] with cubic interpolation
+    cub =
+      it.interpolate_cubic(
+        dy
+      , it.interpolate_cubic(dx,v0,v1,v2,v3)
+      , it.interpolate_cubic(dx,v4,v5,v6,v7)
+      , it.interpolate_cubic(dx,v8,v9,v10,v11)
+      , it.interpolate_cubic(dx,v12,v13,v14,v15)
+      )
+    with {
+      i0  = i4-sizeX;
+      i1  = i5-sizeX;
+      i2  = i6-sizeX;
+      i3  = i7-sizeX;
+
+      i4  = i5-1;
+      i5  = rid(int(idX), midX, C)+yOffset;
+      i6  = i5+1;
+      i7  = i6+1;
+
+      i8  = i4+sizeX;
+      i9  = i5+sizeX;
+      i10 = i6+sizeX;
+      i11 = i7+sizeX;
+
+      i12 = i4+(2*sizeX);
+      i13 = i5+(2*sizeX);
+      i14 = i6+(2*sizeX);
+      i15 = i7+(2*sizeX);
+
+      dx  = idX-int(idX);
+      dy  = idY-int(idY);
+      v0  = rdtable(size, wf, rid(i0 , mid, C));
+      v1  = rdtable(size, wf, rid(i1 , mid, C));
+      v2  = rdtable(size, wf, rid(i2 , mid, C));
+      v3  = rdtable(size, wf, rid(i3 , mid, C));
+      v4  = rdtable(size, wf, rid(i4 , mid, C));
+      v5  = rdtable(size, wf, rid(i5 , mid, C));
+      v6  = rdtable(size, wf, rid(i6 , mid, C));
+      v7  = rdtable(size, wf, rid(i7 , mid, C));
+      v8  = rdtable(size, wf, rid(i8 , mid, C));
+      v9  = rdtable(size, wf, rid(i9 , mid, C));
+      v10 = rdtable(size, wf, rid(i10, mid, C));
+      v11 = rdtable(size, wf, rid(i11, mid, C));
+      v12 = rdtable(size, wf, rid(i12, mid, C));
+      v13 = rdtable(size, wf, rid(i13, mid, C));
+      v14 = rdtable(size, wf, rid(i14, mid, C));
+      v15 = rdtable(size, wf, rid(i15, mid, C));
+    };
+  };
