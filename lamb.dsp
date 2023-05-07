@@ -29,8 +29,8 @@ process =
 // tabulateNd(4,1,fourD,sizeX,sizeY,sizeY,sizeY,rx0,ry0,0,1,rx1,ry1,1,2,x,y,z,p)
 // , fourD(x,y,z,p);
 
-// tabulateNd(N,C,expression) =
-tabulateNd(C,expression,parameters) =
+// tabulateNd(N,C,function) =
+tabulateNd(C,function,parameters) =
   environment {
     val =
       parameters
@@ -161,7 +161,7 @@ tabulateNd(C,expression,parameters) =
     ;
 
     // Create the table
-    wf = (wfps,par(i, N, !)):expression;
+    wf = (wfps,par(i, N, !)):function;
 
     // Limit the table read index in [0, mid] if C = 1
     rid(x,mid, 0) = int(x);
