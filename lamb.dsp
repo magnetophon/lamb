@@ -121,7 +121,7 @@ with {
     // at the higher number of compares (21) we get 11-12% CPU for the raw formaula
     // warpedSineFormula(shapeSlider,x)
     // the tables do much better
-    ba.tabulateNd(2,1, warpedSineFormula,nrShapes, SIZE,0, 0,nrShapes, 1, shapeSlider,x)
+    ba.tabulateNd(1, warpedSineFormula,(nrShapes, SIZE,0, 0,nrShapes, 1, shapeSlider,x)).lin
     // par(i, nrShapes+1, table(i) * xfadeSelector(shapeSlider,i)):>_
     // this one is only slightly cheaper, but less user freindly
     // par(i, nrShapes+1, table(i) * ((shapeSlider)==i)):>_
@@ -389,25 +389,6 @@ with {
 // make the parameter write ranges a bit bigger than the read ranges
 
 
-// process =
-oldProc =
-  ba.tabulateNd(N,0,pwrSine)
-  // tabulate2d(0,pwrSine,sizeX,sizeY,rx0,ry0,rx1,ry1,x,y).val
-  // , tabulate2d(0,pwrSine,sizeX,sizeY,rx0,ry0,rx1,ry1,x,y).lin
-  // , tabulate2d(0,pwrSine,sizeX,sizeY,rx0,ry0,rx1,ry1,x,y).cub
-  // , pwrSine(x,y)
-  // hgroup("",
-  // vgroup("[2]test", test)
-  // :vgroup("[1]AR",
-  // AR
-  // ))
-
-  // test
-  // ARtest<:
-  // PMI_FBFFcompressor_N_chan(strength,thresh,att,rel,knee,prePost,link,FBFF,meter,N)
-  // (ARtest:PMI_compression_gain_mono_db(strength,thresh,att,rel,knee,prePost):ba.db2linear)
-  // , os.lf_sawpos(1)>0.5
-;
 mysel(x)=         (checkbox("AR")*
                    (si.onePoleSwitching(hslider("rel simple", 8, 0, 1000, 0.1)*0.001
                                        ,hslider("att simple", 8, 0, 1000, 0.1)*0.001,x))
