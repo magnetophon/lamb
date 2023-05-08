@@ -1,0 +1,38 @@
+//################################ stdfaust.lib ##########################################
+// The purpose of this library is to give access to all the Faust standard libraries
+// through a series of environments.
+//########################################################################################
+
+aa = library("/home/bart/source/faustlibraries/aanl.lib");
+sf = library("/home/bart/source/faustlibraries/all.lib");
+an = library("/home/bart/source/faustlibraries/analyzers.lib");
+ba = library("/home/bart/source/faustlibraries/basics.lib");
+co = library("/home/bart/source/faustlibraries/compressors.lib");
+de = library("/home/bart/source/faustlibraries/delays.lib");
+dm = library("/home/bart/source/faustlibraries/demos.lib");
+dx = library("/home/bart/source/faustlibraries/dx7.lib");
+en = library("/home/bart/source/faustlibraries/envelopes.lib");
+fd = library("/home/bart/source/faustlibraries/fds.lib");
+fi = library("/home/bart/source/faustlibraries/filters.lib");
+ho = library("/home/bart/source/faustlibraries/hoa.lib");
+it = library("/home/bart/source/faustlibraries/interpolators.lib");
+ma = library("/home/bart/source/faustlibraries/maths.lib");
+mi = library("/home/bart/source/faustlibraries/mi.lib");
+ef = library("/home/bart/source/faustlibraries/misceffects.lib");
+os = library("/home/bart/source/faustlibraries/oscillators.lib");
+no = library("/home/bart/source/faustlibraries/noises.lib");
+pf = library("/home/bart/source/faustlibraries/phaflangers.lib");
+pl = library("/home/bart/source/faustlibraries/platform.lib");
+pm = library("/home/bart/source/faustlibraries/physmodels.lib");
+qu = library("/home/bart/source/faustlibraries/quantizers.lib");
+rm = library("/home/bart/source/faustlibraries/reducemaps.lib");
+re = library("/home/bart/source/faustlibraries/reverbs.lib");
+ro = library("/home/bart/source/faustlibraries/routes.lib");
+sp = library("/home/bart/source/faustlibraries/spats.lib");
+si = library("/home/bart/source/faustlibraries/signals.lib");
+so = library("/home/bart/source/faustlibraries/soundfiles.lib");
+sy = library("/home/bart/source/faustlibraries/synths.lib");
+ve = library("/home/bart/source/faustlibraries/vaeffects.lib");
+vl = library("/home/bart/source/faustlibraries/version.lib");
+wa = library("/home/bart/source/faustlibraries/webaudio.lib");
+wd = library("/home/bart/source/faustlibraries/wdmodels.lib");
