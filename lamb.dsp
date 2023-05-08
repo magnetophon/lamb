@@ -3,251 +3,17 @@ declare version "0.1";
 declare author "Bart Brouns";
 declare license "AGPLv3";
 
-import("stdfaust.lib");
-
+import("/home/bart/source/lamb/stdfaust.lib");
 
 
 process =
   // PMI_FBFFcompressor_N_chan(strength,thresh,att,rel,knee,prePost,link,FBFF,meter,2);
   //
-  // hgroup("",
-  // vgroup("[2]test", test)
-  // :vgroup("[1]AR",
-  // AR
-  // ));
-
-  tabulateNd(0,pwrSine,(sizeX,sizeY,rx0,ry0,rx1,ry1,x,y)).lin
-  // tabulateNd(2,0,pwrSine).val
-  // , pwrSine(x,y);
-, tabulateNd(0,pwrSineDiv,
-             (sizeX,sizeY,sizeY,rx0,ry0,0,rx1,ry1,1,x,y,z)).val
-, tabulateNd(0,pwrSineDiv,
-             (sizeX,sizeY,sizeY,rx0,ry0,0,rx1,ry1,1,x,y,z)).lin
-, tabulateNd(0,pwrSineDiv,
-             (sizeX,sizeY,sizeY,rx0,ry0,0,rx1,ry1,1,x,y,z)).cub
-, pwrSineDiv(x,y,z) ;
-// tabulateNd(4,1,fourD,sizeX,sizeY,sizeY,sizeY,rx0,ry0,0,1,rx1,ry1,1,2,x,y,z,p)
-// , fourD(x,y,z,p);
-
-// tabulateNd(N,C,function) =
-tabulateNd(C,function,parameters) =
-  environment {
-    val =
-      parameters
-      : (par(i, N, int),si.bus(N*3))
-        <: (totalSize,wf,readIndex(idsGetRoundedNotFloored))
-      : rdtable
-        with {
-    // see: https://github.com/grame-cncm/faustlibraries/pull/152
-    idsGetRoundedNotFloored =
-      sizesIds:(bs,par(i, N, _+0.5));
-  };
-
-    lin =
-      parameters
-      : (par(i, N, int),si.bus(N*3))
-        <: (ids,tables(nrReadIndexes,readIndexes))
-      :mixers(0,nrReadIndexes)
-    with {
-      readIndexes =
-        si.bus(nParams) <:
-        ((readIndex(sizesIds)<:si.bus(nrReadIndexes))
-        , offsets)
-        : ro.interleave(nrReadIndexes,2)
-        : par(i, nrReadIndexes, +) ;
-      offsets =
-        baseOffsets
-        <: par(i, nrReadIndexes,
-               par(j, N, switch(i,j)):>_)
-      with {
-        switch(i,j) = _*int2bin(j,i,nrReadIndexes);
-      };
-      nrReadIndexes = pow(2,N);
-    };
-
-    cub =
-      parameters
-      : (par(i, N, int),si.bus(N*3))
-        <: (ids,tables(nrReadIndexes,readIndexes))
-      :mixers(1,nrReadIndexes)
-    with {
-      readIndexes =
-        si.bus(nParams) <:
-        ((baseOffsets:ro.cross(N))
-        , readIndex(sizesIds))
-        :cubifiers;
-      nrReadIndexes = pow(4,N);
-      cubifier(len) =
-        ((_<:si.bus(len*4))
-        , (si.bus(len)<:si.bus(len*4)))
-        : ro.interleave(len*4,2)
-        :par(i, 4,
-             par(j, len, off(i)+_))
-      with
-      {
-        off(0,base) = -1*base;
-        off(1,base) = 0;
-        off(2,base) = 1*base;
-        off(3,base) = 2*base;
-      };
-      cubifiers =
-        seq(i, N,
-            si.bus(N-i-1),cubifier(pow(4,i)));
-    };
-
-    nParams = outputs(parameters);
-    N = int(nParams/4);
-    tables(nrReadIndexes,readIndexes) =
-      si.bus(nParams)<:
-      ((totalSize<:si.bus(nrReadIndexes))
-      , (wf<:si.bus(nrReadIndexes))
-      , readIndexes)
-      :ro.interleave(nrReadIndexes,3)
-      :par(i, nrReadIndexes, rdtable);
-
-    mixers(linCub,nrReadIndexes)=
-      (ro.cross(N),si.bus(nrReadIndexes))
-      : seq(i, N, mixer(linCub,i));
-
-    mixer(0,i) =
-      mixerUniversal(i,2,(_,!,_),it.interpolate_linear) ;
-    mixer(1,i) =
-      mixerUniversal(i,4,(_,!,_,!,_,!,_),it.interpolate_cubic) ;
-
-    mixerUniversal(i,mult,sieve,it) =
-      si.bus(N-i-1),
-      (((_<:si.bus(nrMixers(i)*mult))
-       , (si.bus(nrMixers(i)*mult))
-       ): ro.interleave(nrMixers(i)*mult,2)
-       : par(i, nrMixers(i),
-             ((_<:(_-int(_))),sieve)
-             :it))
-    with {
-      nrMixers(i) = pow(mult,N-i-1);
-    };
-
-    // total size of the table: s(0) * s(1)  ...  * s(N-2) * s(N-1)
-    // N in, 1 out
-    size(1) = _;
-    size(N) = _*size(N-1);
-    totalSize = size(N),par(i, N*3, !);
-    baseOffsets =
-      (int(1),si.bus(N-1),par(i, 3*N+1, !))
-      : seq(i, N-1,
-            ((si.bus(i),(_<:(_,_)), si.bus(N-i-1))
-             :(si.bus(i+1),*,si.bus(N-i-2))));
-    // Prepare the 'float' table read index for one parameter
-    id(sizeX,r0,r1,x) = (x-r0)/(r1-r0)*(sizeX-1);
-    // Prepare the 'float' table read index for all parameters
-    ids =
-      ro.interleave(N,4)
-      : par(i, N, id) ;
-
-    // one waveform parameter write value:
-    wfp(prevSize,sizeX,r0,r1) =
-      r0+
-      ((float(
-           int(ba.time%(prevSize*sizeX)/prevSize)
-         )*(r1-r0)
-       )
-       /float(sizeX-1))
-     ,(prevSize*sizeX);
-
-    // all waveform parameters write values:
-    wfps =
-      ro.interleave(N,3)
-      : (1,si.bus(3*N))
-      : seq(i, N, si.bus(i),wfp, si.bus(3*N-(3*(i+1))))
-      : (si.bus(N),!)
-    ;
-
-    // Create the table
-    wf = (wfps,par(i, N, !)):function;
-
-    // Limit the table read index in [0, mid] if C = 1
-    rid(x,mid, 0) = int(x);
-    rid(x,mid, 1) = max(int(0), min(int(x), mid));
-
-    readIndex(sizesIds)
-    // (sizes,r0s,r1s,xs)
-    = sizesIds
-      : ri
-      : riPost ;
-    riPost(size,ri) =
-      rid(ri,size-int(1),C);
-    ri =
-      ro.interleave(N,2)
-      : (1,0,si.bus(2*N))
-      : seq(i, N, riN, si.bus(2*(N-i-1))) ;
-
-    riN(prevSize,prevIX,sizeX,idX) =
-      (prevSize*sizeX)
-    , ( (prevSize*
-         rid(int(idX),(sizeX-int(1)),C))
-        +prevIX) ;
-
-    sizesIds =
-      (
-        // from sizes
-        ( bs<:si.bus(N*2) )
-        // from r0s,r1s,xs
-      , si.bus(N*3)
-      ) :
-      // from sizes
-      (si.bus(N)
-      ,ids);  // takes (midX,r0,r1,x)
-
-    int2bin(i,n,maxN) = int(int((n)/(1<<i))%int(2));
-    // shortcut
-    bs = si.bus(N);
-  };
-// };
-
-sineShaper(x) = (sin((x*.5 + 0.75)*2*ma.PI)+1)*0.5;
-pwr(x) = pow(2,x);
-pwrSine(x,y)=
-  sineShaper(x *(1+(y/ry1))) ;
-pwrSineDiv(x,y,z) = pwrSine(x,y)/(1+z);
-fourD(x,y,z,p) = pwrSine(pow(x,p),y)/(1+z);
-
-
-x= hslider("x", rx0, rx0, rx1, 0.001):si.smoo;
-y= hslider("y", ry0, ry0, ry1, 0.001):si.smoo;
-z= hslider("z", 0, 0, 1, 0.001):si.smoo;
-p = hslider("p", 1, 1, 2, 0.001):si.smoo;
-// idX = (x-rx0)/(rx1-rx0)*midX;
-rx0 = 0.1;
-rx1 = 1.0;
-ry0 = 0.3;
-ry1 = 0.7;
-// y = hslider("y", , 0, 1, 0.01)*midY:int/midY;
-// y = (float((hslider("y", 0, 0, 1, 0.01)/1.0)*midY:int)*1.0)/midY;
-sizeX = 1<<3;
-sizeY = 1<<3;
-// process =
-oldProc =
-  tabulateNd(N,0,pwrSine)
-  // tabulate2d(0,pwrSine,sizeX,sizeY,rx0,ry0,rx1,ry1,x,y).val
-  // , tabulate2d(0,pwrSine,sizeX,sizeY,rx0,ry0,rx1,ry1,x,y).lin
-  // , tabulate2d(0,pwrSine,sizeX,sizeY,rx0,ry0,rx1,ry1,x,y).cub
-  // , pwrSine(x,y)
-  // hgroup("",
-  // vgroup("[2]test", test)
-  // :vgroup("[1]AR",
-  // AR
-  // ))
-
-  // test
-  // ARtest<:
-  // PMI_FBFFcompressor_N_chan(strength,thresh,att,rel,knee,prePost,link,FBFF,meter,N)
-  // (ARtest:PMI_compression_gain_mono_db(strength,thresh,att,rel,knee,prePost):ba.db2linear)
-  // , os.lf_sawpos(1)>0.5
-;
-mysel(x)=         (checkbox("AR")*
-                   (si.onePoleSwitching(hslider("rel simple", 8, 0, 1000, 0.1)*0.001
-                                       ,hslider("att simple", 8, 0, 1000, 0.1)*0.001,x))
-                  , (1-checkbox("AR"))*AR(x):(!,_,!)):>_,x;
-
+  hgroup("",
+         vgroup("[2]test", test)
+         :vgroup("[1]AR",
+                 AR
+                ));
 
 AR = loop~(_,_)
           // :(!,si.bus(4))
@@ -282,7 +48,7 @@ with {
     - warpedSineFormula(shapeSlider,phase);
 
   // shapeDif(shape,phase,duration,sr) =
-  // tabulateNd(3,1,shapeDifFormula,nrShapes,1<<17,1<<7,0,0,1/192000/1,nrShapes,1,1/24000/(1/192000),shapeSlider,phase,(1 / ma.SR / duration));
+  // ba.tabulateNd(3,1,shapeDifFormula,nrShapes,1<<17,1<<7,0,0,1/192000/1,nrShapes,1,1/24000/(1/192000),shapeSlider,phase,(1 / ma.SR / duration));
   shapeDif(shapeSlider,phase,duration,sr) =
     warpedSine(shapeSlider,phase+(1 / sr / duration))
     - warpedSine(shapeSlider,phase);
@@ -355,7 +121,7 @@ with {
     // at the higher number of compares (21) we get 11-12% CPU for the raw formaula
     // warpedSineFormula(shapeSlider,x)
     // the tables do much better
-    tabulateNd(2,1, warpedSineFormula,nrShapes, SIZE,0, 0,nrShapes, 1, shapeSlider,x)
+    ba.tabulateNd(2,1, warpedSineFormula,nrShapes, SIZE,0, 0,nrShapes, 1, shapeSlider,x)
     // par(i, nrShapes+1, table(i) * xfadeSelector(shapeSlider,i)):>_
     // this one is only slightly cheaper, but less user freindly
     // par(i, nrShapes+1, table(i) * ((shapeSlider)==i)):>_
@@ -622,115 +388,27 @@ with {
 // TODO: fix the out of bound reads from tabulateNd.cub:
 // make the parameter write ranges a bit bigger than the read ranges
 
-tabulate2d(C,function,sizeX,sizeY, rx0, ry0, rx1, ry1,x,y) =
-  environment {
-    size = sizeX*sizeY;
-    // Maximum X index to access
-    midX = sizeX-1;
-    // Maximum Y index to access
-    midY = sizeY-1;
-    // Maximum total index to access
-    mid = size-1;
-    // Create the table
-    wf = function(wfX,wfY);
-    // Prepare the 'float' table read index for X
-    idX = (x-rx0)/(rx1-rx0)*midX;
-    // Prepare the 'float' table read index for Y
-    idY = ((y-ry0)/(ry1-ry0))*midY;
-    // table creation X:
-    wfX =
-      rx0+float(ba.time%sizeX)*(rx1-rx0)
-      /float(midX);
-    // table creation Y:
-    wfY =
-      ry0+
-      ((float(ba.time-(ba.time%sizeX))
-        /float(sizeX))
-       *(ry1-ry0)
-      )
-      /float(midY)
-    ;
 
-    // Limit the table read index in [0, mid] if C = 1
-    rid(x,mid, 0) = x;
-    rid(x,mid, 1) = max(0, min(x, mid));
+// process =
+oldProc =
+  ba.tabulateNd(N,0,pwrSine)
+  // tabulate2d(0,pwrSine,sizeX,sizeY,rx0,ry0,rx1,ry1,x,y).val
+  // , tabulate2d(0,pwrSine,sizeX,sizeY,rx0,ry0,rx1,ry1,x,y).lin
+  // , tabulate2d(0,pwrSine,sizeX,sizeY,rx0,ry0,rx1,ry1,x,y).cub
+  // , pwrSine(x,y)
+  // hgroup("",
+  // vgroup("[2]test", test)
+  // :vgroup("[1]AR",
+  // AR
+  // ))
 
-    // Tabulate an unary 'FX' function on a range [r0, r1]
-    val(x,y) =
-      rdtable(size, wf, readIndex);
-    readIndex =
-      rid(
-        rid(int(idX+0.5),midX, C)
-        +yOffset
-      , mid, C);
-    yOffset =
-      sizeX*rid(int(idY),midY,C);
-
-    // Tabulate an unary 'FX' function over the range [r0, r1] with linear interpolation
-    lin =
-      it.interpolate_linear(
-        dy
-      , it.interpolate_linear(dx,v0,v1)
-      , it.interpolate_linear(dx,v2,v3))
-    with {
-      i0 = rid(int(idX), midX, C)+yOffset;
-      i1 = i0+1;
-      i2 = i0+sizeX;
-      i3 = i1+sizeX;
-      dx  = idX-int(idX);
-      dy  = idY-int(idY);
-      v0 = rdtable(size, wf, rid(i0, mid, C));
-      v1 = rdtable(size, wf, rid(i1, mid, C));
-      v2 = rdtable(size, wf, rid(i2, mid, C));
-      v3 = rdtable(size, wf, rid(i3, mid, C));
-    };
-    // Tabulate an unary 'FX' function over the range [r0, r1] with cubic interpolation
-    cub =
-      it.interpolate_cubic(
-        dy
-      , it.interpolate_cubic(dx,v0,v1,v2,v3)
-      , it.interpolate_cubic(dx,v4,v5,v6,v7)
-      , it.interpolate_cubic(dx,v8,v9,v10,v11)
-      , it.interpolate_cubic(dx,v12,v13,v14,v15)
-      )
-    with {
-      i0  = i4-sizeX;
-      i1  = i5-sizeX;
-      i2  = i6-sizeX;
-      i3  = i7-sizeX;
-
-      i4  = i5-1;
-      i5  = rid(int(idX), midX, C)+yOffset;
-      i6  = i5+1;
-      i7  = i6+1;
-
-      i8  = i4+sizeX;
-      i9  = i5+sizeX;
-      i10 = i6+sizeX;
-      i11 = i7+sizeX;
-
-      i12 = i4+(2*sizeX);
-      i13 = i5+(2*sizeX);
-      i14 = i6+(2*sizeX);
-      i15 = i7+(2*sizeX);
-
-      dx  = idX-int(idX);
-      dy  = idY-int(idY);
-      v0  = rdtable(size, wf, rid(i0 , mid, C));
-      v1  = rdtable(size, wf, rid(i1 , mid, C));
-      v2  = rdtable(size, wf, rid(i2 , mid, C));
-      v3  = rdtable(size, wf, rid(i3 , mid, C));
-      v4  = rdtable(size, wf, rid(i4 , mid, C));
-      v5  = rdtable(size, wf, rid(i5 , mid, C));
-      v6  = rdtable(size, wf, rid(i6 , mid, C));
-      v7  = rdtable(size, wf, rid(i7 , mid, C));
-      v8  = rdtable(size, wf, rid(i8 , mid, C));
-      v9  = rdtable(size, wf, rid(i9 , mid, C));
-      v10 = rdtable(size, wf, rid(i10, mid, C));
-      v11 = rdtable(size, wf, rid(i11, mid, C));
-      v12 = rdtable(size, wf, rid(i12, mid, C));
-      v13 = rdtable(size, wf, rid(i13, mid, C));
-      v14 = rdtable(size, wf, rid(i14, mid, C));
-      v15 = rdtable(size, wf, rid(i15, mid, C));
-    };
-  };
+  // test
+  // ARtest<:
+  // PMI_FBFFcompressor_N_chan(strength,thresh,att,rel,knee,prePost,link,FBFF,meter,N)
+  // (ARtest:PMI_compression_gain_mono_db(strength,thresh,att,rel,knee,prePost):ba.db2linear)
+  // , os.lf_sawpos(1)>0.5
+;
+mysel(x)=         (checkbox("AR")*
+                   (si.onePoleSwitching(hslider("rel simple", 8, 0, 1000, 0.1)*0.001
+                                       ,hslider("att simple", 8, 0, 1000, 0.1)*0.001,x))
+                  , (1-checkbox("AR"))*AR(x):(!,_,!)):>_,x;
