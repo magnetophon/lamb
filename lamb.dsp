@@ -150,7 +150,7 @@ with {
 
 
   warpedSineFormula(shapeSlider,x) =
-    sineShaper(warp(shape,knee,x)):pow(power)
+    sineShaper(warp(shape,knee,x:max(0):min(1))):pow(power)
   with {
     power = (4*shape/3)+(1/3);
     knee = min(2*shape,2-(2*shape));
