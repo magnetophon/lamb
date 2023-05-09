@@ -7,32 +7,29 @@ import("/home/bart/source/lamb/stdfaust.lib");
 
 
 process =
-  // PMI_FBFFcompressor_N_chan(strength,thresh,att,rel,knee,prePost,link,FBFF,meter,2);
-  //
-  hgroup("",
-         vgroup("[2]test", test)
-         :vgroup("[1]AR",
-                 AR
-                ));
+  PMI_FBFFcompressor_N_chan(strength,thresh,attack,release,knee,prePost,link,FBFF,meter,2);
 
-AR = loop~(_,_)
-          // :(!,si.bus(4))
-          // :(!,_)
+// hgroup("",
+// vgroup("[2]test", test)
+// <:vgroup("[1]AR",
+// AR,_
+// ,(_:smootherCascade(4, releaseOP, attackOP ))
+// ));
+
+
+AR(attack,release) = loop~(_,_)
+                          // :(!,_)
 with {
   loop(prevRamp,prevGain,x) =
     ramp
   , gain
-  , x
-  , (x:seq(i, 3, si.onePoleSwitching(releaseOP,attackOP)))
+    // , x
+    // , (x:seq(i, 3, si.onePoleSwitching(releaseOP,attackOP)))
     // , (x==gain)
   with {
   duration =
     // select3(attacking+releasing*2,1,attack,release);
     (attack*attacking)+(release*releasing);
-  attack = hslider("[1]attack time[scale:log]", 8, 0, 1000, 0.1)*0.001;
-  release = hslider("[3]release time[scale:log]", 250, 0, 1000, 0.1)*0.001;
-  attackOP = hslider("[5]OP attack time[scale:log]", 8, 0, 1000, 0.1)*0.001;
-  releaseOP = hslider("[6]OPrelease time[scale:log]", 250, 0, 1000, 0.1)*0.001;
   gain = prevGain+gainStep ;
   gainStep =
     select2(releasing
@@ -47,9 +44,11 @@ with {
     warpedSineFormula(shapeSlider,phase+len)
     - warpedSineFormula(shapeSlider,phase);
 
-  // shapeDif(shape,phase,duration,sr) =
-  // ba.tabulateNd(3,1,shapeDifFormula,nrShapes,1<<17,1<<7,0,0,1/192000/1,nrShapes,1,1/24000/(1/192000),shapeSlider,phase,(1 / ma.SR / duration));
-  shapeDif(shapeSlider,phase,duration,sr) =
+  shapeDif(shape,phase,duration,sr) =
+    // ba.tabulateNd(1,shapeDifFormula,(nrShapes,1<<17,1<<7,0,0,1/192000/1,nrShapes,1,1/24000/(1/192000),shapeSlider,phase,(1 / ma.SR / duration))).lin;
+    // ba.tabulateNd(0,shapeDifFormula,(nrShapes,1<<17,1<<7,0,0,1/192000/1,nrShapes,1,1/24000/(1/192000),shapeSlider,phase,(1 / ma.SR / duration))).lin;
+    // ba.tabulateNd(0,shapeDifFormula,(nrShapes,1<<17,1<<7,0,0,1/192000/1,nrShapes,1,1/24000/(1/192000),shapeSlider,phase,(1 / ma.SR / duration))).lin;
+    // ba.tabulateNd(1,shapeDifFormula,(3,1<<16,1<<6,0,0,1/48000/1,nrShapes,1,1/24000/(1/48000),shapeSlider,phase,(1 / ma.SR / duration))).lin;
     warpedSine(shapeSlider,phase+(1 / sr / duration))
     - warpedSine(shapeSlider,phase);
   // warpedSineFormula(shapeSlider,phase+(1 / sr / duration))
@@ -121,7 +120,9 @@ with {
     // at the higher number of compares (21) we get 11-12% CPU for the raw formaula
     // warpedSineFormula(shapeSlider,x)
     // the tables do much better
-    ba.tabulateNd(1, warpedSineFormula,(nrShapes, SIZE,0, 0,nrShapes, 1, shapeSlider,x)).lin
+    // Size can be 1<<3;
+    // ba.tabulateNd(1, warpedSineFormula,(nrShapes, 1<<3,0, 0,nrShapes, 1, shapeSlider,x)).cub
+    ba.tabulateNd(0, warpedSineFormula,(nrShapes, SIZE,0, 0,nrShapes, 1, shapeSlider,x)).lin
     // par(i, nrShapes+1, table(i) * xfadeSelector(shapeSlider,i)):>_
     // this one is only slightly cheaper, but less user freindly
     // par(i, nrShapes+1, table(i) * ((shapeSlider)==i)):>_
@@ -139,12 +140,13 @@ with {
     // test with
     // patho case: rel 1 shape -3.4
     // patho case: rel 1 shape -1.8
-    SIZE = 1<<17; // for 2d lin
-    // SIZE = 1<<16;
+    // SIZE = 1<<17; // for 2d lin
+    SIZE = 1<<16;
     // table(i) = ba.tabulate(0, warpedSineFormula(shapeSliderVal(i)), SIZE, 0, 1, x).lin;
     // 16 compares: 4.5 -6%CPU
     // 21 compares: 7 % CPU
     // SIZE = 1<<9;
+    // SIZE = 1<<3;
     // table(i) = ba.tabulate(0, warpedSineFormula(shapeSliderVal(i)), SIZE, 0, 1, x).cub;
   };
 
@@ -159,15 +161,13 @@ with {
   shapeSlider =
     // select2(releasing, 1-slider)
     select2(releasing
-           , half+hslider("[2]attack shape" , 0, 0-half, half, 0.1)
-           , half+hslider("[4]release shape", 0, 0-half, half, 0.1));
+           , attackShape
+           , releaseShape);
 
-  nrShapes = 8;
-  half = nrShapes*.5;
 
   shapeSliderVal(shapeSlider) =
     shapeSlider
-    / nrShapes
+    / (nrShapes-1)
     * range
     + start
     // : hbargraph("shapeBG", 0.3, 0.7)
@@ -202,13 +202,17 @@ PMI_compression_gain_N_chan_db(strength,thresh,att,rel,knee,prePost,link,N) =
 
 PMI_compression_gain_mono_db(strength,thresh,att,rel,knee,prePost) =
   // PMI(PMItime) : ba.bypass1(prePost,moog_AR(att,rel)) : ba.linear2db : gain_computer(strength,thresh,knee) : ba.bypass1((prePost!=1),moog_AR(rel,att))
-  PMI(PMItime) : ba.linear2db : gain_computer(strength,thresh,knee)
-                                // : ba.bypass1(prePost,ba.db2linear:my_AR(rel,att,r1,a1):ba.linear2db)
-                                // : ba.bypass1((1-prePost),my_AR(rel,att,r1,a1))
-  : ba.bypass1(prePost,ba.db2linear:AR:ba.linear2db)
-  : ba.bypass1((1-prePost),AR)
-    // : my_AR(0,att,0,a1)
-    // : my_AR(rel,0,r1,0)
+  // PMI(PMItime) :
+  ba.linear2db : gain_computer(strength,thresh,knee)
+                 // : ba.bypass1(prePost,ba.db2linear:my_AR(rel,att,r1,a1):ba.linear2db)
+                 // : ba.bypass1((1-prePost),my_AR(rel,att,r1,a1))
+                 // : ba.bypass1(prePost,ba.db2linear:AR:ba.linear2db)
+                 // : ba.bypass1((1-prePost),AR)
+  : ba.db2linear:AR(attack,release)
+  :(!,_) // for testing
+  :ba.linear2db
+   // : my_AR(0,att,0,a1)
+   // : my_AR(rel,0,r1,0)
 with {
   gain_computer(strength,thresh,knee,level) =
     select3((level>(thresh-(knee/2)))+(level>(thresh+(knee/2))),
@@ -250,29 +254,33 @@ bypassP = checkbox("[00]bypass");
 prePost = AB(prePostP);
 prePostP = checkbox("[01]prePost");
 strength = AB(strengthP);
-strengthP = hslider("[02]strength", 20, 0, 100, 1) * 0.01;
+strengthP = hslider("[02]strength", 100, 0, 100, 1) * 0.01;
 thresh = AB(threshP);
 threshP = hslider("[03]thresh",0,-30,6,1);
-att = AB(attP);
-attP = hslider("[04]attack",20,0,100,1)*0.001;
-rel = AB(relP);
-relP = hslider("[05]release",200,1,1000,1)*0.001;
+attack = AB(attackP);
+attackP = hslider("[04]attack",6,0,100,1)*0.001;
+attackShape = AB(attackShapeP);
+attackShapeP = half+hslider("[2]attack shape" , 0, 0-half, half, 0.1);
+// release = AB(releaseP);
+release = AB(releaseP);
+releaseP = hslider("[05]release",80,1,1000,1)*0.001;
+releaseShape = AB(releaseShapeP);
+releaseShapeP = half+hslider("[2]release shape" , 0, 0-half, half, 0.1);
 knee = AB(kneeP);
-kneeP = hslider("[06]knee",6,0,30,1);
+kneeP = hslider("[06]knee",2,0,30,1);
 link = AB(linkP);
-linkP = hslider("[07]link", 60, 0, 100, 1) *0.01;
+linkP = hslider("[07]link", 0, 0, 100, 1) *0.01;
 FBFF = AB(FBFFP);
-FBFFP = hslider ("[08]fb-ff",50,0,100,1) *0.01;
+FBFFP = hslider ("[08]fb-ff",100,0,100,1) *0.01;
 power = AB(powerP);
 powerP = hslider("[09]power", 2, ma.EPSILON, 10, 0.1);
 PMItime = AB(PMItimeP);
 PMItimeP = hslider("[10]PMI time",20,0,1000,1)*0.001;
 dw = AB(dwP);
 dwP = hslider ("[11]dry/wet",100,0,100,1) * 0.01:si.smoo;
-a1 = AB(a1P);
-a1P = hslider("[12]der attack",20,1,100,1);
-r1 = AB(r1P);
-r1P = hslider("[13]der release",200,1,1000,1);
+
+nrShapes = 9;
+half = (nrShapes-1)*.5;
 
 ARtest = toggle(soft,loud) with {
   toggle(a,b) = select2(block,b,a);
@@ -387,7 +395,24 @@ with {
 // TODO: make sure we use ints where we can
 // TODO: fix the out of bound reads from tabulateNd.cub:
 // make the parameter write ranges a bit bigger than the read ranges
-
+N=4;
+T = ma.T;
+PI = ma.PI;
+TWOPI = 2.0 * PI;
+TWOPIT = TWOPI * T;
+/* Cascaded one-pole smoothers with attack and release times. */
+smoother(N, att, rel, x) = loop ~ _
+with {
+  loop(fb) = coeff * fb + (1.0 - coeff) * x
+  with {
+  cutoffCorrection = 1.0 / sqrt(pow(2.0, 1.0 / N) - 1.0);
+  coeff = ba.if(x > fb, attCoeff, relCoeff);
+  TWOPITC = TWOPIT * cutoffCorrection;
+  attCoeff = exp(-TWOPITC / att);
+  relCoeff = exp(-TWOPITC / rel);
+};
+};
+smootherCascade(N, att, rel, x) = x : seq(i, N, smoother(N, att, rel));
 
 mysel(x)=         (checkbox("AR")*
                    (si.onePoleSwitching(hslider("rel simple", 8, 0, 1000, 0.1)*0.001
