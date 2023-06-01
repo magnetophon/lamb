@@ -5,17 +5,37 @@ declare license "AGPLv3";
 
 import("/home/bart/source/lamb/stdfaust.lib");
 
-
+sinfun(x) = sin(pow(4*x/16,2));
+sfx = hslider("sfx", 0, 0, 16, 1);
 process =
-  PMI_FBFFcompressor_N_chan(strength,thresh,attack,release,knee,prePost,link,FBFF,meter,2);
+  // AR_tester;
+  // ba.tabulate(0, sinfun, 16, 0,16, sfx).lin
+  // ,sinfun(sfx)
+  // ;
+  par(i, 2, _*ba.db2linear(hslider("input gain", 0, -24, 24, 1):si.smoo)):
+  // co.FFcompressor_N_chan(strength,thresh,attack,release,knee,prePost,link,meter,2);
+  // co.RMS_FBFFcompressor_N_chan(strength,thresh,att,rel,RMStime,knee,prePost,link,FBFF,meter,2);
+  // co.RMS_FBcompressor_peak_limiter_N_chan(strength,thresh,threshLim,att,rel,RMStime,knee,link,meter,meterLim,2);
+  lookahead_compressor_N_chan(strength,thresh,attack,release,knee,link,FBFF,meter,2);
 
-// hgroup("",
-// vgroup("[2]test", test)
-// <:vgroup("[1]AR",
-// AR,_
-// ,(_:smootherCascade(4, releaseOP, attackOP ))
-// ));
-
+AR_tester =
+  hgroup("",
+         vgroup("[2]test", test)
+         <:vgroup("[1]AR",
+                  (ba.slidingMin(attackSamples,maxSampleRate):AR(attack,release))
+                  ,_@attackSamples
+                   // ,ba.slidingMin(attackSamples,maxSampleRate)
+                  ,(((ba.slidingMin(attackSamples,maxSampleRate):smootherCascade(4, releaseOP, attackOP )),_@attackSamples):min)
+                 ));
+att = attack;
+rel = release;
+attackSamples = ba.sec2samp(attack);
+meterLim =meter;
+threshLim = AB(threshLimP);
+threshLimP = hslider("[03]thresh lim",0,-30,6,1);
+RMStime = AB(RMStimeP);
+RMStimeP = hslider("[03]RMS time",5,0,100,1)*0.001;
+maxSampleRate = 192000;
 
 AR(attack,release) = loop~(_,_)
                           // :(!,_)
@@ -45,12 +65,12 @@ with {
     - warpedSineFormula(shapeSlider,phase);
 
   shapeDif(shape,phase,duration,sr) =
-    // ba.tabulateNd(1,shapeDifFormula,(nrShapes,1<<17,1<<7,0,0,1/192000/1,nrShapes,1,1/24000/(1/192000),shapeSlider,phase,(1 / ma.SR / duration))).lin;
-    // ba.tabulateNd(0,shapeDifFormula,(nrShapes,1<<17,1<<7,0,0,1/192000/1,nrShapes,1,1/24000/(1/192000),shapeSlider,phase,(1 / ma.SR / duration))).lin;
-    // ba.tabulateNd(0,shapeDifFormula,(nrShapes,1<<17,1<<7,0,0,1/192000/1,nrShapes,1,1/24000/(1/192000),shapeSlider,phase,(1 / ma.SR / duration))).lin;
-    // ba.tabulateNd(1,shapeDifFormula,(3,1<<16,1<<6,0,0,1/48000/1,nrShapes,1,1/24000/(1/48000),shapeSlider,phase,(1 / ma.SR / duration))).lin;
-    warpedSine(shapeSlider,phase+(1 / sr / duration))
-    - warpedSine(shapeSlider,phase);
+    // ba.tabulateNd(1,shapeDifFormula,(nrShapes,1<<17,1<<7,0,0,1/maxSampleRate/1,nrShapes,1,1/24000/(1/maxSampleRate),shapeSlider,phase,(1 / ma.SR / duration))).lin;
+    ba.tabulateNd(0,shapeDifFormula,(nrShapes,1<<17,1<<7,0,0,1/maxSampleRate/1,nrShapes,1,1/24000/(1/maxSampleRate),shapeSlider,phase,(1 / ma.SR / duration))).lin;
+  // ba.tabulateNd(0,shapeDifFormula,(nrShapes,1<<17,1<<7,0,0,1/maxSampleRate/1,nrShapes,1,1/24000/(1/maxSampleRate),shapeSlider,phase,(1 / ma.SR / duration))).lin;
+  // ba.tabulateNd(1,shapeDifFormula,(3,1<<16,1<<6,0,0,1/48000/1,nrShapes,1,1/24000/(1/48000),shapeSlider,phase,(1 / ma.SR / duration))).lin;
+  // warpedSine(shapeSlider,phase+(1 / sr / duration))
+  // - warpedSine(shapeSlider,phase);
   // warpedSineFormula(shapeSlider,phase+(1 / sr / duration))
   // - warpedSineFormula(shapeSlider,phase);
 
@@ -95,6 +115,7 @@ with {
     * ((dif'/dif)/(1-warpedSine(shapeSlider',prevRamp)))
     :seq(i, 21, compare)
     : ((+:_*.5),!) // average start and end, throw away the rest
+    :max(0):min(1)
   with {
     start = 0;
     end = 1;
@@ -118,11 +139,11 @@ with {
     // cause we get wrong ramp durations (to steep or not steep enough) otherwise
     // 21 compares seems to work well enough in all cases so far
     // at the higher number of compares (21) we get 11-12% CPU for the raw formaula
-    // warpedSineFormula(shapeSlider,x)
+    warpedSineFormula(shapeSlider,x)
     // the tables do much better
     // Size can be 1<<3;
     // ba.tabulateNd(1, warpedSineFormula,(nrShapes, 1<<3,0, 0,nrShapes, 1, shapeSlider,x)).cub
-    ba.tabulateNd(0, warpedSineFormula,(nrShapes, SIZE,0, 0,nrShapes, 1, shapeSlider,x)).lin
+    // ba.tabulateNd(0, warpedSineFormula,(nrShapes, SIZE,0, 0,nrShapes, 1, shapeSlider,x)).lin
     // par(i, nrShapes+1, table(i) * xfadeSelector(shapeSlider,i)):>_
     // this one is only slightly cheaper, but less user freindly
     // par(i, nrShapes+1, table(i) * ((shapeSlider)==i)):>_
@@ -152,6 +173,7 @@ with {
 
 
   warpedSineFormula(shapeSlider,x) =
+    // sineShaper(warp(shape,knee,x)):pow(power)
     sineShaper(warp(shape,knee,x:max(0):min(1))):pow(power)
   with {
     power = (4*shape/3)+(1/3);
@@ -185,34 +207,28 @@ with {
 };
 
 
-PMI_FBFFcompressor_N_chan(strength,thresh,att,rel,knee,prePost,link,FBFF,meter,N) =
+lookahead_compressor_N_chan(strength,thresh,att,rel,knee,link,FBFF,meter,N) =
   si.bus(N) <: si.bus(N*2):
   (
-    ((ro.interleave(N,2) : par(i,N*2,abs) :par(i,N,it.interpolate_linear(FBFF)) : PMI_compression_gain_N_chan_db(strength*(1+((FBFF*-1)+1)),thresh,att,rel,knee,prePost,link,N)),si.bus(N))
-    : (ro.interleave(N,2) : par(i,N,(meter: ba.db2linear)*_))
+    ((ro.interleave(N,2) : par(i,N*2,abs) :par(i,N,it.interpolate_linear(FBFF))
+      : lookahead_compression_gain_N_chan_db(strength*(1+((FBFF*-1)+1)),thresh,att,rel,knee,link,N)),si.bus(N))
+    : (ro.interleave(N,2) : par(i,N,(meter: ba.db2linear)*(_@attackSamples)))
   )
   ~ si.bus(N);
 
-PMI_compression_gain_N_chan_db(strength,thresh,att,rel,knee,prePost,link,1) =
-  PMI_compression_gain_mono_db(strength,thresh,att,rel,knee,prePost);
+lookahead_compression_gain_N_chan_db(strength,thresh,att,rel,knee,link,1) =
+  lookahead_compression_gain_mono_db(strength,thresh,att,rel,knee);
 
-PMI_compression_gain_N_chan_db(strength,thresh,att,rel,knee,prePost,link,N) =
-  par(i,N,PMI_compression_gain_mono_db(strength,thresh,att,rel,knee,prePost))
+lookahead_compression_gain_N_chan_db(strength,thresh,att,rel,knee,link,N) =
+  par(i,N,lookahead_compression_gain_mono_db(strength,thresh,att,rel,knee))
   <: (si.bus(N),(ba.parallelMin(N) <: si.bus(N))) : ro.interleave(N,2) : par(i,N,(it.interpolate_linear(link)));
 
-PMI_compression_gain_mono_db(strength,thresh,att,rel,knee,prePost) =
-  // PMI(PMItime) : ba.bypass1(prePost,moog_AR(att,rel)) : ba.linear2db : gain_computer(strength,thresh,knee) : ba.bypass1((prePost!=1),moog_AR(rel,att))
-  // PMI(PMItime) :
+lookahead_compression_gain_mono_db(strength,thresh,att,rel,knee) =
   ba.linear2db : gain_computer(strength,thresh,knee)
-                 // : ba.bypass1(prePost,ba.db2linear:my_AR(rel,att,r1,a1):ba.linear2db)
-                 // : ba.bypass1((1-prePost),my_AR(rel,att,r1,a1))
-                 // : ba.bypass1(prePost,ba.db2linear:AR:ba.linear2db)
-                 // : ba.bypass1((1-prePost),AR)
+  : ba.slidingMin(attackSamples,maxSampleRate)
   : ba.db2linear:AR(attack,release)
   :(!,_) // for testing
   :ba.linear2db
-   // : my_AR(0,att,0,a1)
-   // : my_AR(rel,0,r1,0)
 with {
   gain_computer(strength,thresh,knee,level) =
     select3((level>(thresh-(knee/2)))+(level>(thresh+(knee/2))),
@@ -220,27 +236,7 @@ with {
             ((level-thresh+(knee/2)) : pow(2)/(2*max(ma.EPSILON,knee))),
             (level-thresh))
     : max(0)*-strength;
-  PMI(time) =
-    slidingPMI(s,192000,power)
-  with {
-    s = ba.sec2samp(time):int:max(1);
-  };
-
 };
-
-my_AR(att,rel,a2,r2) = si.onePoleSwitching(att,rel) : der~_ with {
-  // der(prev,x) = (x-prev) : (si.onePoleSwitching(a1,r1)+prev);
-  der(prev,x) = (x-prev)*t(prev,x)+prev;
-  t(prev,x) = select2(x>prev,a1,r1)*0.0001;
-};
-
-moog_AR(att,rel) = loop~_ with {
-  loop(prev,x) = x:ve.moog_vcf_2bn(res,fr(x,prev)):ve.moog_vcf_2bn(res,fr(x,prev)):ve.moog_vcf_2bn(res,fr(x,prev)):ve.moog_vcf_2bn(res,fr(x,prev));
-  fr(x,prev) = select2(x<=prev,1/att,1/rel);
-  res = hslider("res", 0.1, 0.01, 10, 0.01);
-};
-
-slidingPMI(n,maxn,p) = pow(p) : ba.slidingMeanp(n,maxn) : pow(1/p);
 
 AB(p) = ab:hgroup("[1]A/B",sel(aG(p),bG(p)));
 sel(a,b,x) = select2(x,a,b);
@@ -258,7 +254,7 @@ strengthP = hslider("[02]strength", 100, 0, 100, 1) * 0.01;
 thresh = AB(threshP);
 threshP = hslider("[03]thresh",0,-30,6,1);
 attack = AB(attackP);
-attackP = hslider("[04]attack",6,0,100,1)*0.001;
+attackP = hslider("[04]attack",6,0,1000,1)*0.001;
 attackShape = AB(attackShapeP);
 attackShapeP = half+hslider("[2]attack shape" , 0, 0-half, half, 0.1);
 // release = AB(releaseP);
@@ -279,6 +275,10 @@ PMItimeP = hslider("[10]PMI time",20,0,1000,1)*0.001;
 dw = AB(dwP);
 dwP = hslider ("[11]dry/wet",100,0,100,1) * 0.01:si.smoo;
 
+attackOP = AB(attackOpP);
+attackOpP = hslider("[12]attack OP",6,0,1000,1)*0.001;
+releaseOP = AB(releaseOpP);
+releaseOpP = hslider("[12]release OP",80,0,1000,1)*0.001;
 nrShapes = 9;
 half = (nrShapes-1)*.5;
 
@@ -292,8 +292,8 @@ ARtest = toggle(soft,loud) with {
 
 
 meter =
-  _<: attach(_, (max(-12):min(0):hbargraph(
-                   "v:[10]meters/[unit:dB]", -12, 0)
+  _<: attach(_, (max(-24):min(0):hbargraph(
+                   "v:[10]meters/[unit:dB]", -24, 0)
                 ));
 
 ///////////////////////////////////////////////////////////////////////////////
