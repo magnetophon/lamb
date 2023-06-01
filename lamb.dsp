@@ -16,7 +16,7 @@ process =
   // co.FFcompressor_N_chan(strength,thresh,attack,release,knee,prePost,link,meter,2);
   // co.RMS_FBFFcompressor_N_chan(strength,thresh,att,rel,RMStime,knee,prePost,link,FBFF,meter,2);
   // co.RMS_FBcompressor_peak_limiter_N_chan(strength,thresh,threshLim,att,rel,RMStime,knee,link,meter,meterLim,2);
-  lookahead_compressor_N_chan(strength,thresh,attack,release,knee,link,FBFF,meter,2);
+  lookahead_compressor_N_chan(strength,thresh,attack,release,knee,link,meter,2);
 
 AR_tester =
   hgroup("",
@@ -207,21 +207,22 @@ with {
 };
 
 
-lookahead_compressor_N_chan(strength,thresh,att,rel,knee,link,FBFF,meter,N) =
+lookahead_compressor_N_chan(strength,thresh,att,rel,knee,link,meter,N) =
   si.bus(N) <: si.bus(N*2):
   (
-    ((ro.interleave(N,2) : par(i,N*2,abs) :par(i,N,it.interpolate_linear(FBFF))
-      : lookahead_compression_gain_N_chan_db(strength*(1+((FBFF*-1)+1)),thresh,att,rel,knee,link,N)),si.bus(N))
-    : (ro.interleave(N,2) : par(i,N,(meter: ba.db2linear)*(_@attackSamples)))
+    (par(i,N,abs) : lookahead_compression_gain_N_chan_db(strength,thresh,att,rel,knee,link,N))
+   ,si.bus(N)
   )
-  ~ si.bus(N);
+  : (ro.interleave(N,2) : par(i,N,(meter: ba.db2linear)*(_@attackSamples)))
+;
 
 lookahead_compression_gain_N_chan_db(strength,thresh,att,rel,knee,link,1) =
   lookahead_compression_gain_mono_db(strength,thresh,att,rel,knee);
 
 lookahead_compression_gain_N_chan_db(strength,thresh,att,rel,knee,link,N) =
-  par(i,N,lookahead_compression_gain_mono_db(strength,thresh,att,rel,knee))
-  <: (si.bus(N),(ba.parallelMin(N) <: si.bus(N))) : ro.interleave(N,2) : par(i,N,(it.interpolate_linear(link)));
+  si.bus(N)
+  <: (si.bus(N),(ba.parallelMax(N) <: si.bus(N))) : ro.interleave(N,2) : par(i,N,(it.interpolate_linear(link)))
+  : par(i,N,lookahead_compression_gain_mono_db(strength,thresh,att,rel,knee)) ;
 
 lookahead_compression_gain_mono_db(strength,thresh,att,rel,knee) =
   ba.linear2db : gain_computer(strength,thresh,knee)
