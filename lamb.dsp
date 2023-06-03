@@ -39,6 +39,7 @@ with {
     ramp
   , turnAroundRamp
   , gain
+  , turnAroundGain
     // , x
     // , (x:seq(i, 3, si.onePoleSwitching(releaseOP,attackOP)))
     // , (x==gain)
@@ -118,19 +119,28 @@ with {
     end = 1;
     rampStep = 1 / ma.SR / duration;
   };
-  turnAroundRamp = select2(startTurnAroundRamp
-                          , 0
-                          , prevTurnAroundRamp + turnAroundStep)
+  turnAroundRamp = startTurnAroundRamp *
+                   ( prevTurnAroundRamp + turnAroundRampStep)
   with {
     startTurnAroundRamp = goingUp & downSoon;
     goingUp = gain > prevGain;
-    downSoon = turnAroundHold < gain;
+    downSoon = turnAroundHold < attackHold;
 
-    // (turnAroundHold < prevGain)
-    // & (turnAroundHold <= attackHold)
-    // & ( prevTurnAroundRamp < 1 ) ;
-    turnAroundStep = 1 / ma.SR / attack;
+    turnAroundRampStep = 1 / ma.SR / attack;
   };
+
+  // speedMatch = turnAroundSpeed >= (gain - prevGain);
+  speedMatch =
+    (turnAroundGain >= gain)
+    & startTurnAroundRamp;
+  turnAroundGain = prevGain + turnAroundGainStep;
+  turnAroundGainStep =
+    (warpedSine(attackShape,1-turnAroundRamp+(1 / ma.SR / duration))
+     - warpedSine(attackShape,1-turnAroundRamp))
+    * fullTurnAroundDif;
+  fullTurnAroundDif =turnAroundDif/(1-warpedSine(attackShape,turnAroundRamp));
+
+  turnAroundDif = turnAroundHold-prevGain;
 
 
   // ******************************************** the curves: ******************************
