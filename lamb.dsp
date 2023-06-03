@@ -122,10 +122,13 @@ with {
                           , 0
                           , prevTurnAroundRamp + turnAroundStep)
   with {
-    startTurnAroundRamp = (turnAroundHold < prevGain)
-                          & (turnAroundHold <= attackHold)
-                          // & ( prevTurnAroundRamp < 1 )
-    ;
+    startTurnAroundRamp = goingUp & downSoon;
+    goingUp = gain > prevGain;
+    downSoon = turnAroundHold < gain;
+
+    // (turnAroundHold < prevGain)
+    // & (turnAroundHold <= attackHold)
+    // & ( prevTurnAroundRamp < 1 ) ;
     turnAroundStep = 1 / ma.SR / attack;
   };
 
