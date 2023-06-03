@@ -8,24 +8,18 @@ import("/home/bart/source/lamb/stdfaust.lib");
 sinfun(x) = sin(pow(4*x/16,2));
 sfx = hslider("sfx", 0, 0, 16, 1);
 process =
-  // AR_tester;
-  // ba.tabulate(0, sinfun, 16, 0,16, sfx).lin
-  // ,sinfun(sfx)
-  // ;
-  par(i, 2, _*ba.db2linear(hslider("input gain", 0, -24, 24, 1):si.smoo)):
-  // co.FFcompressor_N_chan(strength,thresh,attack,release,knee,prePost,link,meter,2);
-  // co.RMS_FBFFcompressor_N_chan(strength,thresh,att,rel,RMStime,knee,prePost,link,FBFF,meter,2);
-  // co.RMS_FBcompressor_peak_limiter_N_chan(strength,thresh,threshLim,att,rel,RMStime,knee,link,meter,meterLim,2);
-  lookahead_compressor_N_chan(strength,thresh,attack,release,knee,link,FBFF,meter,2);
+  AR_tester;
+// par(i, 2, _*ba.db2linear(hslider("input gain", 0, -24, 24, 1):si.smoo)):
+// lookahead_compressor_N_chan(strength,thresh,attack,release,knee,link,FBFF,meter,2);
 
 AR_tester =
   hgroup("",
          vgroup("[2]test", test)
          <:vgroup("[1]AR",
-                  (ba.slidingMin(attackSamples,maxSampleRate):AR(attack,release))
-                  ,_@attackSamples
+                  AR(attack,release)
+                  ,_@maxHoldTime
                    // ,ba.slidingMin(attackSamples,maxSampleRate)
-                  ,(((ba.slidingMin(attackSamples,maxSampleRate):smootherCascade(4, releaseOP, attackOP )),_@attackSamples):min)
+                   // ,(((ba.slidingMin(attackSamples,maxSampleRate):smootherCascade(4, releaseOP, attackOP )),_@attackSamples):min)
                  ));
 att = attack;
 rel = release;
@@ -36,12 +30,14 @@ threshLimP = hslider("[03]thresh lim",0,-30,6,1);
 RMStime = AB(RMStimeP);
 RMStimeP = hslider("[03]RMS time",5,0,100,1)*0.001;
 maxSampleRate = 192000;
+maxHoldTime = 2 * maxSampleRate;
 
-AR(attack,release) = loop~(_,_)
+AR(attack,release) = loop~(_,_,_)
                           // :(!,_)
 with {
-  loop(prevRamp,prevGain,x) =
+  loop(prevRamp, prevTurnAroundRamp, prevGain, x) =
     ramp
+  , turnAroundRamp
   , gain
     // , x
     // , (x:seq(i, 3, si.onePoleSwitching(releaseOP,attackOP)))
@@ -66,15 +62,16 @@ with {
 
   shapeDif(shape,phase,duration,sr) =
     // ba.tabulateNd(1,shapeDifFormula,(nrShapes,1<<17,1<<7,0,0,1/maxSampleRate/1,nrShapes,1,1/24000/(1/maxSampleRate),shapeSlider,phase,(1 / ma.SR / duration))).lin;
-    ba.tabulateNd(0,shapeDifFormula,(nrShapes,1<<17,1<<7,0,0,1/maxSampleRate/1,nrShapes,1,1/24000/(1/maxSampleRate),shapeSlider,phase,(1 / ma.SR / duration))).lin;
-  // ba.tabulateNd(0,shapeDifFormula,(nrShapes,1<<17,1<<7,0,0,1/maxSampleRate/1,nrShapes,1,1/24000/(1/maxSampleRate),shapeSlider,phase,(1 / ma.SR / duration))).lin;
-  // ba.tabulateNd(1,shapeDifFormula,(3,1<<16,1<<6,0,0,1/48000/1,nrShapes,1,1/24000/(1/48000),shapeSlider,phase,(1 / ma.SR / duration))).lin;
-  // warpedSine(shapeSlider,phase+(1 / sr / duration))
-  // - warpedSine(shapeSlider,phase);
+    // ba.tabulateNd(0,shapeDifFormula,(nrShapes,1<<17,1<<7,0,0,1/maxSampleRate/1,nrShapes,1,1/24000/(1/maxSampleRate),shapeSlider,phase,(1 / ma.SR / duration))).lin;
+    // ba.tabulateNd(0,shapeDifFormula,(nrShapes,1<<17,1<<7,0,0,1/maxSampleRate/1,nrShapes,1,1/24000/(1/maxSampleRate),shapeSlider,phase,(1 / ma.SR / duration))).lin;
+    // ba.tabulateNd(1,shapeDifFormula,(3,1<<16,1<<6,0,0,1/48000/1,nrShapes,1,1/24000/(1/48000),shapeSlider,phase,(1 / ma.SR / duration))).lin;
+    warpedSine(shapeSlider,phase+(1 / sr / duration))
+    - warpedSine(shapeSlider,phase);
   // warpedSineFormula(shapeSlider,phase+(1 / sr / duration))
   // - warpedSineFormula(shapeSlider,phase);
-
-  dif = x-prevGain;
+  attackHold =     ba.slidingMin(     attackSamples,      maxSampleRate,x)@(maxHoldTime-attackSamples);
+  turnAroundHold = ba.slidingMin( 2 * attackSamples , 2 * maxSampleRate, x)@(maxHoldTime-(2*attackSamples));
+  dif = attackHold-prevGain;
   releasing =
     dif>0;
   attacking =
@@ -113,7 +110,7 @@ with {
     (start,end)
   , shapeDif(shapeSlider,prevRamp+rampStep,duration',ma.SR)
     * ((dif'/dif)/(1-warpedSine(shapeSlider',prevRamp)))
-    :seq(i, 21, compare)
+    :seq(i, 22, compare)
     : ((+:_*.5),!) // average start and end, throw away the rest
     :max(0):min(1)
   with {
@@ -121,6 +118,18 @@ with {
     end = 1;
     rampStep = 1 / ma.SR / duration;
   };
+  turnAroundRamp = select2(startTurnAroundRamp
+                          , 0
+                          , prevTurnAroundRamp + turnAroundStep)
+  with {
+    startTurnAroundRamp = (turnAroundHold < prevGain)
+                          & (turnAroundHold <= attackHold)
+                          // & ( prevTurnAroundRamp < 1 )
+    ;
+    turnAroundStep = 1 / ma.SR / attack;
+  };
+
+
   // ******************************************** the curves: ******************************
   kneeCurve(shape,knee,x) =
     select3( (x>shape-(knee*.5)) + (x>shape+(knee*.5))
@@ -139,11 +148,11 @@ with {
     // cause we get wrong ramp durations (to steep or not steep enough) otherwise
     // 21 compares seems to work well enough in all cases so far
     // at the higher number of compares (21) we get 11-12% CPU for the raw formaula
-    warpedSineFormula(shapeSlider,x)
+    // warpedSineFormula(shapeSlider,x)
     // the tables do much better
     // Size can be 1<<3;
     // ba.tabulateNd(1, warpedSineFormula,(nrShapes, 1<<3,0, 0,nrShapes, 1, shapeSlider,x)).cub
-    // ba.tabulateNd(0, warpedSineFormula,(nrShapes, SIZE,0, 0,nrShapes, 1, shapeSlider,x)).lin
+    ba.tabulateNd(0, warpedSineFormula,(nrShapes, SIZE,0, 0,nrShapes, 1, shapeSlider,x)).lin
     // par(i, nrShapes+1, table(i) * xfadeSelector(shapeSlider,i)):>_
     // this one is only slightly cheaper, but less user freindly
     // par(i, nrShapes+1, table(i) * ((shapeSlider)==i)):>_
@@ -161,8 +170,8 @@ with {
     // test with
     // patho case: rel 1 shape -3.4
     // patho case: rel 1 shape -1.8
-    // SIZE = 1<<17; // for 2d lin
-    SIZE = 1<<16;
+    SIZE = 1<<17; // for 2d lin
+    // SIZE = 1<<16;
     // table(i) = ba.tabulate(0, warpedSineFormula(shapeSliderVal(i)), SIZE, 0, 1, x).lin;
     // 16 compares: 4.5 -6%CPU
     // 21 compares: 7 % CPU
@@ -395,6 +404,7 @@ with {
 // TODO: make sure we use ints where we can
 // TODO: fix the out of bound reads from tabulateNd.cub:
 // make the parameter write ranges a bit bigger than the read ranges
+// TODO: much smaller number of compares, and if the error is small, just use the simple ramp
 N=4;
 T = ma.T;
 PI = ma.PI;
