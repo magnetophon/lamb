@@ -16,7 +16,7 @@ AR_tester =
   hgroup("",
          vgroup("[2]test", test)
          <:vgroup("[1]AR",
-                  AR(attack,release)
+                  (AR(attack,release) :(!,_,_,_,_))
                   ,_@maxHoldTime
                    // ,ba.slidingMin(attackSamples,maxSampleRate)
                    // ,(((ba.slidingMin(attackSamples,maxSampleRate):smootherCascade(4, releaseOP, attackOP )),_@attackSamples):min)
@@ -39,7 +39,11 @@ with {
     ramp
   , turnAroundRamp
   , gain
-  , turnAroundGain
+  , turnAroundHold
+  , attackHold
+    // , downSoon
+    // , select2(speedMatch,gain,turnAroundGain)
+    // , turnAroundGain
     // , x
     // , (x:seq(i, 3, si.onePoleSwitching(releaseOP,attackOP)))
     // , (x==gain)
@@ -55,8 +59,8 @@ with {
            ) with {
     rawGainStep =
       shapeDif(shapeSlider,ramp,duration,ma.SR)*fullDif;
-    fullDif =dif/(1-warpedSine(shapeSlider,ramp));
   };
+  fullDif =dif/(1-warpedSine(shapeSlider,ramp));
   shapeDifFormula(shapeSlider,phase,len) =
     warpedSineFormula(shapeSlider,phase+len)
     - warpedSineFormula(shapeSlider,phase);
@@ -120,14 +124,18 @@ with {
     rampStep = 1 / ma.SR / duration;
   };
   turnAroundRamp = startTurnAroundRamp *
-                   ( prevTurnAroundRamp + turnAroundRampStep)
-  with {
-    startTurnAroundRamp = goingUp & downSoon;
-    goingUp = gain > prevGain;
-    downSoon = turnAroundHold < attackHold;
+                   ( prevTurnAroundRamp + turnAroundRampStep);
+  // with {
+  startTurnAroundRamp = goingUp & downSoon;
+  goingUp = gain > prevGain;
+  downSoon =
+    (turnAroundHold < attackHold)
+    // & (turnAroundHold < prevGain)
+    // & (turnAroundHold<gain)
+  ;
 
-    turnAroundRampStep = 1 / ma.SR / attack;
-  };
+  turnAroundRampStep = 1 / ma.SR / attack;
+  // };
 
   // speedMatch = turnAroundSpeed >= (gain - prevGain);
   speedMatch =
@@ -135,10 +143,14 @@ with {
     & startTurnAroundRamp;
   turnAroundGain = prevGain + turnAroundGainStep;
   turnAroundGainStep =
-    (warpedSine(attackShape,1-turnAroundRamp+(1 / ma.SR / duration))
-     - warpedSine(attackShape,1-turnAroundRamp))
+    // warpedSine(shapeSlider,phase+(1 / sr / duration))
+    // - warpedSine(shapeSlider,phase);
+    (warpedSine(attackShape,(turnAroundRamp)+(1 / ma.SR / duration))
+     - (warpedSine(attackShape,(turnAroundRamp))))
     * fullTurnAroundDif;
+  // * fullDif;
   fullTurnAroundDif =turnAroundDif/(1-warpedSine(attackShape,turnAroundRamp));
+  // fullTurnAroundDif =turnAroundDif/(1-warpedSine(attackShape,ramp));
 
   turnAroundDif = turnAroundHold-prevGain;
 
