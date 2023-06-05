@@ -159,14 +159,15 @@ with {
     switch = select2(switchOn
                     , _*keepOn
                     , 1)~_;
-    preMult = 1-(switch*(
+    rawMult = 1-(switch*(
                     (turnAroundRamp-startValue)/(1-startValue)
                ));
     mult = loop~_
                 with {
       loop(prevMult) = select2(sel
-                              , preMult
-                              , 1-1'
+                              , rawMult
+                                // , (1-1'):max(7*turnAroundRampStep)
+                              , (attacking):max(7*turnAroundRampStep)
                               )
       with {
       sel = (prevMult<(8*turnAroundRampStep)) & (prevGain<attackHold);
