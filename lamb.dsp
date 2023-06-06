@@ -24,6 +24,7 @@ AR_tester =
 att = attack;
 rel = release;
 attackSamples = ba.sec2samp(attack);
+releaseSamples = ba.sec2samp(release);
 meterLim =meter;
 threshLim = AB(threshLimP);
 threshLimP = hslider("[03]thresh lim",0,-30,6,1);
@@ -38,8 +39,8 @@ with {
   loop(prevRamp, prevTurnAroundRamp, prevGain, x) =
     ramp
   , turnAroundRamp
-    // , gain
   , turnAroundGain
+    // , gain
     // , turnAroundHold
   , (turnAroundGainStep:(!,_))
     // , attackHold
@@ -76,8 +77,13 @@ with {
     - warpedSine(shapeSlider,phase);
   // warpedSineFormula(shapeSlider,phase+(1 / sr / duration))
   // - warpedSineFormula(shapeSlider,phase);
-  attackHold =     ba.slidingMin(     attackSamples,      maxSampleRate,x)@(maxHoldTime-attackSamples);
-  turnAroundHold = ba.slidingMin( 2 * attackSamples , 2 * maxSampleRate, x)@(maxHoldTime-(2*attackSamples));
+  attackHold =
+    ba.slidingMin(     attackSamples,      maxSampleRate,x)@(maxHoldTime-(attackSamples));
+  releaseHold =
+    ba.slidingMin(     releaseSamples,      maxSampleRate,x)@(maxHoldTime-(releaseSamples));
+  turnAroundHold =
+    releaseHold;
+  // max(attackHold,releaseHold);
   dif = attackHold-prevGain;
   releasing =
     dif>0;
@@ -143,7 +149,12 @@ with {
   speedMatch =
     (turnAroundGain >= prevGain)
     & startTurnAroundRamp;
-  turnAroundGain = prevGain + (turnAroundGainStep:(_,!));
+  turnAroundGain =
+    (prevGain + (turnAroundGainStep:(_,!)))
+    // : smoothAtZero
+  ;
+  smoothAtZero = si.onePoleSwitching(swRel,0);
+  swRel = turnAroundRamp >= 1;
   turnAroundGainStep = loop~_:(!,_,_)
   with {
     loop(prevStartValue) =
@@ -161,9 +172,9 @@ with {
                     , 1)~_;
     rawMult = 1-(switch*(
                     (turnAroundRamp-startValue)/(1-startValue)
-               ));
+                  ));
     mult = loop~_
-                with {
+    with {
       loop(prevMult) = select2(sel
                               , rawMult
                                 // , (1-1'):max(7*turnAroundRampStep)
