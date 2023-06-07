@@ -42,14 +42,15 @@ with {
   , turnAroundGain
     // , gain
     // , turnAroundHold
-  , (turnAroundGainStep:(!,_))
+    // , (turnAroundGainStep:(!,_))
     // , attackHold
     // , downSoon
     // , select2(speedMatch,gain,turnAroundGain)
     // , turnAroundGain
     // , x
-    // , (x:seq(i, 3, si.onePoleSwitching(releaseOP,attackOP)))
+    // , (attackHold:seq(i, 3, si.onePoleSwitching(releaseOP,attackOP)))
     // , (x==gain)
+  , (attackHold:smootherCascade(4, releaseOP, attackOP ))
   with {
   duration =
     // select3(attacking+releasing*2,1,attack,release);
