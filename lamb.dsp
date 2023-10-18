@@ -3,27 +3,38 @@ declare version "0.1";
 declare author "Bart Brouns";
 declare license "AGPLv3";
 
-import("/home/bart/source/lamb/stdfaust.lib");
+// TODO:
+// att/rel discontinuities:
+// - check if need to go down within 2*attack
+// - if yes:
+//   - when dir rel == dir att(neg saw)
+//   - use neg saw
+
+// import("/home/bart/source/lamb/stdfaust.lib");
+import("/nix/store/mljn5almsabrsw6mjb70g61688kc0rqj-faust-2.68.1/share/faust/stdfaust.lib");
+// import("stdfaust.lib");
 
 sinfun(x) = sin(pow(4*x/16,2));
 sfx = hslider("sfx", 0, 0, 16, 1);
 process =
-  // AR_tester;
-  // ba.tabulate(0, sinfun, 16, 0,16, sfx).lin
-  // ,sinfun(sfx)
-  // ;
-  par(i, 2, _*ba.db2linear(hslider("input gain", 0, -24, 24, 1):si.smoo)):
-  // co.FFcompressor_N_chan(strength,thresh,attack,release,knee,prePost,link,meter,2);
-  // co.RMS_FBFFcompressor_N_chan(strength,thresh,att,rel,RMStime,knee,prePost,link,FBFF,meter,2);
-  // co.RMS_FBcompressor_peak_limiter_N_chan(strength,thresh,threshLim,att,rel,RMStime,knee,link,meter,meterLim,2);
-  lookahead_compressor_N_chan(strength,thresh,attack,release,knee,link,meter,2);
+  // sin(2*ma.PI*os.lf_saw(0.7));
+  AR_tester;
+// ba.tabulate(0, sinfun, 16, 0,16, sfx).lin;
+// ,sinfun(sfx)
+// ;
+// co.FFcompressor_N_chan(strength,thresh,attack,release,knee,prePost,link,meter,2);
+// co.RMS_FBFFcompressor_N_chan(strength,thresh,att,rel,RMStime,knee,prePost,link,FBFF,meter,2);
+// co.RMS_FBcompressor_peak_limiter_N_chan(strength,thresh,threshLim,att,rel,RMStime,knee,link,meter,meterLim,2);
+
+// par(i, 2, _*ba.db2linear(hslider("input gain", 0, -24, 24, 1):si.smoo)):
+// lookahead_compressor_N_chan(strength,thresh,attack,release,knee,link,meter,2) ;
 
 AR_tester =
   hgroup("",
          vgroup("[2]test", test)
          <:vgroup("[1]AR",
                   (ba.slidingMin(attackSamples,maxSampleRate):AR(attack,release))
-                  ,_@attackSamples
+                  ,_@(2*attackSamples)
                    // ,ba.slidingMin(attackSamples,maxSampleRate)
                   ,(((ba.slidingMin(attackSamples,maxSampleRate):smootherCascade(4, releaseOP, attackOP )),_@attackSamples):min)
                  ));
@@ -37,16 +48,25 @@ RMStime = AB(RMStimeP);
 RMStimeP = hslider("[03]RMS time",5,0,100,1)*0.001;
 maxSampleRate = 192000;
 
-AR(attack,release) = loop~(_,_)
-                          // :(!,_)
+AR(attack,release) =
+  // (negative_ramp~_),
+  loop~(_,_,_)
+
 with {
-  loop(prevRamp,prevGain,x) =
+  loop(prevRamp,prevGain,prevNegRamp,x) =
     ramp
   , gain
+  , negRamp
     // , x
     // , (x:seq(i, 3, si.onePoleSwitching(releaseOP,attackOP)))
     // , (x==gain)
   with {
+  trig_turnaround =
+    prevGain>
+    ba.slidingMin(attackSamples,maxSampleRate,x);
+  negRamp = select2(trig_turnaround
+                   , -1
+                   , prevNegRamp+(1/attack/ma.SR));
   duration =
     // select3(attacking+releasing*2,1,attack,release);
     (attack*attacking)+(release*releasing);
@@ -66,15 +86,15 @@ with {
 
   shapeDif(shape,phase,duration,sr) =
     // ba.tabulateNd(1,shapeDifFormula,(nrShapes,1<<17,1<<7,0,0,1/maxSampleRate/1,nrShapes,1,1/24000/(1/maxSampleRate),shapeSlider,phase,(1 / ma.SR / duration))).lin;
-    ba.tabulateNd(0,shapeDifFormula,(nrShapes,1<<17,1<<7,0,0,1/maxSampleRate/1,nrShapes,1,1/24000/(1/maxSampleRate),shapeSlider,phase,(1 / ma.SR / duration))).lin;
-  // ba.tabulateNd(0,shapeDifFormula,(nrShapes,1<<17,1<<7,0,0,1/maxSampleRate/1,nrShapes,1,1/24000/(1/maxSampleRate),shapeSlider,phase,(1 / ma.SR / duration))).lin;
-  // ba.tabulateNd(1,shapeDifFormula,(3,1<<16,1<<6,0,0,1/48000/1,nrShapes,1,1/24000/(1/48000),shapeSlider,phase,(1 / ma.SR / duration))).lin;
-  // warpedSine(shapeSlider,phase+(1 / sr / duration))
-  // - warpedSine(shapeSlider,phase);
-  // warpedSineFormula(shapeSlider,phase+(1 / sr / duration))
-  // - warpedSineFormula(shapeSlider,phase);
+    // ba.tabulateNd(0,shapeDifFormula,(nrShapes,1<<17,1<<7,0,0,1/maxSampleRate/1,nrShapes,1,1/24000/(1/maxSampleRate),shapeSlider,phase,(1 / ma.SR / duration))).lin;
+    // ba.tabulateNd(0,shapeDifFormula,(nrShapes,1<<17,1<<7,0,0,1/maxSampleRate/1,nrShapes,1,1/24000/(1/maxSampleRate),shapeSlider,phase,(1 / ma.SR / duration))).lin;
+    // ba.tabulateNd(1,shapeDifFormula,(3,1<<16,1<<6,0,0,1/48000/1,nrShapes,1,1/24000/(1/48000),shapeSlider,phase,(1 / ma.SR / duration))).lin;
+    // warpedSine(shapeSlider,phase+(1 / sr / duration))
+    // - warpedSine(shapeSlider,phase);
+    warpedSineFormula(shapeSlider,phase+(1 / sr / duration))
+    - warpedSineFormula(shapeSlider,phase);
 
-  dif = x-prevGain;
+  dif = x@attackSamples-prevGain;
   releasing =
     dif>0;
   attacking =
