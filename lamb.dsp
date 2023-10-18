@@ -34,7 +34,7 @@ AR_tester =
          vgroup("[2]test", test)
          <:vgroup("[1]AR",
                   (ba.slidingMin(attackSamples,maxSampleRate):AR(attack,release))
-                  ,_@(2*attackSamples)
+                  ,_@(attackSamples)
                    // ,ba.slidingMin(attackSamples,maxSampleRate)
                   ,(((ba.slidingMin(attackSamples,maxSampleRate):smootherCascade(4, releaseOP, attackOP )),_@attackSamples):min)
                  ));
@@ -50,13 +50,16 @@ maxSampleRate = 192000;
 
 AR(attack,release) =
   // (negative_ramp~_),
-  loop~(_,_,_)
+  loop~(_,_)
 
 with {
-  loop(prevRamp,prevGain,prevNegRamp,x) =
+  loop(prevRamp,prevGain
+                // ,prevNegRamp,tmp
+       ,x) =
     ramp
   , gain
-  , negRamp
+    // , negRamp
+    // , warpNegRamp
     // , x
     // , (x:seq(i, 3, si.onePoleSwitching(releaseOP,attackOP)))
     // , (x==gain)
@@ -67,6 +70,9 @@ with {
   negRamp = select2(trig_turnaround
                    , -1
                    , prevNegRamp+(1/attack/ma.SR));
+  warpNegRamp =
+    warpedSineFormula(shapeSlider,negRamp);
+  // sin(ma.PI*negRamp);
   duration =
     // select3(attacking+releasing*2,1,attack,release);
     (attack*attacking)+(release*releasing);
@@ -94,7 +100,7 @@ with {
     warpedSineFormula(shapeSlider,phase+(1 / sr / duration))
     - warpedSineFormula(shapeSlider,phase);
 
-  dif = x@attackSamples-prevGain;
+  dif = x-prevGain;
   releasing =
     dif>0;
   attacking =
@@ -135,9 +141,9 @@ with {
     * ((dif'/dif)/(1-warpedSine(shapeSlider',prevRamp)))
     :seq(i, 21, compare)
     : ((+:_*.5),!) // average start and end, throw away the rest
-    :max(0):min(1)
+    :max(-1):min(1)
   with {
-    start = 0;
+    start = -1;
     end = 1;
     rampStep = 1 / ma.SR / duration;
   };
@@ -194,7 +200,7 @@ with {
 
   warpedSineFormula(shapeSlider,x) =
     // sineShaper(warp(shape,knee,x)):pow(power)
-    sineShaper(warp(shape,knee,x:max(0):min(1))):pow(power)
+    sineShaper(warp(shape,knee,x:max(-1):min(1))):pow(power)
   with {
     power = (4*shape/3)+(1/3);
     knee = min(2*shape,2-(2*shape));
