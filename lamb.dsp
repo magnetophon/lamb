@@ -9,6 +9,17 @@ declare license "AGPLv3";
 // - if yes:
 //   - when dir rel == dir att(neg saw)
 //   - use neg saw
+//
+//   check shape at neg ramp
+//
+//   check if better at att==rel
+//
+// optimize CPU:
+//   make lookup dual SR
+//   make lookup simpler:
+//   - make 2 tables:
+//     - one for (each?) shape (updated controll rate?)
+//     - one for (prevSpeed, totalGR and shape) -> phase
 
 // import("/home/bart/source/lamb/stdfaust.lib");
 import("/nix/store/mljn5almsabrsw6mjb70g61688kc0rqj-faust-2.68.1/share/faust/stdfaust.lib");
@@ -139,9 +150,9 @@ with {
     (start,end)
   , shapeDif(shapeSlider,prevRamp+rampStep,duration',ma.SR)
     * ((dif'/dif)/(1-warpedSine(shapeSlider',prevRamp)))
-    :seq(i, 21, compare)
+    :seq(i, 24, compare)
     : ((+:_*.5),!) // average start and end, throw away the rest
-    :max(-1):min(1)
+      // :max(start):min(end)
   with {
     start = -1;
     end = 1;
