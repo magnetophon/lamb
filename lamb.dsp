@@ -5,6 +5,12 @@ declare license "AGPLv3";
 
 // TODO:
 // att/rel discontinuities:
+//
+// alt solution:
+//
+// if (needToGoDownWithinReleaseTime)
+//   then dontGoUp
+//
 // - check if need to go down within 2*attack
 // - if yes:
 //   - when dir rel == dir att(neg saw)
@@ -43,15 +49,19 @@ process =
 AR_tester =
   hgroup("",
          vgroup("[2]test", test)
+
          <:vgroup("[1]AR",
-                  (ba.slidingMin(attackSamples,maxSampleRate):AR(attack,release))
-                  ,_@(attackSamples)
+                  (AR(attack,release)
+                   // : par(i, 3, _@(maxSampleRate-attackSamples))
+                  )
+
+                  // ,_@attackSamples
+                  ,_@maxSampleRate
                    // ,ba.slidingMin(attackSamples,maxSampleRate)
-                  ,(((ba.slidingMin(attackSamples,maxSampleRate):smootherCascade(4, releaseOP, attackOP )),_@attackSamples):min)
+                   // ,(((ba.slidingMin(attackSamples,maxSampleRate):smootherCascade(4, releaseOP, attackOP )),_@maxSampleRate):min)
                  ));
 att = attack;
 rel = release;
-attackSamples = ba.sec2samp(attack);
 meterLim =meter;
 threshLim = AB(threshLimP);
 threshLimP = hslider("[03]thresh lim",0,-30,6,1);
@@ -61,32 +71,49 @@ maxSampleRate = 192000;
 
 AR(attack,release) =
   // (negative_ramp~_),
-  loop~(_,_)
 
+  loop~(_,_,_,_,_)
+       :(_,_,_,!,!)
+        // :(_,_@releaseSamples,_)
+        // : (
+        // par(i, 2, _@(maxSampleRate-attackSamples))
+        // ,_)
+        // : par(i, 3, _@(maxSampleRate-attackSamples))
 with {
   loop(prevRamp,prevGain
-                // ,prevNegRamp,tmp
+       , hold
+       ,prevAttacking,prevReleasing
        ,x) =
     ramp
   , gain
+  , hold
+  , attacking
+  , releasing
     // , negRamp
     // , warpNegRamp
     // , x
     // , (x:seq(i, 3, si.onePoleSwitching(releaseOP,attackOP)))
     // , (x==gain)
   with {
+  prev = checkbox("prev");
+  attackHold = select2(prev, attack,attack'):ba.sAndH(1-prevAttacking);
+  releaseHold = select2(prev, release,release'):ba.sAndH(1-prevReleasing);
+  // attackSamples = (ba.sec2samp(attackHold)@_:ba.sAndH(1-prevAttacking))~(max(0,maxSampleRate-_):min(maxSampleRate));
+  attackSamples = ba.sec2samp(attackHold);
+  releaseSamples = ba.sec2samp(releaseHold);
+  holdSamples = attackSamples +releaseSamples;
   trig_turnaround =
     prevGain>
     ba.slidingMin(attackSamples,maxSampleRate,x);
   negRamp = select2(trig_turnaround
                    , -1
-                   , prevNegRamp+(1/attack/ma.SR));
+                   , prevNegRamp+(1/attackHold/ma.SR));
   warpNegRamp =
     warpedSineFormula(shapeSlider,negRamp);
   // sin(ma.PI*negRamp);
   duration =
-    // select3(attacking+releasing*2,1,attack,release);
-    (attack*attacking)+(release*releasing);
+    // select3(attacking+releasing*2,1,attackHold,releaseHold);
+    (attackHold*attacking)+(releaseHold*releasing);
   gain = prevGain+gainStep ;
   gainStep =
     select2(releasing
@@ -111,7 +138,17 @@ with {
     warpedSineFormula(shapeSlider,phase+(1 / sr / duration))
     - warpedSineFormula(shapeSlider,phase);
 
-  dif = x-prevGain;
+
+  hold =
+    // x
+    ba.slidingMin(holdSamples,maxSampleRate,x)
+    // :max(prevGain)
+  ;
+
+  attHold(x) = x@max(0,(maxSampleRate-attackSamples)):
+               ba.slidingMin(attackSamples,maxSampleRate);
+
+  dif = attHold(x)-prevGain;
   releasing =
     dif>0;
   attacking =
@@ -154,7 +191,7 @@ with {
     : ((+:_*.5),!) // average start and end, throw away the rest
       // :max(start):min(end)
   with {
-    start = -1;
+    start = 0;
     end = 1;
     rampStep = 1 / ma.SR / duration;
   };
@@ -250,7 +287,7 @@ lookahead_compressor_N_chan(strength,thresh,att,rel,knee,link,meter,N) =
     (par(i,N,abs) : lookahead_compression_gain_N_chan_db(strength,thresh,att,rel,knee,link,N))
    ,si.bus(N)
   )
-  : (ro.interleave(N,2) : par(i,N,(meter: ba.db2linear)*(_@attackSamples)))
+  : (ro.interleave(N,2) : par(i,N,(meter: ba.db2linear)*(_@maxSampleRate)))
 ;
 
 lookahead_compression_gain_N_chan_db(strength,thresh,att,rel,knee,link,1) =
@@ -263,8 +300,8 @@ lookahead_compression_gain_N_chan_db(strength,thresh,att,rel,knee,link,N) =
 
 lookahead_compression_gain_mono_db(strength,thresh,att,rel,knee) =
   ba.linear2db : gain_computer(strength,thresh,knee)
-  : ba.slidingMin(attackSamples,maxSampleRate)
   : ba.db2linear:AR(attack,release)
+                 // ,prevNegRamp,tmp
   :(!,_) // for testing
   :ba.linear2db
 with {
