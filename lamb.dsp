@@ -4,6 +4,9 @@ declare author "Bart Brouns";
 declare license "AGPLv3";
 
 // TODO:
+//
+//  optimise: make attack and release mult factors, to be applied after the tables, and in reverse to the index of the tables
+//
 // att/rel discontinuities:
 //
 // alt solution:
