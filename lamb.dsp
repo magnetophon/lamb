@@ -31,12 +31,24 @@ declare license "AGPLv3";
 //     - one for (prevSpeed, totalGR and shape) -> phase
 
 // import("/home/bart/source/lamb/stdfaust.lib");
+// import("/home/bart/source/faustlibraries/stdfaust.lib");
 import("/nix/store/mljn5almsabrsw6mjb70g61688kc0rqj-faust-2.68.1/share/faust/stdfaust.lib");
 // import("stdfaust.lib");
 
 sinfun(x) = sin(pow(4*x/16,2));
 sfx = hslider("sfx", 0, 0, 16, 1);
 process =
+  // ba.slidingMin(0,2)
+  // , ba.slidingMin(1,2)
+  // , ba.slidingMin(n,2)
+  // , ba.slidingMin(0,4)
+  // , ba.slidingMin(1,4)
+  // , ba.slidingMin(2,4)
+  // , ba.slidingMin(3,4)
+  // , ba.slidingMin(n,4)
+  // , ba.slidingMin(n,8)
+  // ;
+  // n = hslider("n", 0, 0, 8, 1);
   // sin(2*ma.PI*os.lf_saw(0.7));
   AR_tester;
 // ba.tabulate(0, sinfun, 16, 0,16, sfx).lin;
@@ -84,12 +96,13 @@ AR(attack,release) =
         // : par(i, 3, _@(maxSampleRate-attackSamples))
 with {
   loop(prevRamp,prevGain
-       , hold
+       , prevHold
        ,prevAttacking,prevReleasing
        ,x) =
     ramp
   , gain
-  , hold
+    // , attHold(x)
+  , hold(x)
   , attacking
   , releasing
     // , negRamp
@@ -98,33 +111,36 @@ with {
     // , (x:seq(i, 3, si.onePoleSwitching(releaseOP,attackOP)))
     // , (x==gain)
   with {
-  prev = checkbox("prev");
-  attackHold = select2(prev, attack,attack'):ba.sAndH(1-prevAttacking);
-  releaseHold = select2(prev, release,release'):ba.sAndH(1-prevReleasing);
+
+  attackHold = attack:ba.sAndH(1-prevAttacking);
+  releaseHold = release:ba.sAndH(1-prevReleasing);
+  // attackHold =
+  // attack:ba.sAndH(prevGain==(x@(maxSampleRate))) ;
+  // releaseHold =
+  // release:ba.sAndH(prevGain==(x@(maxSampleRate))) ;
   // attackSamples = (ba.sec2samp(attackHold)@_:ba.sAndH(1-prevAttacking))~(max(0,maxSampleRate-_):min(maxSampleRate));
   attackSamples = ba.sec2samp(attackHold);
   releaseSamples = ba.sec2samp(releaseHold);
   holdSamples = attackSamples +releaseSamples;
-  trig_turnaround =
-    prevGain>
-    ba.slidingMin(attackSamples,maxSampleRate,x);
-  negRamp = select2(trig_turnaround
-                   , -1
-                   , prevNegRamp+(1/attackHold/ma.SR));
-  warpNegRamp =
-    warpedSineFormula(shapeSlider,negRamp);
-  // sin(ma.PI*negRamp);
   duration =
     // select3(attacking+releasing*2,1,attackHold,releaseHold);
-    (attackHold*attacking)+(releaseHold*releasing);
-  gain = prevGain+gainStep ;
+    ((attackHold*attacking)+(releaseHold*releasing))
+    // :max(ma.EPSILON)
+  ;
+  gain = prevGain+gainStep
+         // :min(x@maxSampleRate)
+  ;
   gainStep =
     select2(releasing
            , rawGainStep :max(dif)
            , rawGainStep :min(dif)
            ) with {
     rawGainStep =
-      shapeDif(shapeSlider,ramp,duration,ma.SR)*fullDif;
+      // select2(duration==0
+      // ,
+      shapeDif(shapeSlider,ramp,duration,ma.SR)*fullDif
+      // , dif)
+    ;
     fullDif =dif/(1-warpedSine(shapeSlider,ramp));
   };
   shapeDifFormula(shapeSlider,phase,len) =
@@ -142,16 +158,22 @@ with {
     - warpedSineFormula(shapeSlider,phase);
 
 
-  hold =
+  hold(x) =
     // x
     ba.slidingMin(holdSamples,maxSampleRate,x)
-    // :max(prevGain)
+    @max(0,(maxSampleRate-holdSamples))
+    :max(prevGain)
+    :min(attHold(x))
+
   ;
 
-  attHold(x) = x@max(0,(maxSampleRate-attackSamples)):
-               ba.slidingMin(attackSamples,maxSampleRate);
+  attHold(x) = x
+               @max(0,(maxSampleRate-attackSamples)):
+               // @max(0,(maxSampleRate-holdSamples)):
+               ba.slidingMin(attackSamples+1,maxSampleRate);
 
-  dif = attHold(x)-prevGain;
+  // dif = attHold(x)-prevGain;
+  dif = hold(x)-prevGain;
   releasing =
     dif>0;
   attacking =
@@ -337,7 +359,7 @@ attackShape = AB(attackShapeP);
 attackShapeP = half+hslider("[2]attack shape" , 0, 0-half, half, 0.1);
 // release = AB(releaseP);
 release = AB(releaseP);
-releaseP = hslider("[05]release",80,1,1000,1)*0.001;
+releaseP = hslider("[05]release",80,0,1000,1)*0.001;
 releaseShape = AB(releaseShapeP);
 releaseShapeP = half+hslider("[2]release shape" , 0, 0-half, half, 0.1);
 knee = AB(kneeP);
