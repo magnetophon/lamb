@@ -101,8 +101,8 @@ with {
        ,x) =
     ramp
   , gain
-    // , attHold(x)
-  , hold(x)
+    // , attHold
+  , hold
   , attacking
   , releasing
     // , negRamp
@@ -114,6 +114,7 @@ with {
 
   attackHold = attack:ba.sAndH(1-prevAttacking);
   releaseHold = release:ba.sAndH(1-prevReleasing);
+  holdHold = holdTime:ba.sAndH(1-prevReleasing);
   // attackHold =
   // attack:ba.sAndH(prevGain==(x@(maxSampleRate))) ;
   // releaseHold =
@@ -121,7 +122,10 @@ with {
   // attackSamples = (ba.sec2samp(attackHold)@_:ba.sAndH(1-prevAttacking))~(max(0,maxSampleRate-_):min(maxSampleRate));
   attackSamples = ba.sec2samp(attackHold);
   releaseSamples = ba.sec2samp(releaseHold);
-  holdSamples = attackSamples +releaseSamples;
+  holdSamples =
+    attackSamples +
+    releaseSamples;
+  // holdSamples = ba.sec2samp(holdHold);
   duration =
     // select3(attacking+releasing*2,1,attackHold,releaseHold);
     ((attackHold*attacking)+(releaseHold*releasing))
@@ -141,7 +145,8 @@ with {
       shapeDif(shapeSlider,ramp,duration,ma.SR)*fullDif
       // , dif)
     ;
-    fullDif =dif/(1-warpedSine(shapeSlider,ramp));
+    fullDif =
+      dif/(1-warpedSine(shapeSlider,ramp));
   };
   shapeDifFormula(shapeSlider,phase,len) =
     warpedSineFormula(shapeSlider,phase+len)
@@ -158,22 +163,37 @@ with {
     - warpedSineFormula(shapeSlider,phase);
 
 
-  hold(x) =
-    // x
-    ba.slidingMin(holdSamples,maxSampleRate,x)
-    @max(0,(maxSampleRate-holdSamples))
-    :max(prevGain)
-    :min(attHold(x))
+  hold =
+    // attHold
+    fancyHold
+  ;
+  longHold =
+    ba.slidingMin(holdSamples,maxSampleRate,x
+                                            @max(0,(maxSampleRate-holdSamples)));
 
+  switch = (prevGain>longHold) & (prevGain<=attHold);
+  // switchStart =
+
+  fancyHold =
+    (longHold
+     // +offset
+     // +(offset*prevReleasing)
+    )
+
+    :max(prevGain
+         // +(offset*prevReleasing)
+         // :ba.sAndH(1-prevReleasing)
+        )
+    :min(attHold)
   ;
 
-  attHold(x) = x
-               @max(0,(maxSampleRate-attackSamples)):
-               // @max(0,(maxSampleRate-holdSamples)):
-               ba.slidingMin(attackSamples+1,maxSampleRate);
+  attHold = x
+            @max(0,(maxSampleRate-attackSamples)):
+            // @max(0,(maxSampleRate-holdSamples)):
+            ba.slidingMin(attackSamples+1,maxSampleRate);
 
-  // dif = attHold(x)-prevGain;
-  dif = hold(x)-prevGain;
+  // dif = attHold-prevGain;
+  dif = hold-prevGain;
   releasing =
     dif>0;
   attacking =
@@ -362,23 +382,28 @@ release = AB(releaseP);
 releaseP = hslider("[05]release",80,0,1000,1)*0.001;
 releaseShape = AB(releaseShapeP);
 releaseShapeP = half+hslider("[2]release shape" , 0, 0-half, half, 0.1);
+holdTime = AB(holdTimeP);
+holdTimeP = hslider("[06]holdTime",80,0,1000,1)*0.001;
+offset = AB(offsetP);
+// offsetP = hslider("offset", 0, -48, 0, 0.1):ba.db2linear;
+offsetP = hslider("offset", 0, -1, 0, 0.01);
 knee = AB(kneeP);
-kneeP = hslider("[06]knee",2,0,30,1);
+kneeP = hslider("[07]knee",2,0,30,1);
 link = AB(linkP);
-linkP = hslider("[07]link", 0, 0, 100, 1) *0.01;
+linkP = hslider("[08]link", 0, 0, 100, 1) *0.01;
 FBFF = AB(FBFFP);
-FBFFP = hslider ("[08]fb-ff",100,0,100,1) *0.01;
+FBFFP = hslider ("[09]fb-ff",100,0,100,1) *0.01;
 power = AB(powerP);
-powerP = hslider("[09]power", 2, ma.EPSILON, 10, 0.1);
+powerP = hslider("[10]power", 2, ma.EPSILON, 10, 0.1);
 PMItime = AB(PMItimeP);
-PMItimeP = hslider("[10]PMI time",20,0,1000,1)*0.001;
+PMItimeP = hslider("[11]PMI time",20,0,1000,1)*0.001;
 dw = AB(dwP);
-dwP = hslider ("[11]dry/wet",100,0,100,1) * 0.01:si.smoo;
+dwP = hslider ("[12]dry/wet",100,0,100,1) * 0.01:si.smoo;
 
 attackOP = AB(attackOpP);
-attackOpP = hslider("[12]attack OP",6,0,1000,1)*0.001;
+attackOpP = hslider("[13]attack OP",6,0,1000,1)*0.001;
 releaseOP = AB(releaseOpP);
-releaseOpP = hslider("[12]release OP",80,0,1000,1)*0.001;
+releaseOpP = hslider("[14]release OP",80,0,1000,1)*0.001;
 nrShapes = 9;
 half = (nrShapes-1)*.5;
 
