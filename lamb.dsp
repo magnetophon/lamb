@@ -5,6 +5,8 @@ declare license "AGPLv3";
 
 // TODO:
 //
+//  when calculating which part of the fullDif we already did, take into account the prev fullDiff and prevRamp
+//
 //  optimise: make attack and release mult factors, to be applied after the tables, and in reverse to the index of the tables
 //
 // att/rel discontinuities:
@@ -102,7 +104,8 @@ with {
     ramp
   , gain
     // , attHold
-  , hold
+    // , hold
+  , limitMe
   , attacking
   , releasing
     // , negRamp
@@ -157,10 +160,10 @@ with {
     // ba.tabulateNd(0,shapeDifFormula,(nrShapes,1<<17,1<<7,0,0,1/maxSampleRate/1,nrShapes,1,1/24000/(1/maxSampleRate),shapeSlider,phase,(1 / ma.SR / duration))).lin;
     // ba.tabulateNd(0,shapeDifFormula,(nrShapes,1<<17,1<<7,0,0,1/maxSampleRate/1,nrShapes,1,1/24000/(1/maxSampleRate),shapeSlider,phase,(1 / ma.SR / duration))).lin;
     // ba.tabulateNd(1,shapeDifFormula,(3,1<<16,1<<6,0,0,1/48000/1,nrShapes,1,1/24000/(1/48000),shapeSlider,phase,(1 / ma.SR / duration))).lin;
-    // warpedSine(shapeSlider,phase+(1 / sr / duration))
-    // - warpedSine(shapeSlider,phase);
-    warpedSineFormula(shapeSlider,phase+(1 / sr / duration))
-    - warpedSineFormula(shapeSlider,phase);
+    warpedSine(shapeSlider,phase+(1 / sr / duration))
+    - warpedSine(shapeSlider,phase);
+  // warpedSineFormula(shapeSlider,phase+(1 / sr / duration))
+  // - warpedSineFormula(shapeSlider,phase);
 
 
   hold =
@@ -174,18 +177,19 @@ with {
   switch = (prevGain>longHold) & (prevGain<=attHold);
   // switchStart =
 
+  limitMe = prevGain<
+            select2(checkbox("longHoldlim")
+                   , attHold
+                   ,longHold);
   fancyHold =
-    (longHold
-     // +offset
-     // +(offset*prevReleasing)
-    )
-
-    :max(prevGain
-         // +(offset*prevReleasing)
-         // :ba.sAndH(1-prevReleasing)
-        )
+    longHold
+    // <:select2(limitMe,_,max(prevGain))
+    <:select2(limitMe,max(prevGain),_)
+      // <:select2(checkbox("lim"),_,max(prevGain))
     :min(attHold)
   ;
+  predictedGain= prevGain+((prevGain')-(prevGain''));
+  // predictedGain= prevGain+((prevGain'')-(prevGain'));
 
   attHold = x
             @max(0,(maxSampleRate-attackSamples)):
@@ -232,7 +236,7 @@ with {
     (start,end)
   , shapeDif(shapeSlider,prevRamp+rampStep,duration',ma.SR)
     * ((dif'/dif)/(1-warpedSine(shapeSlider',prevRamp)))
-    :seq(i, 24, compare)
+    :seq(i, 18, compare)
     : ((+:_*.5),!) // average start and end, throw away the rest
       // :max(start):min(end)
   with {
@@ -258,11 +262,11 @@ with {
     // cause we get wrong ramp durations (to steep or not steep enough) otherwise
     // 21 compares seems to work well enough in all cases so far
     // at the higher number of compares (21) we get 11-12% CPU for the raw formaula
-    warpedSineFormula(shapeSlider,x)
+    // warpedSineFormula(shapeSlider,x)
     // the tables do much better
     // Size can be 1<<3;
     // ba.tabulateNd(1, warpedSineFormula,(nrShapes, 1<<3,0, 0,nrShapes, 1, shapeSlider,x)).cub
-    // ba.tabulateNd(0, warpedSineFormula,(nrShapes, SIZE,0, 0,nrShapes, 1, shapeSlider,x)).lin
+    ba.tabulateNd(0, warpedSineFormula,(nrShapes, SIZE,0, 0,nrShapes, 1, shapeSlider,x)).lin
     // par(i, nrShapes+1, table(i) * xfadeSelector(shapeSlider,i)):>_
     // this one is only slightly cheaper, but less user freindly
     // par(i, nrShapes+1, table(i) * ((shapeSlider)==i)):>_
