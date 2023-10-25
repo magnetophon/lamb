@@ -102,7 +102,7 @@ with {
     ramp
   , gain
     // , attHold
-  , hold
+  , switch
   , attacking
   , releasing
     // , negRamp
@@ -146,7 +146,12 @@ with {
       // , dif)
     ;
     fullDif =
-      dif/(1-warpedSine(shapeSlider,ramp));
+      select2(switch
+             ,
+               (hold-prevGain)/(1-warpedSine(shapeSlider,ramp))
+             , attHold-switchStart
+             )
+    ;
   };
   shapeDifFormula(shapeSlider,phase,len) =
     warpedSineFormula(shapeSlider,phase+len)
@@ -164,15 +169,19 @@ with {
 
 
   hold =
-    // attHold
-    fancyHold
+    attHold
+    // fancyHold
   ;
   longHold =
     ba.slidingMin(holdSamples,maxSampleRate,x
                                             @max(0,(maxSampleRate-holdSamples)));
 
-  switch = (prevGain>longHold) & (prevGain<=attHold);
-  // switchStart =
+  switch =
+    ((prevGain>longHold) & (prevGain<=attHold))
+    // * (prevRamp < 1)
+    // * (prevRamp > 0)
+  ;
+  switchStart = prevGain:ba.sAndH(1-switch);
 
   fancyHold =
     (longHold
@@ -193,7 +202,16 @@ with {
             ba.slidingMin(attackSamples+1,maxSampleRate);
 
   // dif = attHold-prevGain;
-  dif = hold-prevGain;
+  // , dif/(1-warpedSine(shapeSlider,ramp))
+  dif =
+    select2(switch
+           ,
+             hold-prevGain
+           , (attHold-switchStart)
+             * (1-warpedSine(shapeSlider,prevRamp))
+             // * (1-warpedSine(0.5,0.5))
+           )
+  ;
   releasing =
     dif>0;
   attacking =
@@ -229,17 +247,20 @@ with {
   //
   // with the above settings, too low nr of compares gives a stuck or too slow ramp
   ramp =
-    (start,end)
-  , shapeDif(shapeSlider,prevRamp+rampStep,duration',ma.SR)
-    * ((dif'/dif)/(1-warpedSine(shapeSlider',prevRamp)))
-    :seq(i, 24, compare)
-    : ((+:_*.5),!) // average start and end, throw away the rest
-      // :max(start):min(end)
+
+     (start,end)
+   , shapeDif(shapeSlider,prevRamp+rampStep,duration',ma.SR)
+     * ((dif'/dif)/(1-warpedSine(shapeSlider',prevRamp)))
+     :seq(i, 24, compare)
+     : ((+:_*.5),!) // average start and end, throw away the rest
+       // :max(start):min(end)
+     :select2(switch',_,prevRamp+rampStep)
   with {
     start = 0;
     end = 1;
     rampStep = 1 / ma.SR / duration;
   };
+
   // ******************************************** the curves: ******************************
   kneeCurve(shape,knee,x) =
     select3( (x>shape-(knee*.5)) + (x>shape+(knee*.5))
@@ -301,7 +322,7 @@ with {
   };
   shapeSlider =
     // select2(releasing, 1-slider)
-    select2(releasing
+    select2(prevReleasing
            , attackShape
            , releaseShape);
 
@@ -322,7 +343,7 @@ with {
 
   ishape =
     shapeSliderVal(shapeSlider);
-};
+     };
 };
 
 
