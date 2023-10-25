@@ -105,7 +105,7 @@ with {
   , gain
     // , attHold
     // , hold
-  , limitMe
+  , dontLimitMe
   , attacking
   , releasing
     // , negRamp
@@ -126,8 +126,10 @@ with {
   attackSamples = ba.sec2samp(attackHold);
   releaseSamples = ba.sec2samp(releaseHold);
   holdSamples =
-    attackSamples +
+    (attackSamples*checkbox("longHold plus att")) +
     releaseSamples;
+  // attackSamples +
+  // releaseSamples;
   // holdSamples = ba.sec2samp(holdHold);
   duration =
     // select3(attacking+releasing*2,1,attackHold,releaseHold);
@@ -177,14 +179,28 @@ with {
   switch = (prevGain>longHold) & (prevGain<=attHold);
   // switchStart =
 
-  limitMe = prevGain<
-            select2(checkbox("longHoldlim")
-                   , attHold
-                   ,longHold);
+  dontLimitMe =
+    (prevReleasing
+     : ba.sAndH((prevRamp<=relStep))
+    )
+    // | (1-prevAttacking)
+    // (
+    // prevGain>=
+    // attHold
+    // )
+    // | (prevReleasing)
+    // * (1-prevAttacking)
+    // xor
+    // (
+    // prevGain<longHold
+    // )
+  ;
+  relStep = 1 / ma.SR / releaseHold;
+
   fancyHold =
     longHold
-    // <:select2(limitMe,_,max(prevGain))
-    <:select2(limitMe,max(prevGain),_)
+    // <:select2(dontLimitMe,_,max(prevGain))
+    <:select2(dontLimitMe,max(prevGain),_)
       // <:select2(checkbox("lim"),_,max(prevGain))
     :min(attHold)
   ;
@@ -240,9 +256,9 @@ with {
     : ((+:_*.5),!) // average start and end, throw away the rest
       // :max(start):min(end)
   with {
+    rampStep = 1 / ma.SR / duration;
     start = 0;
     end = 1;
-    rampStep = 1 / ma.SR / duration;
   };
   // ******************************************** the curves: ******************************
   kneeCurve(shape,knee,x) =
