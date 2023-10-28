@@ -5,6 +5,10 @@ declare license "AGPLv3";
 
 // TODO:
 //
+//  if haveTimeForUpDown
+//  then goUpdown
+//  else stayDown
+//
 //  when calculating which part of the fullDif we already did, take into account the prev fullDiff and prevRamp
 //
 //  optimise: make attack and release mult factors, to be applied after the tables, and in reverse to the index of the tables
@@ -37,9 +41,15 @@ declare license "AGPLv3";
 import("/nix/store/mljn5almsabrsw6mjb70g61688kc0rqj-faust-2.68.1/share/faust/stdfaust.lib");
 // import("stdfaust.lib");
 
-sinfun(x) = sin(pow(4*x/16,2));
-sfx = hslider("sfx", 0, 0, 16, 1);
+// loop~_
+// with {
+// loop(prev) = (set | prev) * (1-reset)
+// };
+// sinfun(x) = sin(pow(4*x/16,2));
+// sfx = hslider("sfx", 0, 0, 16, 1);
+
 process =
+
   // ba.slidingMin(0,2)
   // , ba.slidingMin(1,2)
   // , ba.slidingMin(n,2)
@@ -52,7 +62,10 @@ process =
   // ;
   // n = hslider("n", 0, 0, 8, 1);
   // sin(2*ma.PI*os.lf_saw(0.7));
+
+  // graphTime(button("on"));
   AR_tester;
+
 // ba.tabulate(0, sinfun, 16, 0,16, sfx).lin;
 // ,sinfun(sfx)
 // ;
@@ -91,6 +104,7 @@ AR(attack,release) =
 
   loop~(_,_,_,_,_)
        :(_,_,_,!,!)
+        // :(_,_,!,!,_)
         // :(_,_@releaseSamples,_)
         // : (
         // par(i, 2, _@(maxSampleRate-attackSamples))
@@ -104,8 +118,13 @@ with {
     ramp
   , gain
     // , attHold
+  , graphTime
     // , hold
-  , dontLimitMe
+    // , dontLimitMe
+    // ,longHold
+    // ,tooShort
+    // , (prevRamp<=bigStep)
+    // , bigStep
   , attacking
   , releasing
     // , negRamp
@@ -125,9 +144,16 @@ with {
   // attackSamples = (ba.sec2samp(attackHold)@_:ba.sAndH(1-prevAttacking))~(max(0,maxSampleRate-_):min(maxSampleRate));
   attackSamples = ba.sec2samp(attackHold);
   releaseSamples = ba.sec2samp(releaseHold);
+  medLongSamples =
+    (attackSamples +
+     releaseSamples)
+    *hslider("med long", 1, 0.5, 1, 0.01);
+
   holdSamples =
-    (attackSamples*checkbox("longHold plus att")) +
-    releaseSamples;
+    // medLongSamples*
+    (attackSamples +
+     releaseSamples)*
+    hslider("long", 1, 1, 1.5, 0.01);
   // attackSamples +
   // releaseSamples;
   // holdSamples = ba.sec2samp(holdHold);
@@ -173,16 +199,53 @@ with {
     fancyHold
   ;
   longHold =
-    ba.slidingMin(holdSamples,maxSampleRate,x
-                                            @max(0,(maxSampleRate-holdSamples)));
+    ba.slidingMin(holdSamples+1,maxSampleRate,x
+                                              @max(0,(maxSampleRate-holdSamples)));
+  medLongHold =
+    ba.slidingMin(medLongSamples+1,maxSampleRate,x
+                                                 @max(0,(maxSampleRate-medLongSamples)));
+
 
   switch = (prevGain>longHold) & (prevGain<=attHold);
   // switchStart =
 
+  setReset(set,reset) =
+    ((set | _) * (1-reset))~_;
+  // loop~_
+  // with {
+  // loop(prev) = (set | prev) * (1-reset)
+  // };
+
   dontLimitMe =
-    (prevReleasing
-     : ba.sAndH((prevRamp<=relStep))
+    setReset(
+      //set:
+      (prevReleasing
+       // |prevReleasing'
+      )
+      // &(prevRamp<=bigStep)
+
+      //reset:
+    ,
+      // ((prevRamp+bigStep)>1)
+      // | (1-prevReleasing)
+      // |
+      // ((attHold-prevGain)<(8*abs(prevGain-prevGain')))
+      // |
+      // prevAttacking
+      // |
+      (predictedGain>=attHold)
+      // (predictedGain>=longHold)
+      | ((prevRamp+bigStep)>1)
+      // | ((prevRamp+bigStep)>1)'
+      // | ((prevRamp+bigStep)>1)''
+      // | ((prevRamp+bigStep)>1)'''
+      // | (prevRamp<=bigStep)
+      // | (prevRamp==0)
     )
+
+    // (prevReleasing
+    // : ba.sAndH((prevRamp<=relStep))
+    // )
     // | (1-prevAttacking)
     // (
     // prevGain>=
@@ -195,16 +258,43 @@ with {
     // prevGain<longHold
     // )
   ;
-  relStep = 1 / ma.SR / releaseHold;
+  bigStep = hslider("big", 1, 0, 32, 1) / ma.SR / min(releaseHold,attackHold);
 
   fancyHold =
-    longHold
+    // longHold
     // <:select2(dontLimitMe,_,max(prevGain))
-    <:select2(dontLimitMe,max(prevGain),_)
-      // <:select2(checkbox("lim"),_,max(prevGain))
+    // <:select2(dontLimitMe,max(prevGain),_)
+    // <:select2(checkbox("dont pull up"),max(attHold),_)
+    // <:
+    // select2(checkbox("dont pull up"),max(prevGain,longHold),_)
+    max(prevGain,
+        select2(useLong
+               , attHold
+               , longHold
+               )
+       )
     :min(attHold)
   ;
-  predictedGain= prevGain+((prevGain')-(prevGain''));
+
+  stopwatch = (((_+1)*trig)~_)-1;
+  graphTime = stopwatch/ma.SR;
+  trig = x>attHold;
+  tooShort =
+    setReset(
+      //set
+      (prevGain>medLongHold)
+      *(((prevRamp>bigStep)-prevReleasing):max(0))
+      //reset
+      // ,button("reset")
+    , (predictedGain>=attHold)
+    )
+    // | (prevGain<longHold)
+  ;
+  useLong =
+    tooShort;
+  // checkbox("use long");
+  // prevGain>longHold;
+  predictedGain= prevGain+(hslider("reset sens", 1, 0, 2048, 1)*abs((prevGain)-(prevGain')));
   // predictedGain= prevGain+((prevGain'')-(prevGain'));
 
   attHold = x
@@ -219,13 +309,40 @@ with {
   attacking =
     dif<0;
 
-  compare(start,end,compSlope) =
-    (
-      select2(bigger , start , middle)
-    , select2(bigger , middle , end)
-    , compSlope
-    )
+  // compare_tabulate(start,end,compSlope) =
+  // tabulateNd(0,compare_raw,())
+  // ;
+
+  // powSinTable(x,y) = ba.tabulateNd(1, powSin, (sizeX,sizeY, rx0,ry0, rx1,ry1, x,y) ).lin;
+  compare_raw(start,end,compSlope) =
+    (start,end,compSlope)
+    : seq(i, 24, compare)
+    : ((+:_*.5),!) // average start and end, throw away the rest
   with {
+    compare(start,end,compSlope) =
+      (
+        select2(bigger , start , middle)
+      , select2(bigger , middle , end)
+      , compSlope
+      );
+    bigger = compSlope>slope(middle);
+    slope(x) =
+      shapeDifFormula(shapeSlider,x,duration,ma.SR)
+      *(1/(1-warpedSineFormula(shapeSlider,x)));
+    middle = (start+end)*.5;
+  };
+
+  compare_raw_using_tables(start,end,compSlope) =
+    (start,end,compSlope)
+    : seq(i, 24, compare)
+    : ((+:_*.5),!) // average start and end, throw away the rest
+  with {
+    compare(start,end,compSlope) =
+      (
+        select2(bigger , start , middle)
+      , select2(bigger , middle , end)
+      , compSlope
+      );
     bigger = compSlope>slope(middle);
     slope(x) =
       shapeDif(shapeSlider,x,duration,ma.SR)
@@ -252,8 +369,10 @@ with {
     (start,end)
   , shapeDif(shapeSlider,prevRamp+rampStep,duration',ma.SR)
     * ((dif'/dif)/(1-warpedSine(shapeSlider',prevRamp)))
-    :seq(i, 18, compare)
-    : ((+:_*.5),!) // average start and end, throw away the rest
+    // : compare_raw_using_tables
+    : compare_raw
+      // :seq(i, 24, compare)
+      // : ((+:_*.5),!) // average start and end, throw away the rest
       // :max(start):min(end)
   with {
     rampStep = 1 / ma.SR / duration;
@@ -301,7 +420,8 @@ with {
     // patho case: rel 1 shape -3.4
     // patho case: rel 1 shape -1.8
     // SIZE = 1<<17; // for 2d lin
-    SIZE = 1<<16;
+    // SIZE = 1<<16;
+    SIZE = 1<<24;
     // table(i) = ba.tabulate(0, warpedSineFormula(shapeSliderVal(i)), SIZE, 0, 1, x).lin;
     // 16 compares: 4.5 -6%CPU
     // 21 compares: 7 % CPU
