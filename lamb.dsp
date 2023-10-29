@@ -102,6 +102,7 @@ with {
        ,prevAttacking,prevReleasing
        ,x) =
     ramp
+    // OLD_ramp
   , gain
     // , attHold
     // , hold
@@ -219,7 +220,58 @@ with {
   attacking =
     dif<0;
 
-  compare(start,end,compSlope) =
+  ramp =
+    (shapeDif(shapeSlider,prevRamp+rampStep,duration',ma.SR)
+     * ((dif'/dif)/(1-warpedSine(shapeSlider',prevRamp)))
+    )
+   ,shapeSlider,duration
+                : compareArray
+                  // :max(start):min(end)
+  with {
+    rampStep = 1 / ma.SR / duration;
+  };
+
+  compareArray(compSlope,shapeSlider,duration) =
+    (start,end,compSlope)
+    : seq(i, 18, compare)
+    : ((+:_*.5),!) // average start and end, throw away the rest
+  with {
+    start = 0;
+    end = 1;
+    compare(start,end,compSlope) =
+      (
+        select2(bigger , start , middle)
+      , select2(bigger , middle , end)
+      , compSlope
+      )
+    with {
+      bigger = compSlope>slope(middle);
+      slope(x) =
+        shapeDif(shapeSlider,x,duration,ma.SR)
+        *(1/(1-warpedSine(shapeSlider,x)));
+      middle = (start+end)*.5;
+    };
+    // test with shape minimal, so 0.3 and duration = (3/16)^2
+    // (lower shapes give jumps in the phase anyway)
+    // at 48k, 13 seems to little, 14 works
+    //
+    // test with shape -0.4, and duration = (10/16)^2
+    // at 48k, 14 seems to little, 15 works
+    //
+    // test with shape 3.2, and duration = (1/16)^2
+    // at 48k, 16 seems to little, 24 works
+    //
+    // 15 takes about as much CPU as 16, so better be safe than sorry for now
+    //
+    // at 406.5 ms, we get a too slow ramp with 18 compares
+    // 20 is ok, 22 is closer, 21 is "good enough"TM and cheaper
+    //
+    // with the above settings, too low nr of compares gives a stuck or too slow ramp
+  };
+
+
+
+  OLD_compare(start,end,compSlope) =
     (
       select2(bigger , start , middle)
     , select2(bigger , middle , end)
@@ -248,11 +300,11 @@ with {
   // 20 is ok, 22 is closer, 21 is "good enough"TM and cheaper
   //
   // with the above settings, too low nr of compares gives a stuck or too slow ramp
-  ramp =
+  OLD_ramp =
     (start,end)
   , shapeDif(shapeSlider,prevRamp+rampStep,duration',ma.SR)
     * ((dif'/dif)/(1-warpedSine(shapeSlider',prevRamp)))
-    :seq(i, 18, compare)
+    :seq(i, 18, OLD_compare)
     : ((+:_*.5),!) // average start and end, throw away the rest
       // :max(start):min(end)
   with {
@@ -260,6 +312,7 @@ with {
     start = 0;
     end = 1;
   };
+
   // ******************************************** the curves: ******************************
   kneeCurve(shape,knee,x) =
     select3( (x>shape-(knee*.5)) + (x>shape+(knee*.5))
