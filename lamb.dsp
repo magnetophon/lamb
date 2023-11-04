@@ -32,9 +32,9 @@ declare license "AGPLv3";
 //     - one for (each?) shape (updated controll rate?)
 //     - one for (prevSpeed, totalGR and shape) -> phase
 
-// import("/home/bart/source/lamb/stdfaust.lib");
+import("/home/bart/source/lamb/stdfaust.lib");
 // import("/home/bart/source/faustlibraries/stdfaust.lib");
-import("/nix/store/mljn5almsabrsw6mjb70g61688kc0rqj-faust-2.68.1/share/faust/stdfaust.lib");
+// import("/nix/store/mljn5almsabrsw6mjb70g61688kc0rqj-faust-2.68.1/share/faust/stdfaust.lib");
 // import("stdfaust.lib");
 
 sinfun(x) = sin(pow(4*x/16,2));
@@ -154,8 +154,8 @@ with {
     fullDif =
       dif/(1-warpedSine(shapeSlider,ramp));
   };
-  shapeDifFormula(shapeSlider,phase,len) =
-    warpedSineFormula(shapeSlider,phase+len)
+  shapeDifFormula(shapeSlider,phase,duration,sr) =
+    warpedSineFormula(shapeSlider,phase+(1 / sr / duration))
     - warpedSineFormula(shapeSlider,phase);
 
   shapeDif(shape,phase,duration,sr) =
@@ -163,15 +163,17 @@ with {
     // ba.tabulateNd(0,shapeDifFormula,(nrShapes,1<<17,1<<7,0,0,1/maxSampleRate/1,nrShapes,1,1/24000/(1/maxSampleRate),shapeSlider,phase,(1 / ma.SR / duration))).lin;
     // ba.tabulateNd(0,shapeDifFormula,(nrShapes,1<<17,1<<7,0,0,1/maxSampleRate/1,nrShapes,1,1/24000/(1/maxSampleRate),shapeSlider,phase,(1 / ma.SR / duration))).lin;
     // ba.tabulateNd(1,shapeDifFormula,(3,1<<16,1<<6,0,0,1/48000/1,nrShapes,1,1/24000/(1/48000),shapeSlider,phase,(1 / ma.SR / duration))).lin;
-    warpedSine(shapeSlider,phase+(1 / sr / duration))
-    - warpedSine(shapeSlider,phase);
-  // warpedSineFormula(shapeSlider,phase+(1 / sr / duration))
-  // - warpedSineFormula(shapeSlider,phase);
+
+    // warpedSine(shapeSlider,phase+(1 / sr / duration))
+    // - warpedSine(shapeSlider,phase);
+    warpedSine(shape,phase+(1 / sr / duration))
+    - warpedSine(shape,phase);
+
 
 
   hold =
-    // attHold
-    fancyHold
+    attHold
+    // fancyHold
   ;
   longHold =
     ba.slidingMin(holdSamples,maxSampleRate,x
@@ -225,14 +227,46 @@ with {
      * ((dif'/dif)/(1-warpedSine(shapeSlider',prevRamp)))
     )
    ,shapeSlider,duration
-                : compareArray
+                // : compareArray
+                : compareArrayRaw
                   // :max(start):min(end)
   with {
     rampStep = 1 / ma.SR / duration;
   };
 
   compareArray(compSlope,shapeSlider,duration) =
-    (start,end,compSlope)
+    compareArrayRaw(compSlope,shapeSlider,duration)
+
+    // ba.tabulateNd(
+    // 1, compareArrayRaw,
+    // ( sizeCompSlope,nrShapes,sizeDuration
+    // , slopeStart,0,0
+    // , slopeEnd, nrShapes, durationMax
+    // , compSlope,shapeSlider,duration) ).lin
+
+    // ba.tabulateNd(1, function,
+    // ( sizeCompSlope,sizeDuration
+    // , slopeStart, 0
+    // , slopeEnd, durationMax
+    // , (compSlope:max(slopeStart):min(slopeEnd)),(duration:max(0):min(durationMax))) ).lin
+
+
+    // powSinTable(x,y) = ba.tabulateNd(1, powSin, (sizeX,sizeY, rx0,ry0, rx1,ry1, x,y) ).lin;
+  with {
+    function(compSlope,duration) =
+      compareArrayRaw(compSlope,half,0.5);
+    sizeCompSlope = 1<<16;
+    sizeDuration  = 1<<10;
+    // sizeCompSlope = 4;
+    // sizeDuration  = 4;
+    slopeStart = -0.001;
+    slopeEnd = 0.001;
+    durationMax = 1;
+  };
+
+
+  compareArrayRaw(compSlope,shapeSlider,duration) =
+    (start,end,(compSlope:hbargraph("compSlope", 0, 0.01)))
     : seq(i, 18, compare)
     : ((+:_*.5),!) // average start and end, throw away the rest
   with {
@@ -248,7 +282,10 @@ with {
       bigger = compSlope>slope(middle);
       slope(x) =
         shapeDif(shapeSlider,x,duration,ma.SR)
-        *(1/(1-warpedSine(shapeSlider,x)));
+        * (1/(1-warpedSine(shapeSlider,x)))
+        // shapeDifFormula(shapeSlider,x,duration,ma.SR)
+        // * (1/(1-warpedSineFormula(shapeSlider,x)))
+      ;
       middle = (start+end)*.5;
     };
     // test with shape minimal, so 0.3 and duration = (3/16)^2
