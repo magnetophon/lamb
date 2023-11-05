@@ -32,10 +32,13 @@ declare license "AGPLv3";
 //     - one for (each?) shape (updated controll rate?)
 //     - one for (prevSpeed, totalGR and shape) -> phase
 
-import("/home/bart/source/lamb/stdfaust.lib");
+// import("/home/bart/source/lamb/stdfaust.lib");
 // import("/home/bart/source/faustlibraries/stdfaust.lib");
 // import("/nix/store/mljn5almsabrsw6mjb70g61688kc0rqj-faust-2.68.1/share/faust/stdfaust.lib");
-// import("stdfaust.lib");
+import("stdfaust.lib");
+
+attackSamples = ba.sec2samp(attack);
+releaseSamples = ba.sec2samp(release);
 
 sinfun(x) = sin(pow(4*x/16,2));
 sfx = hslider("sfx", 0, 0, 16, 1);
@@ -52,16 +55,16 @@ process =
   // ;
   // n = hslider("n", 0, 0, 8, 1);
   // sin(2*ma.PI*os.lf_saw(0.7));
-  AR_tester;
-// ba.tabulate(0, sinfun, 16, 0,16, sfx).lin;
-// ,sinfun(sfx)
-// ;
-// co.FFcompressor_N_chan(strength,thresh,attack,release,knee,prePost,link,meter,2);
-// co.RMS_FBFFcompressor_N_chan(strength,thresh,att,rel,RMStime,knee,prePost,link,FBFF,meter,2);
-// co.RMS_FBcompressor_peak_limiter_N_chan(strength,thresh,threshLim,att,rel,RMStime,knee,link,meter,meterLim,2);
+  // AR_tester;
+  // ba.tabulate(0, sinfun, 16, 0,16, sfx).lin;
+  // ,sinfun(sfx)
+  // ;
+  // co.FFcompressor_N_chan(strength,thresh,attack,release,knee,prePost,link,meter,2);
+  // co.RMS_FBFFcompressor_N_chan(strength,thresh,att,rel,RMStime,knee,prePost,link,FBFF,meter,2);
+  // co.RMS_FBcompressor_peak_limiter_N_chan(strength,thresh,threshLim,att,rel,RMStime,knee,link,meter,meterLim,2);
 
-// par(i, 2, _*ba.db2linear(hslider("input gain", 0, -24, 24, 1):si.smoo)):
-// lookahead_compressor_N_chan(strength,thresh,attack,release,knee,link,meter,2) ;
+  par(i, 2, _*ba.db2linear(hslider("input gain", 0, -24, 24, 1):si.smoo)):
+  lookahead_compressor_N_chan(strength,thresh,attack,release,knee,link,meter,2) ;
 
 AR_tester =
   hgroup("",
@@ -89,8 +92,12 @@ maxSampleRate = 192000;
 AR(attack,release) =
   // (negative_ramp~_),
 
-  loop~(_,_,_,_,_)
-       :(_,_,_,!,!)
+  loop~(_,_,_)
+       :(_,_,!)
+        // loop~(_,_,_,_,_)
+        // :(_,_,_,!,!)
+        //
+        //
         // :(_,_@releaseSamples,_)
         // : (
         // par(i, 2, _@(maxSampleRate-attackSamples))
@@ -98,16 +105,20 @@ AR(attack,release) =
         // : par(i, 3, _@(maxSampleRate-attackSamples))
 with {
   loop(prevRamp,prevGain
-       , prevHold
-       ,prevAttacking,prevReleasing
+                // , prevHold
+                // ,prevAttacking
+       ,prevReleasing
        ,x) =
     ramp
     // OLD_ramp
   , gain
     // , attHold
+    // , derivative
+    // , shapeDif
+    // , secondDerivative
     // , hold
-  , dontLimitMe
-  , attacking
+    // , dontLimitMe
+    // , attacking
   , releasing
     // , negRamp
     // , warpNegRamp
@@ -116,16 +127,20 @@ with {
     // , (x==gain)
   with {
 
-  attackHold = attack:ba.sAndH(1-prevAttacking);
-  releaseHold = release:ba.sAndH(1-prevReleasing);
+  attackHold = attack
+               // :ba.sAndH(prevReleasing)
+  ;
+  releaseHold = release
+                // :ba.sAndH(1-prevReleasing)
+  ;
   holdHold = holdTime:ba.sAndH(1-prevReleasing);
   // attackHold =
   // attack:ba.sAndH(prevGain==(x@(maxSampleRate))) ;
   // releaseHold =
   // release:ba.sAndH(prevGain==(x@(maxSampleRate))) ;
   // attackSamples = (ba.sec2samp(attackHold)@_:ba.sAndH(1-prevAttacking))~(max(0,maxSampleRate-_):min(maxSampleRate));
-  attackSamples = ba.sec2samp(attackHold);
-  releaseSamples = ba.sec2samp(releaseHold);
+  // attackSamples = ba.sec2samp(attackHold);
+  // releaseSamples = ba.sec2samp(releaseHold);
   holdSamples =
     (attackSamples*checkbox("longHold plus att")) +
     releaseSamples;
@@ -134,6 +149,7 @@ with {
   // holdSamples = ba.sec2samp(holdHold);
   duration =
     // select3(attacking+releasing*2,1,attackHold,releaseHold);
+    // ((attackHold*attacking)+(releaseHold*releasing))
     ((attackHold*attacking)+(releaseHold*releasing))
     // :max(ma.EPSILON)
   ;
@@ -169,7 +185,8 @@ with {
     warpedSine(shape,phase+(1 / sr / duration))
     - warpedSine(shape,phase);
 
-
+  derivative = (dif-dif')*duration;
+  secondDerivative = derivative-derivative';
 
   hold =
     attHold
@@ -211,8 +228,8 @@ with {
   // predictedGain= prevGain+((prevGain'')-(prevGain'));
 
   attHold = x
-            @max(0,(maxSampleRate-attackSamples)):
-            // @max(0,(maxSampleRate-holdSamples)):
+            @max(0,(maxSampleRate-attackSamples))
+            :
             ba.slidingMin(attackSamples+1,maxSampleRate);
 
   // dif = attHold-prevGain;
@@ -220,7 +237,8 @@ with {
   releasing =
     dif>0;
   attacking =
-    dif<0;
+    1-releasing;
+  // dif<0;
 
   ramp =
     (shapeDif(shapeSlider,prevRamp+rampStep,duration',ma.SR)
@@ -266,8 +284,12 @@ with {
 
 
   compareArrayRaw(compSlope,shapeSlider,duration) =
-    (start,end,(compSlope:hbargraph("compSlope", 0, 0.01)))
-    : seq(i, 18, compare)
+    (start,end,(compSlope
+                // :hbargraph("compSlope", 0, 0.01)
+               ))
+    // : seq(i, 16, compare)
+    // : seq(i, 18, compare)
+    : seq(i, 22, compare)
     : ((+:_*.5),!) // average start and end, throw away the rest
   with {
     start = 0;
