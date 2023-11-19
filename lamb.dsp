@@ -55,16 +55,16 @@ process =
   // ;
   // n = hslider("n", 0, 0, 8, 1);
   // sin(2*ma.PI*os.lf_saw(0.7));
-  // AR_tester;
-  // ba.tabulate(0, sinfun, 16, 0,16, sfx).lin;
-  // ,sinfun(sfx)
-  // ;
-  // co.FFcompressor_N_chan(strength,thresh,attack,release,knee,prePost,link,meter,2);
-  // co.RMS_FBFFcompressor_N_chan(strength,thresh,att,rel,RMStime,knee,prePost,link,FBFF,meter,2);
-  // co.RMS_FBcompressor_peak_limiter_N_chan(strength,thresh,threshLim,att,rel,RMStime,knee,link,meter,meterLim,2);
+  AR_tester;
+// ba.tabulate(0, sinfun, 16, 0,16, sfx).lin;
+// ,sinfun(sfx)
+// ;
+// co.FFcompressor_N_chan(strength,thresh,attack,release,knee,prePost,link,meter,2);
+// co.RMS_FBFFcompressor_N_chan(strength,thresh,att,rel,RMStime,knee,prePost,link,FBFF,meter,2);
+// co.RMS_FBcompressor_peak_limiter_N_chan(strength,thresh,threshLim,att,rel,RMStime,knee,link,meter,meterLim,2);
 
-  par(i, 2, _*ba.db2linear(hslider("input gain", 0, -24, 24, 1):si.smoo)):
-  lookahead_compressor_N_chan(strength,thresh,attack,release,knee,link,meter,2) ;
+// par(i, 2, _*ba.db2linear(hslider("input gain", 0, -24, 24, 1):si.smoo)):
+// lookahead_compressor_N_chan(strength,thresh,attack,release,knee,link,meter,2) ;
 
 AR_tester =
   hgroup("",
@@ -245,8 +245,8 @@ with {
      * ((dif'/dif)/(1-warpedSine(shapeSlider',prevRamp)))
     )
    ,shapeSlider,duration
-                // : compareArray
-                : compareArrayRaw
+                : compareArray
+                  // : compareArrayRaw
                   // :max(start):min(end)
   with {
     rampStep = 1 / ma.SR / duration;
@@ -254,7 +254,12 @@ with {
 
   compareArray(compSlope,shapeSlider,duration) =
     compareArrayRaw(compSlope,shapeSlider,duration)
+    // function(compSlope
+    // ,duration)
 
+    // simpleFunction(compSlope)
+    // ba.tabulate(1, simpleFunction, 1<<27, slopeStart,slopeEnd,compSlope).val
+    //
     // ba.tabulateNd(
     // 1, compareArrayRaw,
     // ( sizeCompSlope,nrShapes,sizeDuration
@@ -264,32 +269,42 @@ with {
 
     // ba.tabulateNd(1, function,
     // ( sizeCompSlope,sizeDuration
-    // , slopeStart, 0
+    // , slopeStart, durationMin
     // , slopeEnd, durationMax
-    // , (compSlope:max(slopeStart):min(slopeEnd)),(duration:max(0):min(durationMax))) ).lin
+    // , (compSlope:max(slopeStart):min(slopeEnd)),(duration:max(0):min(durationMax))) ).cub
+    // , compSlope,duration) ).val
 
 
     // powSinTable(x,y) = ba.tabulateNd(1, powSin, (sizeX,sizeY, rx0,ry0, rx1,ry1, x,y) ).lin;
   with {
+    simpleFunction(compSlope) =
+      compareArrayRaw(compSlope
+                      :max(slopeStart)
+                      :min(slopeEnd)
+                     ,half,1);
     function(compSlope,duration) =
-      compareArrayRaw(compSlope,half,0.5);
-    sizeCompSlope = 1<<16;
-    sizeDuration  = 1<<10;
+      compareArrayRaw(compSlope
+                      :max(slopeStart)
+                      :min(slopeEnd)
+                     ,half,duration);
+    sizeCompSlope = 1<<15;
+    sizeDuration  = 1<<12;
     // sizeCompSlope = 4;
     // sizeDuration  = 4;
-    slopeStart = -0.001;
-    slopeEnd = 0.001;
+    slopeStart = 0;
+    slopeEnd = 0.02;
+    // slopeEnd = hslider("slopeEnd", 0.2, 0, 0.2, 0.001);
+    durationMin = 0.001;
     durationMax = 1;
   };
-
 
   compareArrayRaw(compSlope,shapeSlider,duration) =
     (start,end,(compSlope
                 // :hbargraph("compSlope", 0, 0.01)
                ))
-    // : seq(i, 16, compare)
-    // : seq(i, 18, compare)
-    : seq(i, 22, compare)
+    : seq(i, 16, compare)
+      // : seq(i, 18, compare)
+      // : seq(i, 22, compare)
     : ((+:_*.5),!) // average start and end, throw away the rest
   with {
     start = 0;
@@ -394,7 +409,9 @@ with {
     // the tables do much better
     // Size can be 1<<3;
     // ba.tabulateNd(1, warpedSineFormula,(nrShapes, 1<<3,0, 0,nrShapes, 1, shapeSlider,x)).cub
+
     ba.tabulateNd(0, warpedSineFormula,(nrShapes, SIZE,0, 0,nrShapes, 1, shapeSlider,x)).lin
+    //
     // par(i, nrShapes+1, table(i) * xfadeSelector(shapeSlider,i)):>_
     // this one is only slightly cheaper, but less user freindly
     // par(i, nrShapes+1, table(i) * ((shapeSlider)==i)):>_
@@ -425,7 +442,8 @@ with {
 
   warpedSineFormula(shapeSlider,x) =
     // sineShaper(warp(shape,knee,x)):pow(power)
-    sineShaper(warp(shape,knee,x:max(-1):min(1))):pow(power)
+    sineShaper(warp(shape
+                   ,knee,x:max(-1):min(1))):pow(power)
   with {
     power = (4*shape/3)+(1/3);
     knee = min(2*shape,2-(2*shape));
@@ -451,9 +469,6 @@ with {
     // shapeSliderVal(shapeSlider) = hslider("shape", 0.5, 0.30, 0.70, 0.01);
     start = 0.3;
   };
-
-  ishape =
-    shapeSliderVal(shapeSlider);
 };
 };
 
@@ -536,6 +551,7 @@ attackOP = AB(attackOpP);
 attackOpP = hslider("[13]attack OP",6,0,1000,1)*0.001;
 releaseOP = AB(releaseOpP);
 releaseOpP = hslider("[14]release OP",80,0,1000,1)*0.001;
+
 nrShapes = 9;
 half = (nrShapes-1)*.5;
 
