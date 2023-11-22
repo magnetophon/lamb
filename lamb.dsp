@@ -40,8 +40,6 @@ import("stdfaust.lib");
 attackSamples = ba.sec2samp(attack);
 releaseSamples = ba.sec2samp(release);
 
-sinfun(x) = sin(pow(4*x/16,2));
-sfx = hslider("sfx", 0, 0, 16, 1);
 process =
   // ba.slidingMin(0,2)
   // , ba.slidingMin(1,2)
@@ -56,8 +54,6 @@ process =
   // n = hslider("n", 0, 0, 8, 1);
   // sin(2*ma.PI*os.lf_saw(0.7));
   AR_tester;
-// ba.tabulate(0, sinfun, 16, 0,16, sfx).lin;
-// ,sinfun(sfx)
 // ;
 // co.FFcompressor_N_chan(strength,thresh,attack,release,knee,prePost,link,meter,2);
 // co.RMS_FBFFcompressor_N_chan(strength,thresh,att,rel,RMStime,knee,prePost,link,FBFF,meter,2);
@@ -92,8 +88,8 @@ maxSampleRate = 192000;
 AR(attack,release) =
   // (negative_ramp~_),
 
-  loop~(_,_,_)
-       :(_,_,!)
+  loop~(_,_,_,!)
+       :(_,_,!,_)
         // loop~(_,_,_,_,_)
         // :(_,_,_,!,!)
         //
@@ -120,13 +116,19 @@ with {
     // , dontLimitMe
     // , attacking
   , releasing
+    // , arrived
+  , fancyHold
+    // , arrivedToo
     // , negRamp
     // , warpNegRamp
     // , x
     // , (x:seq(i, 3, si.onePoleSwitching(releaseOP,attackOP)))
     // , (x==gain)
   with {
-
+  arrived = (prevRamp>hslider("lim", 0.99, 0.9, 1, 0.001))
+            * (1-prevReleasing);
+  arrivedToo = (attHold == x@maxSampleRate): ba.impulsify
+                                             * (1-prevReleasing);
   attackHold = attack
                // :ba.sAndH(prevReleasing)
   ;
@@ -142,8 +144,9 @@ with {
   // attackSamples = ba.sec2samp(attackHold);
   // releaseSamples = ba.sec2samp(releaseHold);
   holdSamples =
-    (attackSamples*checkbox("longHold plus att")) +
-    releaseSamples;
+    ba.sec2samp(hslider("hold", 250, 0, 1000, 1)*0.001);
+  // (attackSamples*checkbox("longHold plus att")) +
+  // releaseSamples;
   // attackSamples +
   // releaseSamples;
   // holdSamples = ba.sec2samp(holdHold);
@@ -189,8 +192,8 @@ with {
   secondDerivative = derivative-derivative';
 
   hold =
-    attHold
-    // fancyHold
+    // attHold
+    fancyHold
   ;
   longHold =
     ba.slidingMin(holdSamples,maxSampleRate,x
@@ -217,7 +220,12 @@ with {
   ;
   relStep = 1 / ma.SR / releaseHold;
 
+  // TODO: array of holds, length from 2*att till 1*att, offset from 0.1 to 0
   fancyHold =
+    max(longHold,prevGain+hslider("offset", 0, 0, 0.1, 0.001))
+    :min(attHold)
+  ;
+  OLDfancyHold =
     longHold
     // <:select2(dontLimitMe,_,max(prevGain))
     <:select2(dontLimitMe,max(prevGain),_)
