@@ -237,7 +237,7 @@ with {
     N = 8;
     holds = shapedArray(attackSamples,holdSamples,holdShape,N);
     offsets = shapedArray(0,maxOffset,offsetShape,N);
-    maxOffset = hslider("offset", 0.1, 0, 0.5, 0.001);
+    maxOffset = hslider("offset", 0.08, 0, 0.5, 0.001);
     offsetShape = hslider("offsetShape", 0.97, 0, 1, 0.001);
     holdShape = hslider("holdShape", 0.9, 0, 1, 0.001);
   };
