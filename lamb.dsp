@@ -222,9 +222,49 @@ with {
 
   // TODO: array of holds, length from 2*att till 1*att, offset from 0.1 to 0
   fancyHold =
-    max(longHold,prevGain+hslider("offset", 0, 0, 0.1, 0.001))
+    // max(longHold,prevGain+hslider("offset", 0, 0, 0.1, 0.001))
+    holdArray
     :min(attHold)
   ;
+  holdArray =
+    (
+      holds, offsets
+    )
+    : ro.interleave(N,2)
+    : par(i, N, max(varHold,prevGain+_))
+    : ba.parallelMin(N)
+  with {
+    N = 16;
+    holds = shapedArray(attackSamples,holdSamples,holdShape,N);
+    offsets = shapedArray(0,maxOffset,offsetShape,N);
+    maxOffset = hslider("offset", 0.1, 0, 0.5, 0.001);
+    offsetShape = hslider("offsetShape", 0, -1, 1, 0.001);
+    holdShape = hslider("holdShape", 0, -1, 1, 0.001);
+  };
+
+  LinArray(bottom,top,0) =   0:! ;
+  LinArray(bottom,top,nrElements) =     par(i,nrElements,   ((top-bottom)*(i/(nrElements-1)))+bottom);
+
+  shapedArray(bottom,top,shape,0) =   0:! ;
+  shapedArray(bottom,top, shape ,nrElements) =
+    par(i,nrElements,
+        (i/(nrElements-1))
+        :shaper(shape)
+         *(top-bottom)
+         +bottom
+       )
+  with {
+    // https://www.desmos.com/calculator/pn4myus6x4
+    shaper(s,x) = (x-x*s)/(s-x*2*s+1);
+  };
+
+
+
+  varHold(samples) =
+    ba.slidingMin(max(0,samples),maxSampleRate,x
+                                               @max(0,(maxSampleRate-samples))
+                 ) ;
+
   OLDfancyHold =
     longHold
     // <:select2(dontLimitMe,_,max(prevGain))
