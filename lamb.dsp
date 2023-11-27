@@ -5,6 +5,12 @@ declare license "AGPLv3";
 
 // TODO:
 //
+//
+//  - tabula reverse lookup
+//  - two latency points: one for regular functioning and one for turnaround
+// - seq array of slowdowns, length from holdSamples to attackSamples , shaped strong curve up for the big ones to lin for the last one
+//  - use the sine table for turnaround
+//
 //  when calculating which part of the fullDif we already did, take into account the prev fullDiff and prevRamp
 //
 //  optimise: make attack and release mult factors, to be applied after the tables, and in reverse to the index of the tables
@@ -117,7 +123,11 @@ with {
     // , attacking
   , releasing
     // , arrived
-  , fancyHold
+  , turnAround
+    // , (slowdownArray(10/ma.SR))
+    // , slowDownRamp
+    // , startTurn
+    // , fancyHold
     // , arrivedToo
     // , negRamp
     // , warpNegRamp
@@ -143,8 +153,11 @@ with {
   // attackSamples = (ba.sec2samp(attackHold)@_:ba.sAndH(1-prevAttacking))~(max(0,maxSampleRate-_):min(maxSampleRate));
   // attackSamples = ba.sec2samp(attackHold);
   // releaseSamples = ba.sec2samp(releaseHold);
-  holdSamples =
-    ba.sec2samp(hslider("hold", 250, 0, 1000, 1)*0.001);
+
+  // holdSamples =
+  // ba.sec2samp(hslider("hold", 250, 0, 1000, 1)*0.001);
+  holdSamples = attackSamples * 2;
+
   // (attackSamples*checkbox("longHold plus att")) +
   // releaseSamples;
   // attackSamples +
@@ -160,19 +173,32 @@ with {
          // :min(x@maxSampleRate)
   ;
   gainStep =
-    select2(releasing
-           , rawGainStep :max(dif)
-           , rawGainStep :min(dif)
-           ) with {
-    rawGainStep =
-      // select2(duration==0
-      // ,
-      shapeDif(shapeSlider,ramp,duration,ma.SR)*fullDif
-      // , dif)
-    ;
-    fullDif =
-      dif/(1-warpedSine(shapeSlider,ramp));
-  };
+    select2(
+      // turnAround *
+      checkbox("slowDown")
+    , rawGainStep ,
+    slowdownArray(rawGainStep)
+    )
+  ;
+  // with {
+  rawGainStep =
+    // select2(duration==0
+    // ,
+    shapeDif(shapeSlider,ramp,duration,ma.SR)*fullDif
+    // , dif)
+  ;
+  fullDif =
+    dif/(1-warpedSine(shapeSlider,ramp));
+  OLDslowDown = rawGainStep
+                <:select2(checkbox("sample")
+                         ,_
+                         ,ba.sAndH(startTurn))
+                  * (1-slowDownRamp)
+                : min(rawGainStep);
+  slowDownRamp = ba.countup(turnSamples,startTurn)/turnSamples;
+  startTurn = turnAround:ba.impulsify;
+  turnSamples = holdSamples-attackSamples;
+  // };
   shapeDifFormula(shapeSlider,phase,duration,sr) =
     warpedSineFormula(shapeSlider,phase+(1 / sr / duration))
     - warpedSineFormula(shapeSlider,phase);
@@ -192,9 +218,13 @@ with {
   secondDerivative = derivative-derivative';
 
   hold =
-    // attHold
-    fancyHold
+    // select2(checkbox("fancyHold"),
+    attHold
+    // ,
+    // fancyHold
+    // )
   ;
+  turnAround = (prevGain>longHold) & releasing;
   longHold =
     ba.slidingMin(holdSamples,maxSampleRate,x
                                             @max(0,(maxSampleRate-holdSamples)));
@@ -221,11 +251,44 @@ with {
   relStep = 1 / ma.SR / releaseHold;
 
   // TODO: array of holds, length from 2*att till 1*att, offset from 0.1 to 0
+
   fancyHold =
     // max(longHold,prevGain+hslider("offset", 0, 0, 0.1, 0.001))
     holdArray
-    :min(attHold)
-  ;
+    :min(attHold) ;
+
+  slowdownArray(gainStep) =
+    // (holds, shapes)
+    // : ro.interleave(N,2)
+    // : par(i, N, max(varHold,prevGain+_))
+    // : ba.parallelMin(N)
+    gainStep,holds
+             :seq(i, N, slowdownElement,si.bus(N-i-1))
+  with {
+    N = 8;
+    holds = shapedArray(attackSamples,holdSamples,holdShape,N+1)
+            :(!,ro.cross(N));
+    holdShape = hslider("holdShape", 0.6, -1, 1, 0.001);
+    slowdownElement(step,samples) =
+      ba.slidingMin(max(0,samples),maxSampleRate
+                    ,x@max(0,(maxSampleRate-samples)))
+      : slowDown(samples,step)
+    ;
+
+    slowDown(samples,thisStep,thisHold) =
+      select2(turnAround(thisHold)
+             , thisStep
+             , thisStep:ba.sAndH(startTurn(thisHold))
+                        * (1-slowDownRamp(samples,thisHold))
+             )
+      : min(gainStep)
+    ;
+    slowDownRamp(samples,thisHold) = ba.countup(turnSamples(samples),startTurn(thisHold))/turnSamples(samples);
+    turnAround(thisHold) = (prevGain>thisHold) & releasing;
+    startTurn(thisHold) = turnAround(thisHold):ba.impulsify;
+    turnSamples(samples) = samples-attackSamples;
+  };
+
   holdArray =
     (
       holds, offsets
@@ -234,12 +297,12 @@ with {
     : par(i, N, max(varHold,prevGain+_))
     : ba.parallelMin(N)
   with {
-    N = 8;
-    holds = shapedArray(attackSamples,holdSamples,holdShape,N);
-    offsets = shapedArray(0,maxOffset,offsetShape,N);
-    maxOffset = hslider("offset", 0.08, 0, 0.5, 0.001);
-    offsetShape = hslider("offsetShape", 0.97, 0, 1, 0.001);
-    holdShape = hslider("holdShape", 0.9, 0, 1, 0.001);
+    N = 4;
+    holds = shapedArray(attackSamples,holdSamples,holdShape,N+1):(!,si.bus(N));
+    offsets = shapedArray(0,maxOffset,offsetShape,N+1):(!,si.bus(N));
+    maxOffset = hslider("offset", 0.06, 0, 0.5, 0.001);
+    offsetShape = hslider("offsetShape", 0.76, 0, 1, 0.001);
+    holdShape = hslider("holdShape", 0.6, 0, 1, 0.001);
   };
 
   LinArray(bottom,top,0) =   0:! ;
