@@ -224,6 +224,7 @@ with {
     // fancyHold
     // )
   ;
+  // turnAround = ((prevGain+(holdSamples*rawGainStep))>longHold) & releasing;
   turnAround = (prevGain>longHold) & releasing;
   longHold =
     ba.slidingMin(holdSamples,maxSampleRate,x
@@ -262,28 +263,36 @@ with {
     // : ro.interleave(N,2)
     // : par(i, N, max(varHold,prevGain+_))
     // : ba.parallelMin(N)
-    gainStep,holds
-             :seq(i, N, slowdownElement,si.bus(N-i-1))
+    gainStep
+  , ((holds,shapes):ro.interleave(N,2))
+    :seq(i, N, slowdownElement,si.bus((2*N)-(2*i)-2))
   with {
     N = 8;
     holds = shapedArray(attackSamples,holdSamples,holdShape,N+1)
             :(!,ro.cross(N));
-    holdShape = hslider("holdShape", 0.6, -1, 1, 0.001);
-    slowdownElement(step,samples) =
+    shapes =
+      shapedArray(startShape,endShape,shapesShape,N);
+    // par(i, N, 0);
+    holdShape = 0;
+    startShape = hslider("startShape", 0.99, -1, 1, 0.01);
+    endShape = hslider("endShape", -0.3, -1, 1, 0.01);
+    shapesShape = 0;
+    // hslider("holdShape", 0.6, -1, 1, 0.001);
+    slowdownElement(step,samples,shape) =
       ba.slidingMin(max(0,samples),maxSampleRate
                     ,x@max(0,(maxSampleRate-samples)))
-      : slowDown(samples,step)
+      : slowDown(samples,shape,step)
     ;
 
-    slowDown(samples,thisStep,thisHold) =
+    slowDown(samples,shape,thisStep,thisHold) =
       select2(turnAround(thisHold)
              , thisStep
              , thisStep:ba.sAndH(startTurn(thisHold))
-                        * (1-slowDownRamp(samples,thisHold))
+                        * (1-slowDownRamp(samples,shape,thisHold))
              )
       : min(gainStep)
     ;
-    slowDownRamp(samples,thisHold) = ba.countup(turnSamples(samples),startTurn(thisHold))/turnSamples(samples);
+    slowDownRamp(samples,shape,thisHold) = ba.countup(turnSamples(samples),startTurn(thisHold))/turnSamples(samples):shaper(shape);
     turnAround(thisHold) = (prevGain>thisHold) & releasing;
     startTurn(thisHold) = turnAround(thisHold):ba.impulsify;
     turnSamples(samples) = samples-attackSamples;
@@ -312,14 +321,14 @@ with {
   shapedArray(bottom,top, shape ,nrElements) =
     par(i,nrElements,
         (i/(nrElements-1))
-        :shaper(shape)
-         *(top-bottom)
-         +bottom
-       )
-  with {
-    // https://www.desmos.com/calculator/pn4myus6x4
-    shaper(s,x) = (x-x*s)/(s-x*2*s+1);
-  };
+        // :shaper(shape)
+        *(top-bottom)
+        +bottom
+       );
+  // with {
+  // https://www.desmos.com/calculator/pn4myus6x4
+  shaper(s,x) = (x-x*s)/(s-x*2*s+1);
+  // };
 
 
 
