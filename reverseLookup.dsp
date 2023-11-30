@@ -6,41 +6,52 @@ declare license "AGPLv3";
 import("stdfaust.lib");
 
 process =
-  // os.lf_sawpos(0.5)
-  lookupVal
-  : reverseLookup(start, end, nrCompares, lookupFunc)
+  reverseLookup(startFunInput, endFunInput, nrCompares, lookupFunc, lookupVal)
+  : (_:hbargraph("pre-func", startFunInput, endFunInput))
   : lookupFunc
     <:(
-    ((abs(_-lookupVal)<(hslider("mult", 1, 1, 100, 1)*ma.EPSILON)):hbargraph("check", 0, 1))
-  , hbargraph("val", start, end)
-  , (lookupFunc(lookupVal):hbargraph("wrong", 0, 1))
-  );
+    (
+      (abs(_-lookupVal)
+       < (precision *ma.EPSILON)
+      ):hbargraph("post = lookupFunc(pre)", 0, 1))
+  , (_:hbargraph("post-func", startFunOutput, endFunOutput))
+  )
+;
+precision =
+  // 100;
+  hslider("precision", 4, 1, 100, 1);
 
 // which x should I give to
 // lookupFunc(x)
 // so that the output is lookupVal
 //
 // lookupFunc should be rising only
-reverseLookup(start, end, nrCompares, lookupFunc, lookupVal) =
-  (start,end,lookupVal)
+reverseLookup(startFunInput, endFunInput, nrCompares, lookupFunc, lookupVal) =
+  (startFunInput,endFunInput)
   : seq(i, nrCompares, compare)
-  : ((+:_*.5),!) // average start and end, throw away the rest
+  : +:_*.5 // average start and end
 with {
-  compare(start,end,lookupVal) =
-    (
-      select2(bigger , start , middle)
-    , select2(bigger , middle , end)
-    , lookupVal
-    )
+  compare(start,end) =
+    select2(bigger , start , middle)
+  , select2(bigger , middle , end)
   with {
   bigger = lookupVal>lookupFunc(middle);
   middle = (start+end)*.5;
 };
 };
 
-lookupVal = hslider("lookupVal", start, start, end, 0.01);
-start = 0;
-end = 1;
-nrCompares = 32;
-lookupFunc = sineShaper;
+// endFunInput = 1;
+// lookupFunc(x) = sineShaper(x^(1/div))^div;
+endFunInput = div;
+lookupFunc(x) = sineShaper(x/div);
+// lookupFunc = _/div;
+div =
+  maxDiv;
+// hslider("div", 1, 1, maxDiv, 1);
+maxDiv = 4;
+lookupVal = hslider("lookupVal", startFunOutput, startFunOutput, endFunOutput, 0.01);
 sineShaper(x) = (sin((x*0.5 + 0.75)*2*ma.PI)+1)*0.5;
+startFunInput = 0;
+startFunOutput = lookupFunc(startFunInput);
+endFunOutput = lookupFunc(endFunInput);
+nrCompares = 32;
