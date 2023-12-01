@@ -6,15 +6,17 @@ declare license "AGPLv3";
 import("stdfaust.lib");
 
 // TODO: make tester: go trough all the parameter combinations and for every combination, increase the precision untill it hits the bell
+// TODO: make 2 table.val for the sliders, and crosssfade them for the lookupVal, (or 4, for cub)
 //
+// process = endFunOutput;
 process =
   // reverseLookup(startFunInput, endFunInput, nrCompares, lookupFunc, lookupVal)
   // reverseLookupRaw(startFunInput, endFunInput, nrCompares, lookupFunc, lookupVal)
-  // reverseLookupNdRaw(startFunInput, endFunInput, nrCompares, lookupFuncNd, shapeSlider, lookupVal)
-  reverseLookupNd(startFunInput, endFunInput, nrCompares, lookupFuncNd, shapeSlider, lookupVal)
+  reverseLookupNdRaw(startFunInput, endFunInput, nrCompares, lookupFuncNd, shapeSlider, durationSlider, lookupVal)
+  // reverseLookupNd(startFunInput, endFunInput, nrCompares, lookupFuncNd, shapeSlider, durationSlider, lookupVal)
   : (_:hbargraph("pre-func", startFunInput, endFunInput))
     // : lookupFunc
-  : lookupFuncNd(shapeSlider)
+  : lookupFuncNd(shapeSlider,durationSlider)
     <:(
     (
       (abs(_-lookupVal)
@@ -57,21 +59,28 @@ with {
 
 
 
-reverseLookupNd(startFunInput, endFunInput, nrCompares, lookupFunc, shapeSlider, lookupVal) =
+reverseLookupNd(startFunInput, endFunInput, nrCompares, lookupFunc, shapeSlider, duration, lookupVal) =
   ba.tabulateNd(0,
                 reverseLookupNdRaw(startFunInput, endFunInput, nrCompares, lookupFuncNd )
-                , (Sy, Sx, ry0, startFunOutput, ry1, endFunOutput, shapeSlider, lookupVal)).lin
+                , (Sy, Sdur, Sx, ry0, rDur0, startFunOutput, ry1, rDur1, endFunOutput, shapeSlider, duration, lookupVal)).lin
 with {
   // Sx = 1<<8;
   Sx = 1<<12;
   // Sx = 1<<16;
   Sy = (nrShapes/shapeStep)+1;
+  Sdur = nrDurations;
   ry0 = 0;
+  rDur0 = 0;
   ry1 = nrShapes;
+  rDur1 = maxSeconds;
 };
 
+durationSlider = hslider("duration", 1, 0, nrDurations, 1);
+dur2sec(x) = x/nrDurations:pow(2)*maxSeconds;
+nrDurations = 32;
+maxSeconds = 1;
 
-reverseLookupNdRaw(startFunInput, endFunInput, nrCompares, lookupFuncNd, y, lookupVal) =
+reverseLookupNdRaw(startFunInput, endFunInput, nrCompares, lookupFuncNd, y, duration, lookupVal) =
   (startFunInput,endFunInput)
   : seq(i, nrCompares, compare)
   : +:_*.5 // average start and end
@@ -80,7 +89,7 @@ with {
     select2(bigger , start , middle)
   , select2(bigger , middle , end)
   with {
-  bigger = lookupVal>lookupFuncNd(y,middle);
+  bigger = lookupVal>lookupFuncNd(y,duration,middle);
   middle = (start+end)*.5;
 };
 };
@@ -93,8 +102,16 @@ lookupFunc(x) =
   (par(i, N,x/(i+1): warpedSineFormula(half)):>_/3)
 ;
 N = 300;
-lookupFuncNd(y,x) =
-  warpedSineFormula(y,x);
+lookupFuncNd(y,duration,x) =
+  // warpedSineFormula(y,x);
+  // shapeDifFormula(y,phase,duration,sr)
+  shapeDifFormula(y,x,duration:dur2sec,sr)
+with {
+  // phase = 0.5;
+  sr = 48000;
+  // sr = 1;
+};
+
 // endFunInput = div;
 // lookupFunc = _/div;
 div =
@@ -105,25 +122,32 @@ maxDiv = 4;
 // tabulated with S = 1<<8; lookupVal=0.01 precision=228      0.5% - 0.8% CPU 21MiB
 // tabulated with S = 1<<12; lookupVal=0.74 precision=145      0.7% - 0.8% CPU 1.7GB
 // raw: lookupVal=0.68 precision=147   3.5% - 4% CPU 22MiB
-lookupVal = hslider("lookupVal", startFunOutput, startFunOutput, endFunOutput, 0.01);
+// lookupVal = hslider("lookupVal", startFunOutput, startFunOutput, endFunOutput, 0.01):si.smoo;
+lookupVal = hslider("lookupVal", 0, 0, nrVals, 1)/nrVals*(endFunOutput-startFunOutput):_+startFunOutput;
+nrVals = 1000;
 precision =
   // 100;
   hslider("precision", 5, 1, 1000, 1);
 
 sineShaper(x) = (sin((x*0.5 + 0.75)*2*ma.PI)+1)*0.5;
 startFunInput = 0;
-startFunOutput = lookupFunc(startFunInput);
+startFunOutput = lookupFuncNd(0,nrDurations,startFunInput);
 endFunOutput =
-  // 1;
-  lookupFuncNd(0,endFunInput);
+  1;
+// faust2svg -double -sd reverseLookup.dsp && xdg-open reverseLookup-svg/process.svg
+// turns out it's 1!
+// par(i, nrShapes, par(j, nrDurations, par(k, nrPhases, lookupFuncNd(i,j:max(ma.EPSILON),k/nrPhases))))
+// :ba.parallelMax(nrShapes*nrDurations*nrPhases) ;
+// nrPhases = 48000*maxSeconds;
+nrPhases = 16;
 //lookupFunc(endFunInput);
 
-nrCompares = 24;
+// nrCompares = 22;
 // nrCompares = 24;
 // nrCompares = 32;
 // nrCompares = 64;
 // nrCompares = 128;
-// nrCompares = 256;
+nrCompares = 256;
 
 nrShapes = 8;
 half = nrShapes*.5;
@@ -167,3 +191,7 @@ warp(shape,knee,x) =
   factor = (1/shape-2)/(1/shape-1);
 };
 sineShaper(x) = (sin((x*0.5 + 0.75)*2*ma.PI)+1)*0.5;
+
+shapeDifFormula(shapeSlider,phase,duration,sr) =
+  warpedSineFormula(shapeSlider,phase+(1 / sr / duration))
+  - warpedSineFormula(shapeSlider,phase);
