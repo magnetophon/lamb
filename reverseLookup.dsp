@@ -5,11 +5,16 @@ declare license "AGPLv3";
 
 import("stdfaust.lib");
 
+// TODO: make tester: go trough all the parameter combinations and for every combination, increase the precision untill it hits the bell
+//
 process =
-  reverseLookup(startFunInput, endFunInput, nrCompares, lookupFunc, lookupVal)
+  // reverseLookup(startFunInput, endFunInput, nrCompares, lookupFunc, lookupVal)
   // reverseLookupRaw(startFunInput, endFunInput, nrCompares, lookupFunc, lookupVal)
+  // reverseLookupNdRaw(startFunInput, endFunInput, nrCompares, lookupFuncNd, shapeSlider, lookupVal)
+  reverseLookupNd(startFunInput, endFunInput, nrCompares, lookupFuncNd, shapeSlider, lookupVal)
   : (_:hbargraph("pre-func", startFunInput, endFunInput))
-  : lookupFunc
+    // : lookupFunc
+  : lookupFuncNd(shapeSlider)
     <:(
     (
       (abs(_-lookupVal)
@@ -49,16 +54,47 @@ with {
 };
 };
 
+
+
+
+reverseLookupNd(startFunInput, endFunInput, nrCompares, lookupFunc, shapeSlider, lookupVal) =
+  ba.tabulateNd(0,
+                reverseLookupNdRaw(startFunInput, endFunInput, nrCompares, lookupFuncNd )
+                , (Sy, Sx, ry0, startFunOutput, ry1, endFunOutput, shapeSlider, lookupVal)).lin
+with {
+  // Sx = 1<<8;
+  Sx = 1<<12;
+  // Sx = 1<<16;
+  Sy = (nrShapes/shapeStep)+1;
+  ry0 = 0;
+  ry1 = nrShapes;
+};
+
+
+reverseLookupNdRaw(startFunInput, endFunInput, nrCompares, lookupFuncNd, y, lookupVal) =
+  (startFunInput,endFunInput)
+  : seq(i, nrCompares, compare)
+  : +:_*.5 // average start and end
+with {
+  compare(start,end) =
+    select2(bigger , start , middle)
+  , select2(bigger , middle , end)
+  with {
+  bigger = lookupVal>lookupFuncNd(y,middle);
+  middle = (start+end)*.5;
+};
+};
+
+
+
 endFunInput = 1;
 // lookupFunc(x) = sineShaper(x^(1/div))^div;
 lookupFunc(x) =
-  // (0.5*warpedSineFormula(shapeSlider,x))
-  // +(0.5*
-  // (x:seq(i, 3, warpedSineFormula(shapeSlider)))
-  (par(i, N,x/(i+1): warpedSineFormula(shapeSlider)):>_/3)
-  // )
+  (par(i, N,x/(i+1): warpedSineFormula(half)):>_/3)
 ;
 N = 300;
+lookupFuncNd(y,x) =
+  warpedSineFormula(y,x);
 // endFunInput = div;
 // lookupFunc = _/div;
 div =
@@ -72,21 +108,27 @@ maxDiv = 4;
 lookupVal = hslider("lookupVal", startFunOutput, startFunOutput, endFunOutput, 0.01);
 precision =
   // 100;
-  hslider("precision", 8, 1, 1000, 1);
+  hslider("precision", 5, 1, 1000, 1);
 
 sineShaper(x) = (sin((x*0.5 + 0.75)*2*ma.PI)+1)*0.5;
 startFunInput = 0;
 startFunOutput = lookupFunc(startFunInput);
-endFunOutput = lookupFunc(endFunInput);
+endFunOutput =
+  // 1;
+  lookupFuncNd(0,endFunInput);
+//lookupFunc(endFunInput);
+
+nrCompares = 24;
 // nrCompares = 24;
 // nrCompares = 32;
-nrCompares = 64;
+// nrCompares = 64;
 // nrCompares = 128;
 // nrCompares = 256;
 
-nrShapes = 9;
-half = (nrShapes-1)*.5;
-shapeSlider = half;
+nrShapes = 8;
+half = nrShapes*.5;
+shapeStep = 0.1;
+shapeSlider = half+hslider("[2]release shape" , 0, 0-half, half, shapeStep);
 warpedSineFormula(shapeSlider,x) =
   // sineShaper(warp(shape,knee,x)):pow(power)
   sineShaper(warp(shape
@@ -104,15 +146,12 @@ with {
 
 shapeSliderVal(shapeSlider) =
   shapeSlider
-  / (nrShapes-1)
+  / nrShapes
   * range
   + start
   // : hbargraph("shapeBG", 0.3, 0.7)
 with {
   range = 2* (.5-start);
-  // lower shapes then 0.3 give jumps in the phase at low durations (d < (3/16:pow(2)))
-  // also they give stuck ramps at nr of compares < 14
-  // shapeSliderVal(shapeSlider) = hslider("shape", 0.5, 0.30, 0.70, 0.01);
   start = 0.3;
 };
 // };
