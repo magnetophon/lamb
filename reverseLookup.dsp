@@ -5,18 +5,26 @@ declare license "AGPLv3";
 
 import("stdfaust.lib");
 
+
+
+// TODO: special case duration = 0. run the algo from durationSlider=1 upwards;
+
+
 // TODO: make tester: go trough all the parameter combinations and for every combination, increase the precision untill it hits the bell
 // TODO: make 2 table.val for the sliders, and crosssfade them for the lookupVal, (or 4, for cub)
 //
 // process = endFunOutput;
-Iprocess =
-  lookupFuncNd(shapeSlider,durationSlider,hslider("phase", 0, 0, 1, 0.0001))
+iprocess =
+  lookupFuncNd(shapeSlider,durationSlider,hslider("phase", 0, 0, 1, 0.001))
   // :(max)~_
   <:
   (
-    hbargraph("0-0.05", 0, 0.05)
+    hbargraph("0-0.000005", 0, 0.000005)
+  , hbargraph("0-0.0005", 0, 0.0005)
+  , hbargraph("0-0.05", 0, 0.05)
   , hbargraph("0-0.5", 0, 0.5)
   , hbargraph("0-2", 0, 2)
+  , (pow(hslider("scal", 1, 0.001, 100, 0.01)):hbargraph("scaled", 0, 1))
   )
 ;
 // process = durationSlider:dur2sec:pow(0.5):hbargraph("durationM", 0, 1) ;
@@ -32,9 +40,9 @@ process =
     (
       (abs(_-lookupVal)
        // < (precision *ma.EPSILON)
-       < (hslider("precision", 0, 0, 1, 0.001)*0.001)
+       < (hslider("precision", 0, 0, 1, 0.001)*0.1)
       ):hbargraph("post = lookupFunc(pre)", 0, 1))
-  , (_:hbargraph("post-func", startFunOutput, endFunOutput))
+  , (_:pow(0.1):hbargraph("post-func", startFunOutput, endFunOutput))
   )
 ;
 // which x should I give to
@@ -108,8 +116,10 @@ with {
 
 
 
-endFunInput = 2;
-// lookupFunc(x) = sineShaper(x^(1/div))^div;
+endFunInput =
+  1;
+// 4096;
+// 2;
 lookupFunc(x) =
   (par(i, N,x/(i+1): warpedSineFormula(half)):>_/3)
 ;
@@ -117,7 +127,8 @@ N = 300;
 lookupFuncNd(y,duration,x) =
   // warpedSineFormula(y,x);
   // shapeDifFormula(y,phase,duration,sr)
-  shapeDifFormula(y,x,duration:dur2sec,sr)
+  // shapeDifFormula(y,x,duration:dur2sec,sr)
+  rampCompare(y,x,duration:dur2sec,sr)
 with {
   // phase = 0.5;
   sr = 48000;
@@ -135,7 +146,10 @@ maxDiv = 4;
 // tabulated with S = 1<<12; lookupVal=0.74 precision=145      0.7% - 0.8% CPU 1.7GB
 // raw: lookupVal=0.68 precision=147   3.5% - 4% CPU 22MiB
 // lookupVal = hslider("lookupVal", startFunOutput, startFunOutput, endFunOutput, 0.001);
-lookupVal = hslider("lookupVal", 0, 0, nrVals, 1)/nrVals*(endFunOutput-startFunOutput):_+startFunOutput;
+lookupVal = (hslider("lookupVal", 0, 0, nrVals, 1)/nrVals)
+            :pow(10)
+             *(endFunOutput-startFunOutput)
+             +startFunOutput;
 nrVals = 1000;
 precision =
   // 100;
@@ -160,12 +174,12 @@ nrPhases = 16;
 //lookupFunc(endFunInput);
 // nrCompares = 22;
 // nrCompares = 24;
-// nrCompares = 32;
+nrCompares = 32;
 // nrCompares = 64;
 // nrCompares = 128;
 // nrCompares = 256;
 // nrCompares = 512;
-nrCompares = 1024;
+// nrCompares = 1024;
 
 nrShapes = 8;
 half = nrShapes*.5;
@@ -210,9 +224,22 @@ warp(shape,knee,x) =
 };
 sineShaper(x) = (sin((x*0.5 + 0.75)*2*ma.PI)+1)*0.5;
 
-shapeDifFormula(shapeSlider,phase,0,sr) = 1;
+// shapeDifFormula(shapeSlider,phase,0,sr) = 1;
 
 shapeDifFormula(shapeSlider,phase,duration,sr) =
-  // warpedSineFormula(shapeSlider,phase+(1 / sr / duration))
-  // - warpedSineFormula(shapeSlider,phase);
-  warpedSineFormula(shapeSlider,phase)*(1+duration);
+  warpedSineFormula(shapeSlider,phase+(1 / sr
+                                       / duration
+                                      )
+                                :min(1)
+                   )
+  - warpedSineFormula(shapeSlider,phase)
+  :min(1)
+;
+
+// warpedSineFormula(shapeSlider,phase)*(1+duration);
+// warpedSineFormula(shapeSlider,phase)*(duration);
+// phase*duration;
+
+rampCompare(shapeSlider,phase,duration,sr) =
+  shapeDifFormula(shapeSlider,phase,duration,sr)
+  * (1/(1-warpedSineFormula(shapeSlider,phase)));
