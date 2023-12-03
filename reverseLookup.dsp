@@ -9,6 +9,17 @@ import("stdfaust.lib");
 // TODO: make 2 table.val for the sliders, and crosssfade them for the lookupVal, (or 4, for cub)
 //
 // process = endFunOutput;
+Iprocess =
+  lookupFuncNd(shapeSlider,durationSlider,hslider("phase", 0, 0, 1, 0.0001))
+  // :(max)~_
+  <:
+  (
+    hbargraph("0-0.05", 0, 0.05)
+  , hbargraph("0-0.5", 0, 0.5)
+  , hbargraph("0-2", 0, 2)
+  )
+;
+// process = durationSlider:dur2sec:pow(0.5):hbargraph("durationM", 0, 1) ;
 process =
   // reverseLookup(startFunInput, endFunInput, nrCompares, lookupFunc, lookupVal)
   // reverseLookupRaw(startFunInput, endFunInput, nrCompares, lookupFunc, lookupVal)
@@ -20,7 +31,8 @@ process =
     <:(
     (
       (abs(_-lookupVal)
-       < (precision *ma.EPSILON)
+       // < (precision *ma.EPSILON)
+       < (hslider("precision", 0, 0, 1, 0.001)*0.001)
       ):hbargraph("post = lookupFunc(pre)", 0, 1))
   , (_:hbargraph("post-func", startFunOutput, endFunOutput))
   )
@@ -96,7 +108,7 @@ with {
 
 
 
-endFunInput = 1;
+endFunInput = 2;
 // lookupFunc(x) = sineShaper(x^(1/div))^div;
 lookupFunc(x) =
   (par(i, N,x/(i+1): warpedSineFormula(half)):>_/3)
@@ -122,18 +134,23 @@ maxDiv = 4;
 // tabulated with S = 1<<8; lookupVal=0.01 precision=228      0.5% - 0.8% CPU 21MiB
 // tabulated with S = 1<<12; lookupVal=0.74 precision=145      0.7% - 0.8% CPU 1.7GB
 // raw: lookupVal=0.68 precision=147   3.5% - 4% CPU 22MiB
-// lookupVal = hslider("lookupVal", startFunOutput, startFunOutput, endFunOutput, 0.01):si.smoo;
+// lookupVal = hslider("lookupVal", startFunOutput, startFunOutput, endFunOutput, 0.001);
 lookupVal = hslider("lookupVal", 0, 0, nrVals, 1)/nrVals*(endFunOutput-startFunOutput):_+startFunOutput;
 nrVals = 1000;
 precision =
   // 100;
-  hslider("precision", 5, 1, 1000, 1);
+  hslider("precision", 5, 1, 1000, 1) * 10000000;
 
 sineShaper(x) = (sin((x*0.5 + 0.75)*2*ma.PI)+1)*0.5;
 startFunInput = 0;
-startFunOutput = lookupFuncNd(0,nrDurations,startFunInput);
+startFunOutput =
+  0;
+// lookupFuncNd(0,0.5,10);
+// lookupFuncNd(0,nrDurations,startFunInput);
 endFunOutput =
+  // lookupFuncNd(0,0.5,9);
   1;
+// 0.05:pow(0.5);
 // faust2svg -double -sd reverseLookup.dsp && xdg-open reverseLookup-svg/process.svg
 // turns out it's 1!
 // par(i, nrShapes, par(j, nrDurations, par(k, nrPhases, lookupFuncNd(i,j:max(ma.EPSILON),k/nrPhases))))
@@ -141,13 +158,14 @@ endFunOutput =
 // nrPhases = 48000*maxSeconds;
 nrPhases = 16;
 //lookupFunc(endFunInput);
-
 // nrCompares = 22;
 // nrCompares = 24;
 // nrCompares = 32;
 // nrCompares = 64;
 // nrCompares = 128;
-nrCompares = 256;
+// nrCompares = 256;
+// nrCompares = 512;
+nrCompares = 1024;
 
 nrShapes = 8;
 half = nrShapes*.5;
@@ -192,6 +210,9 @@ warp(shape,knee,x) =
 };
 sineShaper(x) = (sin((x*0.5 + 0.75)*2*ma.PI)+1)*0.5;
 
+shapeDifFormula(shapeSlider,phase,0,sr) = 1;
+
 shapeDifFormula(shapeSlider,phase,duration,sr) =
-  warpedSineFormula(shapeSlider,phase+(1 / sr / duration))
-  - warpedSineFormula(shapeSlider,phase);
+  // warpedSineFormula(shapeSlider,phase+(1 / sr / duration))
+  // - warpedSineFormula(shapeSlider,phase);
+  warpedSineFormula(shapeSlider,phase)*(1+duration);
