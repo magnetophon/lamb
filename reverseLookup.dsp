@@ -42,7 +42,9 @@ process =
        // < (precision *ma.EPSILON)
        < (hslider("precision", 0, 0, 1, 0.001)*0.1)
       ):hbargraph("post = lookupFunc(pre)", 0, 1))
-  , (_:pow(0.1):hbargraph("post-func", startFunOutput, endFunOutput))
+  , (_
+     // :pow(0.1)
+     :hbargraph("post-func", startFunOutput, endFunOutput))
   )
 ;
 // which x should I give to
@@ -82,11 +84,12 @@ with {
 reverseLookupNd(startFunInput, endFunInput, nrCompares, lookupFunc, shapeSlider, duration, lookupVal) =
   ba.tabulateNd(0,
                 reverseLookupNdRaw(startFunInput, endFunInput, nrCompares, lookupFuncNd )
-                , (Sy, Sdur, Sx, ry0, rDur0, startFunOutput, ry1, rDur1, endFunOutput, shapeSlider, duration, lookupVal)).lin
+                , (Sy, Sdur, Sx, ry0, rDur0, startFunOutput, ry1, rDur1, endFunOutput, shapeSlider, duration, lookupVal)).val
 with {
   // Sx = 1<<8;
-  Sx = 1<<12;
+  // Sx = 1<<12;
   // Sx = 1<<16;
+  Sx = nrVals;
   Sy = (nrShapes/shapeStep)+1;
   Sdur = nrDurations;
   ry0 = 0;
@@ -147,9 +150,9 @@ maxDiv = 4;
 // raw: lookupVal=0.68 precision=147   3.5% - 4% CPU 22MiB
 // lookupVal = hslider("lookupVal", startFunOutput, startFunOutput, endFunOutput, 0.001);
 lookupVal = (hslider("lookupVal", 0, 0, nrVals, 1)/nrVals)
-            :pow(10)
-             *(endFunOutput-startFunOutput)
-             +startFunOutput;
+            // :pow(10)
+            *(endFunOutput-startFunOutput)
+            +startFunOutput;
 nrVals = 1000;
 precision =
   // 100;
@@ -173,8 +176,8 @@ endFunOutput =
 nrPhases = 16;
 //lookupFunc(endFunInput);
 // nrCompares = 22;
-// nrCompares = 24;
-nrCompares = 32;
+nrCompares = 24;
+// nrCompares = 32;
 // nrCompares = 64;
 // nrCompares = 128;
 // nrCompares = 256;
