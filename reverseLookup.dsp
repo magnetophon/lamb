@@ -13,21 +13,6 @@ import("stdfaust.lib");
 // TODO: make tester: go trough all the parameter combinations and for every combination, increase the precision untill it hits the bell
 // TODO: make 2 table.val for the sliders, and crosssfade them for the lookupVal, (or 4, for cub)
 //
-// process = endFunOutput;
-iprocess =
-  lookupFuncNd(shapeSlider,durationSlider,hslider("phase", 0, 0, 1, 0.001))
-  // :(max)~_
-  <:
-  (
-    hbargraph("0-0.000005", 0, 0.000005)
-  , hbargraph("0-0.0005", 0, 0.0005)
-  , hbargraph("0-0.05", 0, 0.05)
-  , hbargraph("0-0.5", 0, 0.5)
-  , hbargraph("0-2", 0, 2)
-  , (pow(hslider("scal", 1, 0.001, 100, 0.01)):hbargraph("scaled", 0, 1))
-  )
-;
-// process = durationSlider:dur2sec:pow(0.5):hbargraph("durationM", 0, 1) ;
 process =
   // reverseLookup(startFunInput, endFunInput, nrCompares, lookupFunc, lookupVal)
   // reverseLookupRaw(startFunInput, endFunInput, nrCompares, lookupFunc, lookupVal)
@@ -88,10 +73,11 @@ reverseLookupNd(startFunInput, endFunInput, nrCompares, lookupFunc, shapeSlider,
 with {
   // Sx = 1<<8;
   // Sx = 1<<12;
-  Sx = 1<<16;
-  // Sx = nrVals;
+  // Sx = 1<<16;
+  Sx = nrVals+1;
   Sy = (nrShapes/shapeStep)+1;
-  Sdur = nrDurations;
+  // Sy = nrShapes+1;
+  Sdur = nrDurations+1;
   ry0 = 0;
   rDur0 = 0;
   ry1 = nrShapes;
@@ -150,7 +136,6 @@ maxDiv = 4;
 // raw: lookupVal=0.68 precision=147   3.5% - 4% CPU 22MiB
 // lookupVal = hslider("lookupVal", startFunOutput, startFunOutput, endFunOutput, 0.001);
 lookupVal = (hslider("lookupVal", 0, 0, nrVals, 1)/nrVals)
-            // :pow(10)
             *(endFunOutput-startFunOutput)
             +startFunOutput;
 nrVals = 1000;
@@ -233,10 +218,10 @@ shapeDifFormula(shapeSlider,phase,duration,sr) =
   warpedSineFormula(shapeSlider,phase+(1 / sr
                                        / duration
                                       )
-                                :min(1)
+                                // :min(1)
                    )
   - warpedSineFormula(shapeSlider,phase)
-  :min(1)
+  // :min(1)
 ;
 
 // warpedSineFormula(shapeSlider,phase)*(1+duration);
@@ -245,4 +230,6 @@ shapeDifFormula(shapeSlider,phase,duration,sr) =
 
 rampCompare(shapeSlider,phase,duration,sr) =
   shapeDifFormula(shapeSlider,phase,duration,sr)
-  * (1/(1-warpedSineFormula(shapeSlider,phase)));
+  * (1/(1-warpedSineFormula(shapeSlider,phase)))
+  // :min(1)
+;
