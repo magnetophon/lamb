@@ -31,8 +31,8 @@ iprocess =
 process =
   // reverseLookup(startFunInput, endFunInput, nrCompares, lookupFunc, lookupVal)
   // reverseLookupRaw(startFunInput, endFunInput, nrCompares, lookupFunc, lookupVal)
-  reverseLookupNdRaw(startFunInput, endFunInput, nrCompares, lookupFuncNd, shapeSlider, durationSlider, lookupVal)
-  // reverseLookupNd(startFunInput, endFunInput, nrCompares, lookupFuncNd, shapeSlider, durationSlider, lookupVal)
+  // reverseLookupNdRaw(startFunInput, endFunInput, nrCompares, lookupFuncNd, shapeSlider, durationSlider, lookupVal)
+  reverseLookupNd(startFunInput, endFunInput, nrCompares, lookupFuncNd, shapeSlider, durationSlider, lookupVal)
   : (_:hbargraph("pre-func", startFunInput, endFunInput))
     // : lookupFunc
   : lookupFuncNd(shapeSlider,durationSlider)
@@ -88,14 +88,14 @@ reverseLookupNd(startFunInput, endFunInput, nrCompares, lookupFunc, shapeSlider,
 with {
   // Sx = 1<<8;
   // Sx = 1<<12;
-  // Sx = 1<<16;
-  Sx = nrVals;
+  Sx = 1<<16;
+  // Sx = nrVals;
   Sy = (nrShapes/shapeStep)+1;
   Sdur = nrDurations;
   ry0 = 0;
   rDur0 = 0;
   ry1 = nrShapes;
-  rDur1 = maxSeconds;
+  rDur1 = nrDurations;
 };
 
 durationSlider = hslider("duration", 1, 0, nrDurations, 1);
