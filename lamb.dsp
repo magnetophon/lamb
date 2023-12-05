@@ -372,8 +372,8 @@ with {
 
   compareArray(compSlope,shapeSlider,duration) =
     // compareArrayRaw(compSlope,shapeSlider,duration)
-    reverseLookupNdRaw(startFunInput, endFunInput, nrCompares, lookupFuncNd, shapeSlider, duration, compSlope)
-    // reverseLookupNd(startFunInput, endFunInput, nrCompares, lookupFuncNd, shapeSlider, duration, compSlope)
+    // reverseLookupNdRaw(startFunInput, endFunInput, nrCompares, lookupFuncNd, shapeSlider, duration, compSlope)
+    reverseLookupNd(startFunInput, endFunInput, nrCompares, lookupFuncNd, shapeSlider, duration, compSlope)
   ;
 
   nrCompares = 16;
@@ -409,6 +409,31 @@ with {
     shapeDifFormula(shapeSlider,phase,duration,sr)
     * (1/(1-warpedSineFormula(shapeSlider,phase)))
   ;
+
+  reverseLookupNd(startFunInput, endFunInput, nrCompares, lookupFunc, shapeSlider, duration, lookupVal) =
+    ba.tabulateNd(0,
+                  reverseLookupNdRaw(startFunInput, endFunInput, nrCompares, lookupFuncNd )
+                  , (Sy, Sdur, Sx, ry0, rDur0, startFunOutput, ry1, rDur1, endFunOutput, shapeSlider, duration, lookupVal)).val
+  with {
+    // for .cub:
+    // Sx = 1<<8;
+    // for .lin:
+    // Sx = 1<<10;
+    // for .val:
+    // Sx = 1<<12;
+    // Sx = 1<<14;
+    // Sx = 1<<16;
+    // Sx = 1<<18;
+    Sx = 1<<19;
+    // Sx = nrVals+1;
+    // Sy = (nrShapes/shapeStep)+1;
+    Sy = nrShapes+1;
+    Sdur = nrDurations+1;
+    ry0 = 0;
+    rDur0 = 0;
+    ry1 = nrShapes;
+    rDur1 = nrDurations;
+  };
 
   compareArrayRaw(compSlope,shapeSlider,duration) =
     (start,end,(compSlope
