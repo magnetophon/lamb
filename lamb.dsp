@@ -488,7 +488,7 @@ with {
     // Size can be 1<<3;
     // ba.tabulateNd(1, warpedSineFormula,(nrShapes, 1<<3,0, 0,nrShapes, 1, shapeSlider,x)).cub
 
-    ba.tabulateNd(0, warpedSineFormula,(nrShapes, SIZE,0, 0,nrShapes, 1, shapeSlider,x)).lin
+    ba.tabulateNd(0, warpedSineFormula,(nrShapes+1, SIZE,0, 0,nrShapes+1, 1, shapeSlider,x)).lin
     //
     // par(i, nrShapes+1, table(i) * xfadeSelector(shapeSlider,i)):>_
     // this one is only slightly cheaper, but less user freindly
@@ -536,7 +536,7 @@ with {
 
   shapeSliderVal(shapeSlider) =
     shapeSlider
-    / (nrShapes-1)
+    / nrShapes
     * range
     + start
     // : hbargraph("shapeBG", 0.3, 0.7)
@@ -605,15 +605,19 @@ threshP = hslider("[03]thresh",0,-30,6,1);
 
 durationSlider = hslider("duration", 1, 0, nrDurations, 1);
 
+nrShapes = 8;
+half = nrShapes*.5;
+shapeStep = 0.1;
+
 attack = AB(attackP);
 attackP = hslider("[04]attack", 1, 0, nrDurations, 1);
 attackShape = AB(attackShapeP);
-attackShapeP = half+hslider("[2]attack shape" , 0, 0-half, half, 0.1);
+attackShapeP = half+hslider("[2]attack shape" , 0, 0-half, half, shapeStep);
 // release = AB(releaseP);
 release = AB(releaseP);
 releaseP = hslider("[05]release", 1, 0, nrDurations, 1);
 releaseShape = AB(releaseShapeP);
-releaseShapeP = half+hslider("[2]release shape" , 0, 0-half, half, 0.1);
+releaseShapeP = half+hslider("[2]release shape" , 0, 0-half, half, shapeStep);
 holdTime = AB(holdTimeP);
 holdTimeP = hslider("[06]holdTime",80,0,1000,1)*0.001;
 offset = AB(offsetP);
@@ -637,8 +641,6 @@ attackOpP = hslider("[13]attack OP",6,0,1000,1)*0.001;
 releaseOP = AB(releaseOpP);
 releaseOpP = hslider("[14]release OP",80,0,1000,1)*0.001;
 
-nrShapes = 9;
-half = (nrShapes-1)*.5;
 
 ARtest = toggle(soft,loud) with {
   toggle(a,b) = select2(block,b,a);
