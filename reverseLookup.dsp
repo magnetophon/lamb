@@ -25,7 +25,7 @@ process =
     (
       (abs(_-lookupVal)
        // < (precision *ma.EPSILON)
-       < (hslider("precision", 0, 0, 1, 0.001)*0.001)
+       < (hslider("precision", 0.394, 0, 1, 0.001)*0.001)
       ):hbargraph("post = lookupFunc(pre)", 0, 1))
   , (_
      // :pow(0.1)
@@ -69,12 +69,17 @@ with {
 reverseLookupNd(startFunInput, endFunInput, nrCompares, lookupFunc, shapeSlider, duration, lookupVal) =
   ba.tabulateNd(0,
                 reverseLookupNdRaw(startFunInput, endFunInput, nrCompares, lookupFuncNd )
-                , (Sy, Sdur, Sx, ry0, rDur0, startFunOutput, ry1, rDur1, endFunOutput, shapeSlider, duration, lookupVal)).val
+                , (Sy, Sdur, Sx, ry0, rDur0, startFunOutput, ry1, rDur1, endFunOutput, shapeSlider, duration, lookupVal)).lin
 with {
+  // for .cub:
   // Sx = 1<<8;
+  // for .lin:
+  Sx = 1<<10;
+  // for .val:
   // Sx = 1<<12;
+  // Sx = 1<<14;
   // Sx = 1<<16;
-  Sx = nrVals+1;
+  // Sx = nrVals+1;
   // Sy = (nrShapes/shapeStep)+1;
   Sy = nrShapes+1;
   Sdur = nrDurations+1;
