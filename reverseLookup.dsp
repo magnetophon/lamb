@@ -25,7 +25,7 @@ process =
     (
       (abs(_-lookupVal)
        // < (precision *ma.EPSILON)
-       < (hslider("precision", 0, 0, 1, 0.001)*0.1)
+       < (hslider("precision", 0, 0, 1, 0.001)*0.001)
       ):hbargraph("post = lookupFunc(pre)", 0, 1))
   , (_
      // :pow(0.1)
@@ -75,8 +75,8 @@ with {
   // Sx = 1<<12;
   // Sx = 1<<16;
   Sx = nrVals+1;
-  Sy = (nrShapes/shapeStep)+1;
-  // Sy = nrShapes+1;
+  // Sy = (nrShapes/shapeStep)+1;
+  Sy = nrShapes+1;
   Sdur = nrDurations+1;
   ry0 = 0;
   rDur0 = 0;
@@ -141,7 +141,7 @@ lookupVal = (hslider("lookupVal", 0, 0, nrVals, 1)/nrVals)
 nrVals = 1000;
 precision =
   // 100;
-  hslider("precision", 5, 1, 1000, 1) * 10000000;
+  hslider("precision", 5, 1, 1000, 1) * 1000000000;
 
 sineShaper(x) = (sin((x*0.5 + 0.75)*2*ma.PI)+1)*0.5;
 startFunInput = 0;
@@ -161,8 +161,8 @@ endFunOutput =
 nrPhases = 16;
 //lookupFunc(endFunInput);
 // nrCompares = 22;
-nrCompares = 24;
-// nrCompares = 32;
+// nrCompares = 24;
+nrCompares = 32;
 // nrCompares = 64;
 // nrCompares = 128;
 // nrCompares = 256;
