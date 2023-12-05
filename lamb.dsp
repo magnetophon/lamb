@@ -44,8 +44,8 @@ declare license "AGPLv3";
 import("stdfaust.lib");
 // import("./reverseLookup.dsp");
 
-attackSamples = ba.sec2samp(attack);
-releaseSamples = ba.sec2samp(release);
+attackSamples = ba.sec2samp(attack:dur2sec);
+releaseSamples = ba.sec2samp(release:dur2sec);
 
 process =
   // ba.slidingMin(0,2)
@@ -83,8 +83,8 @@ AR_tester =
                    // ,ba.slidingMin(attackSamples,maxSampleRate)
                    // ,(((ba.slidingMin(attackSamples,maxSampleRate):smootherCascade(4, releaseOP, attackOP )),_@maxSampleRate):min)
                  ));
-att = attack;
-rel = release;
+// att = attack;
+// rel = release;
 meterLim =meter;
 threshLim = AB(threshLimP);
 threshLimP = hslider("[03]thresh lim",0,-30,6,1);
@@ -141,12 +141,6 @@ with {
             * (1-prevReleasing);
   arrivedToo = (attHold == x@maxSampleRate): ba.impulsify
                                              * (1-prevReleasing);
-  attackHold = attack
-               // :ba.sAndH(prevReleasing)
-  ;
-  releaseHold = release
-                // :ba.sAndH(1-prevReleasing)
-  ;
   holdHold = holdTime:ba.sAndH(1-prevReleasing);
   // attackHold =
   // attack:ba.sAndH(prevGain==(x@(maxSampleRate))) ;
@@ -168,7 +162,8 @@ with {
   duration =
     // select3(attacking+releasing*2,1,attackHold,releaseHold);
     // ((attackHold*attacking)+(releaseHold*releasing))
-    ((attackHold*attacking)+(releaseHold*releasing))
+    ((attack*attacking)+(release*releasing))
+    // ((attack*(1-releasing))+(release*releasing))
     // :max(ma.EPSILON)
   ;
   gain = prevGain+gainStep
@@ -202,7 +197,7 @@ with {
   turnSamples = holdSamples-attackSamples;
   // };
   shapeDifFormula(shapeSlider,phase,duration,sr) =
-    warpedSineFormula(shapeSlider,phase+(1 / sr / duration))
+    warpedSineFormula(shapeSlider,phase+(1 / sr / (duration:dur2sec)))
     - warpedSineFormula(shapeSlider,phase);
 
   shapeDif(shape,phase,duration,sr) =
@@ -213,10 +208,10 @@ with {
 
     // warpedSine(shapeSlider,phase+(1 / sr / duration))
     // - warpedSine(shapeSlider,phase);
-    warpedSine(shape,phase+(1 / sr / duration))
+    warpedSine(shape,phase+(1 / sr / (duration:dur2sec)))
     - warpedSine(shape,phase);
 
-  derivative = (dif-dif')*duration;
+  derivative = (dif-dif')*(duration:dur2sec);
   secondDerivative = derivative-derivative';
 
   hold =
@@ -373,7 +368,7 @@ with {
                   // : compareArrayRaw
                   // :max(start):min(end)
   with {
-    rampStep = 1 / ma.SR / duration;
+    rampStep = 1 / ma.SR / (duration:dur2sec);
   };
 
   compareArray(compSlope,shapeSlider,duration) =
@@ -465,7 +460,7 @@ with {
     : ((+:_*.5),!) // average start and end, throw away the rest
       // :max(start):min(end)
   with {
-    rampStep = 1 / ma.SR / duration;
+    rampStep = 1 / ma.SR / (duration:dur2sec);
     start = 0;
     end = 1;
   };
@@ -588,6 +583,10 @@ with {
     : max(0)*-strength;
 };
 
+dur2sec(x) = x/nrDurations:pow(2)*maxSeconds;
+
+nrDurations = 32;
+maxSeconds = 1;
 AB(p) = ab:hgroup("[1]A/B",sel(aG(p),bG(p)));
 sel(a,b,x) = select2(x,a,b);
 aG(x) = vgroup("[0]a", x);
@@ -603,13 +602,16 @@ strength = AB(strengthP);
 strengthP = hslider("[02]strength", 100, 0, 100, 1) * 0.01;
 thresh = AB(threshP);
 threshP = hslider("[03]thresh",0,-30,6,1);
+
+durationSlider = hslider("duration", 1, 0, nrDurations, 1);
+
 attack = AB(attackP);
-attackP = hslider("[04]attack",6,0,1000,1)*0.001;
+attackP = hslider("[04]attack", 1, 0, nrDurations, 1);
 attackShape = AB(attackShapeP);
 attackShapeP = half+hslider("[2]attack shape" , 0, 0-half, half, 0.1);
 // release = AB(releaseP);
 release = AB(releaseP);
-releaseP = hslider("[05]release",80,0,1000,1)*0.001;
+releaseP = hslider("[05]release", 1, 0, nrDurations, 1);
 releaseShape = AB(releaseShapeP);
 releaseShapeP = half+hslider("[2]release shape" , 0, 0-half, half, 0.1);
 holdTime = AB(holdTimeP);
