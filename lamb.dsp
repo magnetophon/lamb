@@ -42,6 +42,7 @@ declare license "AGPLv3";
 // import("/home/bart/source/faustlibraries/stdfaust.lib");
 // import("/nix/store/mljn5almsabrsw6mjb70g61688kc0rqj-faust-2.68.1/share/faust/stdfaust.lib");
 import("stdfaust.lib");
+// import("./reverseLookup.dsp");
 
 attackSamples = ba.sec2samp(attack);
 releaseSamples = ba.sec2samp(release);
@@ -124,6 +125,7 @@ with {
   , releasing
     // , arrived
   , turnAround
+    // , fullDif
     // , (slowdownArray(10/ma.SR))
     // , slowDownRamp
     // , startTurn
@@ -224,7 +226,7 @@ with {
     // fancyHold
     // )
   ;
-  // turnAround = ((prevGain+(holdSamples*rawGainStep))>longHold) & releasing;
+  // turnAround = ((prevGain+((holdSamples-attackSamples)*rawGainStep))>attHold) & releasing;
   turnAround = (prevGain>longHold) & releasing;
   longHold =
     ba.slidingMin(holdSamples,maxSampleRate,x
@@ -276,7 +278,9 @@ with {
     holdShape = 0;
     startShape = hslider("startShape", 0.99, -1, 1, 0.01);
     endShape = hslider("endShape", -0.3, -1, 1, 0.01);
-    shapesShape = 0;
+    shapesShape =
+      hslider("shapesShape", 0, -1, 1, 0.01);
+    // 0;
     // hslider("holdShape", 0.6, -1, 1, 0.001);
     slowdownElement(step,samples,shape) =
       ba.slidingMin(max(0,samples),maxSampleRate
@@ -374,49 +378,8 @@ with {
 
   compareArray(compSlope,shapeSlider,duration) =
     compareArrayRaw(compSlope,shapeSlider,duration)
-    // function(compSlope
-    // ,duration)
-
-    // simpleFunction(compSlope)
-    // ba.tabulate(1, simpleFunction, 1<<27, slopeStart,slopeEnd,compSlope).val
-    //
-    // ba.tabulateNd(
-    // 1, compareArrayRaw,
-    // ( sizeCompSlope,nrShapes,sizeDuration
-    // , slopeStart,0,0
-    // , slopeEnd, nrShapes, durationMax
-    // , compSlope,shapeSlider,duration) ).lin
-
-    // ba.tabulateNd(1, function,
-    // ( sizeCompSlope,sizeDuration
-    // , slopeStart, durationMin
-    // , slopeEnd, durationMax
-    // , (compSlope:max(slopeStart):min(slopeEnd)),(duration:max(0):min(durationMax))) ).cub
-    // , compSlope,duration) ).val
-
-
-    // powSinTable(x,y) = ba.tabulateNd(1, powSin, (sizeX,sizeY, rx0,ry0, rx1,ry1, x,y) ).lin;
-  with {
-    simpleFunction(compSlope) =
-      compareArrayRaw(compSlope
-                      :max(slopeStart)
-                      :min(slopeEnd)
-                     ,half,1);
-    function(compSlope,duration) =
-      compareArrayRaw(compSlope
-                      :max(slopeStart)
-                      :min(slopeEnd)
-                     ,half,duration);
-    sizeCompSlope = 1<<15;
-    sizeDuration  = 1<<12;
-    // sizeCompSlope = 4;
-    // sizeDuration  = 4;
-    slopeStart = 0;
-    slopeEnd = 0.02;
-    // slopeEnd = hslider("slopeEnd", 0.2, 0, 0.2, 0.001);
-    durationMin = 0.001;
-    durationMax = 1;
-  };
+    // reverseLookupNdRaw(startFunInput, endFunInput, nrCompares, lookupFuncNd, shapeSlider, durationSlider, compSlope)
+  ;
 
   compareArrayRaw(compSlope,shapeSlider,duration) =
     (start,end,(compSlope
