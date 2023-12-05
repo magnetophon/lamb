@@ -42,7 +42,6 @@ declare license "AGPLv3";
 // import("/home/bart/source/faustlibraries/stdfaust.lib");
 // import("/nix/store/mljn5almsabrsw6mjb70g61688kc0rqj-faust-2.68.1/share/faust/stdfaust.lib");
 import("stdfaust.lib");
-// import("./reverseLookup.dsp");
 
 attackSamples = ba.sec2samp(attack:dur2sec);
 releaseSamples = ba.sec2samp(release:dur2sec);
@@ -372,8 +371,43 @@ with {
   };
 
   compareArray(compSlope,shapeSlider,duration) =
-    compareArrayRaw(compSlope,shapeSlider,duration)
-    // reverseLookupNdRaw(startFunInput, endFunInput, nrCompares, lookupFuncNd, shapeSlider, durationSlider, compSlope)
+    // compareArrayRaw(compSlope,shapeSlider,duration)
+    reverseLookupNdRaw(startFunInput, endFunInput, nrCompares, lookupFuncNd, shapeSlider, duration, compSlope)
+    // reverseLookupNd(startFunInput, endFunInput, nrCompares, lookupFuncNd, shapeSlider, duration, compSlope)
+  ;
+
+  nrCompares = 16;
+  // nrCompares = 32;
+  // nrCompares = 128;
+  endFunInput = 1;
+  endFunOutput = 1;
+  startFunInput = 0;
+  startFunOutput =
+    0;
+
+  reverseLookupNdRaw(startFunInput, endFunInput, nrCompares, lookupFuncNd, y, duration, lookupVal) =
+    (startFunInput,endFunInput)
+    : seq(i, nrCompares, compare)
+    : +:_*.5 // average start and end
+  with {
+    compare(start,end) =
+      select2(bigger , start , middle)
+    , select2(bigger , middle , end)
+    with {
+    bigger = lookupVal>lookupFuncNd(y,duration,middle);
+    middle = (start+end)*.5;
+  };
+  };
+
+  lookupFuncNd(y,duration,x) =
+    rampCompare(y,x,duration,sr)
+  with {
+    sr = 48000;
+  };
+
+  rampCompare(shapeSlider,phase,duration,sr) =
+    shapeDifFormula(shapeSlider,phase,duration,sr)
+    * (1/(1-warpedSineFormula(shapeSlider,phase)))
   ;
 
   compareArrayRaw(compSlope,shapeSlider,duration) =
@@ -483,12 +517,12 @@ with {
     // cause we get wrong ramp durations (to steep or not steep enough) otherwise
     // 21 compares seems to work well enough in all cases so far
     // at the higher number of compares (21) we get 11-12% CPU for the raw formaula
-    // warpedSineFormula(shapeSlider,x)
+    warpedSineFormula(shapeSlider,x)
     // the tables do much better
     // Size can be 1<<3;
     // ba.tabulateNd(1, warpedSineFormula,(nrShapes, 1<<3,0, 0,nrShapes, 1, shapeSlider,x)).cub
 
-    ba.tabulateNd(0, warpedSineFormula,(nrShapes+1, SIZE,0, 0,nrShapes+1, 1, shapeSlider,x)).lin
+    // ba.tabulateNd(0, warpedSineFormula,(nrShapes+1, SIZE,0, 0,nrShapes+1, 1, shapeSlider,x)).lin
     //
     // par(i, nrShapes+1, table(i) * xfadeSelector(shapeSlider,i)):>_
     // this one is only slightly cheaper, but less user freindly

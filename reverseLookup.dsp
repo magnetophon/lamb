@@ -110,8 +110,7 @@ with {
 
 
 
-endFunInput =
-  1;
+endFunInput = 1;
 // 4096;
 // 2;
 lookupFunc(x) =
