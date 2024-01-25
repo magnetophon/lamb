@@ -22,10 +22,10 @@ AR_tester =
   hgroup("",
          vgroup("[2]test", test)
          <:vgroup("[1]AR",
-                  (ba.slidingMin(attackSamples,maxSampleRate):AR(attack,release))
+                  (ba.slidingMin(attackSamples+1,maxSampleRate):AR(attack,release))
                   ,_@attackSamples
                    // ,ba.slidingMin(attackSamples,maxSampleRate)
-                  ,(((ba.slidingMin(attackSamples,maxSampleRate):smootherCascade(4, releaseOP, attackOP )),_@attackSamples):min)
+                  ,(((ba.slidingMin(attackSamples+1,maxSampleRate):smootherCascade(4, releaseOP, attackOP )),_@attackSamples):min)
                  ));
 att = attack;
 rel = release;
@@ -66,11 +66,11 @@ with {
 
   shapeDif(shape,phase,duration,sr) =
     // ba.tabulateNd(1,shapeDifFormula,(nrShapes,1<<17,1<<7,0,0,1/maxSampleRate/1,nrShapes,1,1/24000/(1/maxSampleRate),shapeSlider,phase,(1 / ma.SR / duration))).lin;
-    ba.tabulateNd(0,shapeDifFormula,(nrShapes,1<<17,1<<7,0,0,1/maxSampleRate/1,nrShapes,1,1/24000/(1/maxSampleRate),shapeSlider,phase,(1 / ma.SR / duration))).lin;
-  // ba.tabulateNd(0,shapeDifFormula,(nrShapes,1<<17,1<<7,0,0,1/maxSampleRate/1,nrShapes,1,1/24000/(1/maxSampleRate),shapeSlider,phase,(1 / ma.SR / duration))).lin;
-  // ba.tabulateNd(1,shapeDifFormula,(3,1<<16,1<<6,0,0,1/48000/1,nrShapes,1,1/24000/(1/48000),shapeSlider,phase,(1 / ma.SR / duration))).lin;
-  // warpedSine(shapeSlider,phase+(1 / sr / duration))
-  // - warpedSine(shapeSlider,phase);
+    // ba.tabulateNd(0,shapeDifFormula,(nrShapes,1<<17,1<<7,0,0,1/maxSampleRate/1,nrShapes,1,1/24000/(1/maxSampleRate),shapeSlider,phase,(1 / ma.SR / duration))).lin;
+    // ba.tabulateNd(0,shapeDifFormula,(nrShapes,1<<17,1<<7,0,0,1/maxSampleRate/1,nrShapes,1,1/24000/(1/maxSampleRate),shapeSlider,phase,(1 / ma.SR / duration))).lin;
+    // ba.tabulateNd(1,shapeDifFormula,(3,1<<16,1<<6,0,0,1/48000/1,nrShapes,1,1/24000/(1/48000),shapeSlider,phase,(1 / ma.SR / duration))).lin;
+    warpedSine(shapeSlider,phase+(1 / sr / duration))
+    - warpedSine(shapeSlider,phase);
   // warpedSineFormula(shapeSlider,phase+(1 / sr / duration))
   // - warpedSineFormula(shapeSlider,phase);
 
@@ -139,11 +139,11 @@ with {
     // cause we get wrong ramp durations (to steep or not steep enough) otherwise
     // 21 compares seems to work well enough in all cases so far
     // at the higher number of compares (21) we get 11-12% CPU for the raw formaula
-    warpedSineFormula(shapeSlider,x)
+    // warpedSineFormula(shapeSlider,x)
     // the tables do much better
     // Size can be 1<<3;
     // ba.tabulateNd(1, warpedSineFormula,(nrShapes, 1<<3,0, 0,nrShapes, 1, shapeSlider,x)).cub
-    // ba.tabulateNd(0, warpedSineFormula,(nrShapes, SIZE,0, 0,nrShapes, 1, shapeSlider,x)).lin
+    ba.tabulateNd(0, warpedSineFormula,(nrShapes, SIZE,0, 0,nrShapes, 1, shapeSlider,x)).lin
     // par(i, nrShapes+1, table(i) * xfadeSelector(shapeSlider,i)):>_
     // this one is only slightly cheaper, but less user freindly
     // par(i, nrShapes+1, table(i) * ((shapeSlider)==i)):>_
@@ -213,7 +213,7 @@ lookahead_compressor_N_chan(strength,thresh,att,rel,knee,link,meter,N) =
     (par(i,N,abs) : lookahead_compression_gain_N_chan_db(strength,thresh,att,rel,knee,link,N))
    ,si.bus(N)
   )
-  : (ro.interleave(N,2) : par(i,N,(meter: ba.db2linear)*(_@attackSamples)))
+  : (ro.interleave(N,2) : par(i,N,(meter(i): ba.db2linear)*(_@attackSamples)))
 ;
 
 lookahead_compression_gain_N_chan_db(strength,thresh,att,rel,knee,link,1) =
@@ -226,7 +226,7 @@ lookahead_compression_gain_N_chan_db(strength,thresh,att,rel,knee,link,N) =
 
 lookahead_compression_gain_mono_db(strength,thresh,att,rel,knee) =
   ba.linear2db : gain_computer(strength,thresh,knee)
-  : ba.slidingMin(attackSamples,maxSampleRate)
+  : ba.slidingMin(attackSamples+1,maxSampleRate)
   : ba.db2linear:AR(attack,release)
   :(!,_) // for testing
   :ba.linear2db
@@ -255,18 +255,18 @@ strengthP = hslider("[02]strength", 100, 0, 100, 1) * 0.01;
 thresh = AB(threshP);
 threshP = hslider("[03]thresh",0,-30,6,1);
 attack = AB(attackP);
-attackP = hslider("[04]attack",6,0,1000,1)*0.001;
+attackP = hslider("[04]attack",10,0,100,0.1)*0.001;
 attackShape = AB(attackShapeP);
 attackShapeP = half+hslider("[2]attack shape" , 0, 0-half, half, 0.1);
 // release = AB(releaseP);
 release = AB(releaseP);
-releaseP = hslider("[05]release",80,1,1000,1)*0.001;
+releaseP = hslider("[05]release",100,1,1000,1)*0.001;
 releaseShape = AB(releaseShapeP);
 releaseShapeP = half+hslider("[2]release shape" , 0, 0-half, half, 0.1);
 knee = AB(kneeP);
 kneeP = hslider("[06]knee",2,0,30,1);
 link = AB(linkP);
-linkP = hslider("[07]link", 0, 0, 100, 1) *0.01;
+linkP = hslider("[07]link", 100, 0, 100, 1) *0.01;
 FBFF = AB(FBFFP);
 FBFFP = hslider ("[08]fb-ff",100,0,100,1) *0.01;
 power = AB(powerP);
@@ -292,9 +292,9 @@ ARtest = toggle(soft,loud) with {
 };
 
 
-meter =
+meter(i) =
   _<: attach(_, (max(-24):min(0):hbargraph(
-                   "v:[10]meters/[unit:dB]", -24, 0)
+                   "v:[10]meters/%i[unit:dB]", -24, 0)
                 ));
 
 ///////////////////////////////////////////////////////////////////////////////
