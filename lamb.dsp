@@ -3,31 +3,33 @@ declare version "0.1";
 declare author "Bart Brouns";
 declare license "AGPLv3";
 
-import("/home/bart/source/lamb/stdfaust.lib");
+import("stdfaust.lib");
+
+
+NrChannels = 2;
+maxSampleRate = 48000;
+
 
 process =
   // SIN_tester;
-  par(i, NrChannels, _*ba.db2linear(hslider("input gain", 0, -24, 24, 1):si.smoo)):
+  par(i, NrChannels, _*ba.db2linear(inputGain)):
   lookahead_compressor_N_chan(strength,thresh,attack,release,knee,link,meter,NrChannels);
 
 SIN_tester =
   hgroup("",
          vgroup("[2]test", test)
          <:vgroup("[1]SIN",
-                  (ba.slidingMin(attackSamples+1,maxSampleRate):SIN(attack,release))
+                  (ba.slidingMin(attackSamples+1,maxAttackSamples):SIN(attack,release))
                   ,_@attackSamples
-                   // ,ba.slidingMin(attackSamples,maxSampleRate)
-                  ,(((ba.slidingMin(attackSamples+1,maxSampleRate):smootherCascade(4, releaseOP, attackOP )),_@attackSamples):min)
+                   // ,ba.slidingMin(attackSamples,maxAttackSamples)
+                  ,(((ba.slidingMin(attackSamples+1,maxAttackSamples):smootherCascade(4, releaseOP, attackOP )),_@attackSamples):min)
                  ));
-att = attack;
-rel = release;
+
 attackSamples = ba.sec2samp(attack);
-meterLim =meter;
-threshLim = AB(threshLimP);
-threshLimP = hslider("[03]thresh lim",0,-30,6,1);
-RMStime = AB(RMStimeP);
-RMStimeP = hslider("[03]RMS time",5,0,100,1)*0.001;
-maxSampleRate = 192000;
+maxAttackSamples =
+  maxAttack*maxSampleRate
+  // ba.sec2samp(maxAttack)+1:max(1)
+;
 
 SIN(attack,release) = loop~(_,_)
                            // :(!,_)
@@ -57,9 +59,9 @@ with {
     - warpedSineFormula(shapeSlider,phase);
 
   shapeDif(shape,phase,duration,sr) =
-    // ba.tabulateNd(1,shapeDifFormula,(nrShapes,1<<17,1<<7,0,0,1/maxSampleRate/1,nrShapes,1,1/24000/(1/maxSampleRate),shapeSlider,phase,(1 / ma.SR / duration))).lin;
-    // ba.tabulateNd(0,shapeDifFormula,(nrShapes,1<<17,1<<7,0,0,1/maxSampleRate/1,nrShapes,1,1/24000/(1/maxSampleRate),shapeSlider,phase,(1 / ma.SR / duration))).lin;
-    // ba.tabulateNd(0,shapeDifFormula,(nrShapes,1<<17,1<<7,0,0,1/maxSampleRate/1,nrShapes,1,1/24000/(1/maxSampleRate),shapeSlider,phase,(1 / ma.SR / duration))).lin;
+    // ba.tabulateNd(1,shapeDifFormula,(nrShapes,1<<17,1<<7,0,0,1/maxAttackSamples/1,nrShapes,1,1/24000/(1/maxAttackSamples),shapeSlider,phase,(1 / ma.SR / duration))).lin;
+    // ba.tabulateNd(0,shapeDifFormula,(nrShapes,1<<17,1<<7,0,0,1/maxAttackSamples/1,nrShapes,1,1/24000/(1/maxAttackSamples),shapeSlider,phase,(1 / ma.SR / duration))).lin;
+    // ba.tabulateNd(0,shapeDifFormula,(nrShapes,1<<17,1<<7,0,0,1/maxAttackSamples/1,nrShapes,1,1/24000/(1/maxAttackSamples),shapeSlider,phase,(1 / ma.SR / duration))).lin;
     // ba.tabulateNd(1,shapeDifFormula,(3,1<<16,1<<6,0,0,1/48000/1,nrShapes,1,1/24000/(1/48000),shapeSlider,phase,(1 / ma.SR / duration))).lin;
     warpedSine(shapeSlider,phase+(1 / sr / duration))
     - warpedSine(shapeSlider,phase);
@@ -224,7 +226,7 @@ lookahead_compression_gain_N_chan(strength,thresh,att,rel,knee,link,N) =
 
 lookahead_compression_gain_mono(strength,thresh,att,rel,knee) =
   ba.linear2db : gain_computer(strength,thresh,knee)
-  : ba.slidingMin(attackSamples+1,maxSampleRate)
+  : ba.slidingMin(attackSamples+1,maxAttackSamples)
   : ba.db2linear
     <:
     select2(SINsmoo
@@ -251,32 +253,35 @@ B = si.bus(2);
 ab = checkbox("[0]a/b");
 // bypass = AB(bypassP);
 // bypassP = checkbox("[00]bypass");
+inputGain = hslider("[0]input gain", 0, -24, 24, 1):si.smoo;
 prePost = AB(prePostP);
 prePostP = checkbox("[01]prePost");
 strength = AB(strengthP);
 strengthP = hslider("[02]strength", 100, 0, 100, 1) * 0.01;
 thresh = AB(threshP);
-threshP = hslider("[03]thresh",0,-30,6,1);
+threshP = hslider("[03]thresh",-1,-30,0,1);
 attack = AB(attackP);
-attackP = hslider("[04]attack",10,0,100,0.1)*0.001;
+attackP = hslider("[04]attack[unit:ms] [scale:log]",30, 0, maxAttack*1000,1)*0.001;
 attackShape = AB(attackShapeP);
-attackShapeP = half+hslider("[05]attack shape" , 0, 0-half, half, 0.1);
+attackShapeP = half+hslider("[05]attack shape" , 2, 0-half, half, 0.1);
 // release = AB(releaseP);
 release = AB(releaseP);
-releaseP = hslider("[06]release",100,1,1000,1)*0.001;
+releaseP = hslider("[06]release[unit:ms] [scale:log]",42,1,1000,1)*0.001;
 releaseShape = AB(releaseShapeP);
-releaseShapeP = half+hslider("[07]release shape" , 0, 0-half, half, 0.1);
+releaseShapeP = half+hslider("[07]release shape" , -3, 0-half, half, 0.1);
 knee = AB(kneeP);
 kneeP = hslider("[08]knee",2,0,30,1);
 link = AB(linkP);
 linkP = hslider("[09]link", 100, 0, 100, 1) *0.01;
 
 attackOP = AB(attackOpP);
-attackOpP = hslider("[10]attack 4-pole",10,0,100,1)*0.001;
+attackOpP = hslider("[10]attack 4-pole[unit:ms] [scale:log]",30, 0, maxAttack*1000,1)*0.001;
 releaseOP = AB(releaseOpP);
-releaseOpP = hslider("[11]release 4-pole",100,0,1000,1)*0.001;
+releaseOpP = hslider("[11]release 4-pole[unit:ms] [scale:log]",42,0,1000,1)*0.001;
 nrShapes = 9;
 half = (nrShapes-1)*.5;
+
+maxAttack = 0.1;
 
 SINtest = toggle(soft,loud) with {
   toggle(a,b) = select2(block,b,a);
@@ -292,7 +297,6 @@ meter(i) =
                    "v:[10]meters/%i[unit:dB]", -24, 0)
                 ));
 
-NrChannels = 2;
 ///////////////////////////////////////////////////////////////////////////////
 //                                    test                                   //
 ///////////////////////////////////////////////////////////////////////////////
