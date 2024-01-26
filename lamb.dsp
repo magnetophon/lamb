@@ -5,18 +5,10 @@ declare license "AGPLv3";
 
 import("/home/bart/source/lamb/stdfaust.lib");
 
-sinfun(x) = sin(pow(4*x/16,2));
-sfx = hslider("sfx", 0, 0, 16, 1);
 process =
   // AR_tester;
-  // ba.tabulate(0, sinfun, 16, 0,16, sfx).lin
-  // ,sinfun(sfx)
-  // ;
-  par(i, 2, _*ba.db2linear(hslider("input gain", 0, -24, 24, 1):si.smoo)):
-  // co.FFcompressor_N_chan(strength,thresh,attack,release,knee,prePost,link,meter,2);
-  // co.RMS_FBFFcompressor_N_chan(strength,thresh,att,rel,RMStime,knee,prePost,link,FBFF,meter,2);
-  // co.RMS_FBcompressor_peak_limiter_N_chan(strength,thresh,threshLim,att,rel,RMStime,knee,link,meter,meterLim,2);
-  lookahead_compressor_N_chan(strength,thresh,attack,release,knee,link,meter,2);
+  par(i, NrChannels, _*ba.db2linear(hslider("input gain", 0, -24, 24, 1):si.smoo)):
+  lookahead_compressor_N_chan(strength,thresh,attack,release,knee,link,meter,NrChannels);
 
 AR_tester =
   hgroup("",
@@ -210,26 +202,38 @@ with {
 lookahead_compressor_N_chan(strength,thresh,att,rel,knee,link,meter,N) =
   si.bus(N) <: si.bus(N*2):
   (
-    (par(i,N,abs) : lookahead_compression_gain_N_chan_db(strength,thresh,att,rel,knee,link,N))
-   ,si.bus(N)
+    par(i, N, _@attackSamples)
+   ,((par(i,N,abs) : lookahead_compression_gain_N_chan(strength,thresh,att,rel,knee,link,N))
+     : par(i, N, (meter(i)))
+       <: si.bus(N*2)
+    )
   )
-  : (ro.interleave(N,2) : par(i,N,(meter(i): ba.db2linear)*(_@attackSamples)))
+  :((ro.interleave(N,2)
+     : par(i,N, *))
+   , si.bus(N)
+   )
 ;
 
-lookahead_compression_gain_N_chan_db(strength,thresh,att,rel,knee,link,1) =
-  lookahead_compression_gain_mono_db(strength,thresh,att,rel,knee);
+lookahead_compression_gain_N_chan(strength,thresh,att,rel,knee,link,1) =
+  lookahead_compression_gain_mono(strength,thresh,att,rel,knee);
 
-lookahead_compression_gain_N_chan_db(strength,thresh,att,rel,knee,link,N) =
+lookahead_compression_gain_N_chan(strength,thresh,att,rel,knee,link,N) =
   si.bus(N)
   <: (si.bus(N),(ba.parallelMax(N) <: si.bus(N))) : ro.interleave(N,2) : par(i,N,(it.interpolate_linear(link)))
-  : par(i,N,lookahead_compression_gain_mono_db(strength,thresh,att,rel,knee)) ;
+  : par(i,N,lookahead_compression_gain_mono(strength,thresh,att,rel,knee)) ;
 
-lookahead_compression_gain_mono_db(strength,thresh,att,rel,knee) =
+lookahead_compression_gain_mono(strength,thresh,att,rel,knee) =
   ba.linear2db : gain_computer(strength,thresh,knee)
   : ba.slidingMin(attackSamples+1,maxSampleRate)
-  : ba.db2linear:AR(attack,release)
+  : ba.db2linear
+    <:
+    // select2(ARsmoo
+    // ,_
+    // ,_)
+    // ,
+    AR(attack,release)
+    // ,smootherCascade(4, releaseOP, attackOP ))
   :(!,_) // for testing
-  :ba.linear2db
 with {
   gain_computer(strength,thresh,knee,level) =
     select3((level>(thresh-(knee/2)))+(level>(thresh+(knee/2))),
@@ -243,6 +247,8 @@ AB(p) = ab:hgroup("[1]A/B",sel(aG(p),bG(p)));
 sel(a,b,x) = select2(x,a,b);
 aG(x) = vgroup("[0]a", x);
 bG(x) = vgroup("[1]b", x);
+
+ARsmoo = checkbox("AR / 4 pole smoother");
 
 B = si.bus(2);
 ab = checkbox("[0]a/b");
@@ -293,10 +299,11 @@ ARtest = toggle(soft,loud) with {
 
 
 meter(i) =
-  _<: attach(_, (max(-24):min(0):hbargraph(
+  _<: attach(_, (ba.linear2db:max(-24):min(0):hbargraph(
                    "v:[10]meters/%i[unit:dB]", -24, 0)
                 ));
 
+NrChannels = 2;
 ///////////////////////////////////////////////////////////////////////////////
 //                                    test                                   //
 ///////////////////////////////////////////////////////////////////////////////
@@ -415,7 +422,3 @@ with {
 };
 smootherCascade(N, att, rel, x) = x : seq(i, N, smoother(N, att, rel));
 
-mysel(x)=         (checkbox("AR")*
-                   (si.onePoleSwitching(hslider("rel simple", 8, 0, 1000, 0.1)*0.001
-                                       ,hslider("att simple", 8, 0, 1000, 0.1)*0.001,x))
-                  , (1-checkbox("AR"))*AR(x):(!,_,!)):>_,x;
