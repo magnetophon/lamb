@@ -6,15 +6,15 @@ declare license "AGPLv3";
 import("/home/bart/source/lamb/stdfaust.lib");
 
 process =
-  // AR_tester;
+  // SIN_tester;
   par(i, NrChannels, _*ba.db2linear(hslider("input gain", 0, -24, 24, 1):si.smoo)):
   lookahead_compressor_N_chan(strength,thresh,attack,release,knee,link,meter,NrChannels);
 
-AR_tester =
+SIN_tester =
   hgroup("",
          vgroup("[2]test", test)
-         <:vgroup("[1]AR",
-                  (ba.slidingMin(attackSamples+1,maxSampleRate):AR(attack,release))
+         <:vgroup("[1]SIN",
+                  (ba.slidingMin(attackSamples+1,maxSampleRate):SIN(attack,release))
                   ,_@attackSamples
                    // ,ba.slidingMin(attackSamples,maxSampleRate)
                   ,(((ba.slidingMin(attackSamples+1,maxSampleRate):smootherCascade(4, releaseOP, attackOP )),_@attackSamples):min)
@@ -29,8 +29,8 @@ RMStime = AB(RMStimeP);
 RMStimeP = hslider("[03]RMS time",5,0,100,1)*0.001;
 maxSampleRate = 192000;
 
-AR(attack,release) = loop~(_,_)
-                          // :(!,_)
+SIN(attack,release) = loop~(_,_)
+                           // :(!,_)
 with {
   loop(prevRamp,prevGain,x) =
     ramp
@@ -227,8 +227,8 @@ lookahead_compression_gain_mono(strength,thresh,att,rel,knee) =
   : ba.slidingMin(attackSamples+1,maxSampleRate)
   : ba.db2linear
     <:
-    select2(ARsmoo
-           , AR(attack,release)
+    select2(SINsmoo
+           , SIN(attack,release)
              :(!,_) // for testing
            ,smootherCascade(4, releaseOP, attackOP ))
 with {
@@ -245,12 +245,12 @@ sel(a,b,x) = select2(x,a,b);
 aG(x) = vgroup("[0]a", x);
 bG(x) = vgroup("[1]b", x);
 
-ARsmoo = checkbox("AR / 4 pole smoother");
+SINsmoo = AB(checkbox("SIN / 4 pole smoother"));
 
 B = si.bus(2);
 ab = checkbox("[0]a/b");
-bypass = AB(bypassP);
-bypassP = checkbox("[00]bypass");
+// bypass = AB(bypassP);
+// bypassP = checkbox("[00]bypass");
 prePost = AB(prePostP);
 prePostP = checkbox("[01]prePost");
 strength = AB(strengthP);
@@ -260,33 +260,25 @@ threshP = hslider("[03]thresh",0,-30,6,1);
 attack = AB(attackP);
 attackP = hslider("[04]attack",10,0,100,0.1)*0.001;
 attackShape = AB(attackShapeP);
-attackShapeP = half+hslider("[2]attack shape" , 0, 0-half, half, 0.1);
+attackShapeP = half+hslider("[05]attack shape" , 0, 0-half, half, 0.1);
 // release = AB(releaseP);
 release = AB(releaseP);
-releaseP = hslider("[05]release",100,1,1000,1)*0.001;
+releaseP = hslider("[06]release",100,1,1000,1)*0.001;
 releaseShape = AB(releaseShapeP);
-releaseShapeP = half+hslider("[2]release shape" , 0, 0-half, half, 0.1);
+releaseShapeP = half+hslider("[07]release shape" , 0, 0-half, half, 0.1);
 knee = AB(kneeP);
-kneeP = hslider("[06]knee",2,0,30,1);
+kneeP = hslider("[08]knee",2,0,30,1);
 link = AB(linkP);
-linkP = hslider("[07]link", 100, 0, 100, 1) *0.01;
-FBFF = AB(FBFFP);
-FBFFP = hslider ("[08]fb-ff",100,0,100,1) *0.01;
-power = AB(powerP);
-powerP = hslider("[09]power", 2, ma.EPSILON, 10, 0.1);
-PMItime = AB(PMItimeP);
-PMItimeP = hslider("[10]PMI time",20,0,1000,1)*0.001;
-dw = AB(dwP);
-dwP = hslider ("[11]dry/wet",100,0,100,1) * 0.01:si.smoo;
+linkP = hslider("[09]link", 100, 0, 100, 1) *0.01;
 
 attackOP = AB(attackOpP);
-attackOpP = hslider("[12]attack OP",10,0,100,1)*0.001;
+attackOpP = hslider("[10]attack 4-pole",10,0,100,1)*0.001;
 releaseOP = AB(releaseOpP);
-releaseOpP = hslider("[12]release OP",100,0,1000,1)*0.001;
+releaseOpP = hslider("[11]release 4-pole",100,0,1000,1)*0.001;
 nrShapes = 9;
 half = (nrShapes-1)*.5;
 
-ARtest = toggle(soft,loud) with {
+SINtest = toggle(soft,loud) with {
   toggle(a,b) = select2(block,b,a);
   block = os.lf_sawpos(0.5)>0.5;
   soft = sine*0.1;
@@ -418,4 +410,3 @@ with {
 };
 };
 smootherCascade(N, att, rel, x) = x : seq(i, N, smoother(N, att, rel));
-
