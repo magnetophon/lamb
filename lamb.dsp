@@ -227,13 +227,10 @@ lookahead_compression_gain_mono(strength,thresh,att,rel,knee) =
   : ba.slidingMin(attackSamples+1,maxSampleRate)
   : ba.db2linear
     <:
-    // select2(ARsmoo
-    // ,_
-    // ,_)
-    // ,
-    AR(attack,release)
-    // ,smootherCascade(4, releaseOP, attackOP ))
-  :(!,_) // for testing
+    select2(ARsmoo
+           , AR(attack,release)
+             :(!,_) // for testing
+           ,smootherCascade(4, releaseOP, attackOP ))
 with {
   gain_computer(strength,thresh,knee,level) =
     select3((level>(thresh-(knee/2)))+(level>(thresh+(knee/2))),
@@ -283,9 +280,9 @@ dw = AB(dwP);
 dwP = hslider ("[11]dry/wet",100,0,100,1) * 0.01:si.smoo;
 
 attackOP = AB(attackOpP);
-attackOpP = hslider("[12]attack OP",6,0,1000,1)*0.001;
+attackOpP = hslider("[12]attack OP",10,0,100,1)*0.001;
 releaseOP = AB(releaseOpP);
-releaseOpP = hslider("[12]release OP",80,0,1000,1)*0.001;
+releaseOpP = hslider("[12]release OP",100,0,1000,1)*0.001;
 nrShapes = 9;
 half = (nrShapes-1)*.5;
 
