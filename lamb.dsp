@@ -45,15 +45,23 @@ with {
     // select3(attacking+releasing*2,1,attack,release);
     (attack*attacking)+(release*releasing);
   gain = prevGain+gainStep ;
+
   gainStep =
+    select2(
+      checkbox("slowDown") ,
+      OLDgainStep
+      , turnArroundArray(rawGainStep)
+    );
+
+  OLDgainStep =
     select2(releasing
            , rawGainStep :max(dif)
            , rawGainStep :min(dif)
-           ) with {
-    rawGainStep =
-      shapeDif(shapeSlider,ramp,duration,ma.SR)*fullDif;
-    fullDif =dif/(1-warpedSine(shapeSlider,ramp));
-  };
+           );
+
+  rawGainStep =
+    shapeDif(shapeSlider,ramp,duration,ma.SR)*fullDif;
+  fullDif =dif/(1-warpedSine(shapeSlider,ramp));
   shapeDifFormula(shapeSlider,phase,len) =
     warpedSineFormula(shapeSlider,phase+len)
     - warpedSineFormula(shapeSlider,phase);
@@ -68,11 +76,16 @@ with {
   // warpedSineFormula(shapeSlider,phase+(1 / sr / duration))
   // - warpedSineFormula(shapeSlider,phase);
 
-  dif = x-prevGain;
+  dif = attHold-prevGain;
+
+  attHold = x
+            @max(0,(maxSampleRate-attackSamples))
+            :
+            ba.slidingMin(attackSamples+1,maxSampleRate);
   releasing =
     dif>0;
   attacking =
-    dif<0;
+    1-releasing;
 
   compare(start,end,compSlope) =
     (
@@ -168,7 +181,8 @@ with {
 
   warpedSineFormula(shapeSlider,x) =
     // sineShaper(warp(shape,knee,x)):pow(power)
-    sineShaper(warp(shape,knee,x:max(0):min(1))):pow(power)
+    sineShaper(warp(shape
+                   ,knee,x:max(-1):min(1))):pow(power)
   with {
     power = (4*shape/3)+(1/3);
     knee = min(2*shape,2-(2*shape));
@@ -195,8 +209,47 @@ with {
     start = 0.3;
   };
 
-  ishape =
-    shapeSliderVal(shapeSlider);
+
+  turnArroundArray(gainStep) =
+    // (holds, shapes)
+    // : ro.interleave(N,2)
+    // : par(i, N, max(varHold,prevGain+_))
+    // : ba.parallelMin(N)
+    gainStep
+  , ((holds,shapes):ro.interleave(N,2))
+    :seq(i, N, slowdownElement,si.bus((2*N)-(2*i)-2))
+  with {
+    N = 8;
+    holds = shapedArray(attackSamples,attackSamples*2,holdShape,N+1)
+            :(!,ro.cross(N));
+    shapes =
+      shapedArray(startShape,endShape,shapesShape,N);
+    // par(i, N, 0);
+    holdShape = 0;
+    startShape = hslider("startShape", 0.99, -1, 1, 0.01);
+    endShape = hslider("endShape", -0.3, -1, 1, 0.01);
+    shapesShape = 0;
+    // hslider("holdShape", 0.6, -1, 1, 0.001);
+    slowdownElement(step,samples,shape) =
+      ba.slidingMin(max(0,samples),maxSampleRate
+                    ,x@max(0,(maxSampleRate-samples)))
+      : slowDown(samples,shape,step)
+    ;
+
+    slowDown(samples,shape,thisStep,thisHold) =
+      select2(turnAround(thisHold)
+             , thisStep
+             , thisStep:ba.sAndH(startTurn(thisHold))
+                        * (1-slowDownRamp(samples,shape,thisHold))
+             )
+      : min(gainStep)
+    ;
+    slowDownRamp(samples,shape,thisHold) = ba.countup(turnSamples(samples),startTurn(thisHold))/turnSamples(samples):shaper(shape);
+    turnAround(thisHold) = (prevGain>thisHold) & releasing;
+    startTurn(thisHold) = turnAround(thisHold):ba.impulsify;
+    turnSamples(samples) = samples-attackSamples;
+  };
+
 };
 };
 
@@ -241,6 +294,20 @@ with {
             (level-thresh))
     : max(0)*-strength;
 };
+
+
+shapedArray(bottom,top,shape,0) =   0:! ;
+shapedArray(bottom,top, shape ,nrElements) =
+  par(i,nrElements,
+      (i/(nrElements-1))
+      // :shaper(shape)
+      *(top-bottom)
+      +bottom
+     );
+// with {
+// https://www.desmos.com/calculator/pn4myus6x4
+shaper(s,x) = (x-x*s)/(s-x*2*s+1);
+// };
 
 AB(p) = ab:hgroup("[1]A/B",sel(aG(p),bG(p)));
 sel(a,b,x) = select2(x,a,b);
