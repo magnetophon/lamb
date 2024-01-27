@@ -70,19 +70,6 @@ with {
   attacking =
     dif<0;
 
-  compare(start,end,compSlope) =
-    (
-      select2(bigger , start , middle)
-    , select2(bigger , middle , end)
-    , compSlope
-    )
-  with {
-    bigger = compSlope>slope(middle);
-    slope(x) =
-      shapeDif(shapeSlider,x,duration,ma.SR)
-      *(1/(1-warpedSine(shapeSlider,x)));
-    middle = (start+end)*.5;
-  };
   ramp =
     (start,end)
   , shapeDif(shapeSlider,prevRamp+rampStep,duration',ma.SR)
@@ -94,6 +81,20 @@ with {
     start = 0;
     end = 1;
     rampStep = 1 / ma.SR / duration;
+
+    compare(start,end,compSlope) =
+      (
+        select2(bigger , start , middle)
+      , select2(bigger , middle , end)
+      , compSlope
+      )
+    with {
+      bigger = compSlope>slope(middle);
+      slope(x) =
+        shapeDif(shapeSlider,x,duration,ma.SR)
+        *(1/(1-warpedSine(shapeSlider,x)));
+      middle = (start+end)*.5;
+    };
   };
   // ******************************************** the curves: ******************************
   kneeCurve(shape,knee,x) =
