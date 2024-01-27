@@ -5,9 +5,21 @@ declare license "AGPLv3";
 
 import("stdfaust.lib");
 
+///////////////////////////////////////////////////////////////////////////////
+//                          compile time variables                           //
+///////////////////////////////////////////////////////////////////////////////
+
 
 NrChannels = 2;
 maxSampleRate = 48000;
+// 0 for a simple plugin
+// 1 for gain reduction outputs, an A/B comparison system
+// and a comparison to a 4-pole smoother.
+testingFeatures = 1;
+
+///////////////////////////////////////////////////////////////////////////////
+//                                   rocess                                     //
+///////////////////////////////////////////////////////////////////////////////
 
 
 process =
@@ -15,34 +27,23 @@ process =
   par(i, NrChannels, _*ba.db2linear(inputGain)):
   lookahead_compressor_N_chan(strength,thresh,attack,release,knee,link,meter,NrChannels);
 
-SIN_tester =
-  hgroup("",
-         vgroup("[2]test", test)
-         <:vgroup("[1]SIN",
-                  (ba.slidingMin(attackSamples+1,maxAttackSamples):SIN(attack,release))
-                  ,_@attackSamples
-                   // ,ba.slidingMin(attackSamples,maxAttackSamples)
-                  ,(((ba.slidingMin(attackSamples+1,maxAttackSamples):smootherCascade(4, releaseOP, attackOP )),_@attackSamples):min)
-                 ));
+
+///////////////////////////////////////////////////////////////////////////////
+//                                   DSP                                     //
+///////////////////////////////////////////////////////////////////////////////
 
 attackSamples = ba.sec2samp(attack);
 maxAttackSamples =
   maxAttack*maxSampleRate
-  // ba.sec2samp(maxAttack)+1:max(1)
 ;
 
 SIN(attack,release) = loop~(_,_)
-                           // :(!,_)
 with {
   loop(prevRamp,prevGain,x) =
     ramp
   , gain
-    // , x
-    // , (x:seq(i, 3, si.onePoleSwitching(releaseOP,attackOP)))
-    // , (x==gain)
   with {
   duration =
-    // select3(attacking+releasing*2,1,attack,release);
     (attack*attacking)+(release*releasing);
   gain = prevGain+gainStep ;
   gainStep =
@@ -59,14 +60,8 @@ with {
     - warpedSineFormula(shapeSlider,phase);
 
   shapeDif(shape,phase,duration,sr) =
-    // ba.tabulateNd(1,shapeDifFormula,(nrShapes,1<<17,1<<7,0,0,1/maxAttackSamples/1,nrShapes,1,1/24000/(1/maxAttackSamples),shapeSlider,phase,(1 / ma.SR / duration))).lin;
-    // ba.tabulateNd(0,shapeDifFormula,(nrShapes,1<<17,1<<7,0,0,1/maxAttackSamples/1,nrShapes,1,1/24000/(1/maxAttackSamples),shapeSlider,phase,(1 / ma.SR / duration))).lin;
-    // ba.tabulateNd(0,shapeDifFormula,(nrShapes,1<<17,1<<7,0,0,1/maxAttackSamples/1,nrShapes,1,1/24000/(1/maxAttackSamples),shapeSlider,phase,(1 / ma.SR / duration))).lin;
-    // ba.tabulateNd(1,shapeDifFormula,(3,1<<16,1<<6,0,0,1/48000/1,nrShapes,1,1/24000/(1/48000),shapeSlider,phase,(1 / ma.SR / duration))).lin;
     warpedSine(shapeSlider,phase+(1 / sr / duration))
     - warpedSine(shapeSlider,phase);
-  // warpedSineFormula(shapeSlider,phase+(1 / sr / duration))
-  // - warpedSineFormula(shapeSlider,phase);
 
   dif = x-prevGain;
   releasing =
@@ -127,17 +122,8 @@ with {
   };
   sineShaper(x) = (sin((x*0.5 + 0.75)*2*ma.PI)+1)*0.5;
   warpedSine(shapeSlider,x) =
-    // at low number of compares the raw formula is faster than the tabulated version
-    // 16 compares: 5 to 6 % CPU
-    // when doing contant phase recalculations, we need higher precision in the newramp function
-    // cause we get wrong ramp durations (to steep or not steep enough) otherwise
-    // 21 compares seems to work well enough in all cases so far
-    // at the higher number of compares (21) we get 11-12% CPU for the raw formaula
-    // warpedSineFormula(shapeSlider,x)
-    // the tables do much better
-    // Size can be 1<<3;
-    // ba.tabulateNd(1, warpedSineFormula,(nrShapes, 1<<3,0, 0,nrShapes, 1, shapeSlider,x)).cub
-    ba.tabulateNd(0, warpedSineFormula,(nrShapes, SIZE,0, 0,nrShapes, 1, shapeSlider,x)).lin
+    ba.tabulateNd(1, warpedSineFormula,(nrShapes, 1<<3,0, 0,nrShapes, 1, shapeSlider,x)).cub
+    // ba.tabulateNd(0, warpedSineFormula,(nrShapes, SIZE,0, 0,nrShapes, 1, shapeSlider,x)).lin
     // par(i, nrShapes+1, table(i) * xfadeSelector(shapeSlider,i)):>_
     // this one is only slightly cheaper, but less user freindly
     // par(i, nrShapes+1, table(i) * ((shapeSlider)==i)):>_
@@ -213,8 +199,7 @@ lookahead_compressor_N_chan(strength,thresh,att,rel,knee,link,meter,N) =
   :((ro.interleave(N,2)
      : par(i,N, *))
    , si.bus(N)
-   )
-;
+   );
 
 lookahead_compression_gain_N_chan(strength,thresh,att,rel,knee,link,1) =
   lookahead_compression_gain_mono(strength,thresh,att,rel,knee);
@@ -232,7 +217,7 @@ lookahead_compression_gain_mono(strength,thresh,att,rel,knee) =
     select2(SINsmoo
            , SIN(attack,release)
              :(!,_) // for testing
-           ,smootherCascade(4, releaseOP, attackOP ))
+           ,smootherCascade(4, release, attack ))
 with {
   gain_computer(strength,thresh,knee,level) =
     select3((level>(thresh-(knee/2)))+(level>(thresh+(knee/2))),
@@ -242,7 +227,11 @@ with {
     : max(0)*-strength;
 };
 
-AB(p) = ab:hgroup("[1]A/B",sel(aG(p),bG(p)));
+///////////////////////////////////////////////////////////////////////////////
+//                                    GUI                                   //
+///////////////////////////////////////////////////////////////////////////////
+
+AB(p) = ab:hgroup("[2]A/B",sel(aG(p),bG(p)));
 sel(a,b,x) = select2(x,a,b);
 aG(x) = vgroup("[0]a", x);
 bG(x) = vgroup("[1]b", x);
@@ -250,10 +239,10 @@ bG(x) = vgroup("[1]b", x);
 SINsmoo = AB(checkbox("SIN / 4 pole smoother"));
 
 B = si.bus(2);
-ab = checkbox("[0]a/b");
+ab = checkbox("[1]a/b");
 // bypass = AB(bypassP);
 // bypassP = checkbox("[00]bypass");
-inputGain = hslider("[0]input gain", 0, -24, 24, 1):si.smoo;
+inputGain = AB(hslider("[00]input gain", 0, -24, 24, 1)):si.smoo;
 prePost = AB(prePostP);
 prePostP = checkbox("[01]prePost");
 strength = AB(strengthP);
@@ -301,6 +290,15 @@ meter(i) =
 //                                    test                                   //
 ///////////////////////////////////////////////////////////////////////////////
 
+SIN_tester =
+  hgroup("",
+         vgroup("[2]test", test)
+         <:vgroup("[1]SIN",
+                  (ba.slidingMin(attackSamples+1,maxAttackSamples):SIN(attack,release))
+                  ,_@attackSamples
+                   // ,ba.slidingMin(attackSamples,maxAttackSamples)
+                  ,(((ba.slidingMin(attackSamples+1,maxAttackSamples):smootherCascade(4, release, attack )),_@attackSamples):min)
+                 ));
 test = (select3(hslider("test", 2, 0, 2, 1)
                , test0
                , test1
@@ -323,9 +321,6 @@ with {
 };
 // TODO:
 // will algo
-// variable rms size
-// rms as attack
-// shaper around attack/release
 // https://www.desmos.com/calculator/xeystvebfz
 // https://www.desmos.com/calculator/ir2xakmtav
 // sine shaper: https://www.desmos.com/calculator/a9esb5hpzu
