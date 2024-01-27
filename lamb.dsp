@@ -10,12 +10,16 @@ import("stdfaust.lib");
 ///////////////////////////////////////////////////////////////////////////////
 
 
+SampleRate = 48000;
+// Make sure you set this correctly for proper functioning of the plugin
+
 NrChannels = 2;
-maxSampleRate = 48000;
+// Speaks for itself.
+
+testingFeatures = 0;
 // 0 for a simple plugin
 // 1 for gain reduction outputs, an A/B comparison system
 // and a comparison to a 4-pole smoother.
-testingFeatures = 0;
 
 ///////////////////////////////////////////////////////////////////////////////
 //                                  process                                     //
@@ -35,7 +39,7 @@ process =
 
 attackSamples = ba.sec2samp(attack);
 maxAttackSamples =
-  maxAttack*maxSampleRate
+  maxAttack*SampleRate
 ;
 
 SIN(attack,release) = loop~(_,_)
