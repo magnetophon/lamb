@@ -15,21 +15,22 @@ maxSampleRate = 48000;
 // 0 for a simple plugin
 // 1 for gain reduction outputs, an A/B comparison system
 // and a comparison to a 4-pole smoother.
-testingFeatures = 1;
+testingFeatures = 0;
 
 ///////////////////////////////////////////////////////////////////////////////
-//                                   rocess                                     //
+//                                  process                                     //
 ///////////////////////////////////////////////////////////////////////////////
 
 
 process =
   // SIN_tester;
   par(i, NrChannels, _*ba.db2linear(inputGain)):
-  lookahead_compressor_N_chan(strength,thresh,attack,release,knee,link,meter,NrChannels);
-
+  lookahead_compressor_N_chan(strength,thresh,attack,release,knee,link,meter,NrChannels)
+  :postProc(testingFeatures)
+;
 
 ///////////////////////////////////////////////////////////////////////////////
-//                                   DSP                                     //
+//                         SIN  smoother                                     //
 ///////////////////////////////////////////////////////////////////////////////
 
 attackSamples = ba.sec2samp(attack);
@@ -82,27 +83,11 @@ with {
       *(1/(1-warpedSine(shapeSlider,x)));
     middle = (start+end)*.5;
   };
-  // test with shape minimal, so 0.3 and duration = (3/16)^2
-  // (lower shapes give jumps in the phase anyway)
-  // at 48k, 13 seems to little, 14 works
-  //
-  // test with shape -0.4, and duration = (10/16)^2
-  // at 48k, 14 seems to little, 15 works
-  //
-  // test with shape 3.2, and duration = (1/16)^2
-  // at 48k, 16 seems to little, 24 works
-  //
-  // 15 takes about as much CPU as 16, so better be safe than sorry for now
-  //
-  // at 406.5 ms, we get a too slow ramp with 18 compares
-  // 20 is ok, 22 is closer, 21 is "good enough"TM and cheaper
-  //
-  // with the above settings, too low nr of compares gives a stuck or too slow ramp
   ramp =
     (start,end)
   , shapeDif(shapeSlider,prevRamp+rampStep,duration',ma.SR)
     * ((dif'/dif)/(1-warpedSine(shapeSlider',prevRamp)))
-    :seq(i, 21, compare)
+    :seq(i, 16, compare)
     : ((+:_*.5),!) // average start and end, throw away the rest
     :max(0):min(1)
   with {
@@ -122,38 +107,9 @@ with {
   };
   sineShaper(x) = (sin((x*0.5 + 0.75)*2*ma.PI)+1)*0.5;
   warpedSine(shapeSlider,x) =
-    ba.tabulateNd(1, warpedSineFormula,(nrShapes, 1<<3,0, 0,nrShapes, 1, shapeSlider,x)).cub
-    // ba.tabulateNd(0, warpedSineFormula,(nrShapes, SIZE,0, 0,nrShapes, 1, shapeSlider,x)).lin
-    // par(i, nrShapes+1, table(i) * xfadeSelector(shapeSlider,i)):>_
-    // this one is only slightly cheaper, but less user freindly
-    // par(i, nrShapes+1, table(i) * ((shapeSlider)==i)):>_
-  with {
-    // with 16 compares: 4.5 to 5.5 % CPU
-    // with 21 compares: 12 - 17 % CPU!
-    // 23 goes wrong with rel=3, shape=minimum, ramp not steep enough
-    // SIZE =24 hangs the ramp with rel=406.5 ms, any shape
-    // SIZE>24 doesn't compile, even with -quad
-    // SIZE = 1<<24;
-    // table(i) = ba.tabulate(0, warpedSineFormula(shapeSliderVal(i)), SIZE, 0, 1, x).val;
-
-    // 16 compares: 3 to 4 % CPU
-    // 21 compares: 4.5 to 5.5 % CPU
-    // test with
-    // patho case: rel 1 shape -3.4
-    // patho case: rel 1 shape -1.8
-    // SIZE = 1<<17; // for 2d lin
-    SIZE = 1<<16;
-    // table(i) = ba.tabulate(0, warpedSineFormula(shapeSliderVal(i)), SIZE, 0, 1, x).lin;
-    // 16 compares: 4.5 -6%CPU
-    // 21 compares: 7 % CPU
-    // SIZE = 1<<9;
-    // SIZE = 1<<3;
-    // table(i) = ba.tabulate(0, warpedSineFormula(shapeSliderVal(i)), SIZE, 0, 1, x).cub;
-  };
-
+    ba.tabulateNd(0, warpedSineFormula,(nrShapes, 1<<16,0, 0,nrShapes, 1, shapeSlider,x)).lin;
 
   warpedSineFormula(shapeSlider,x) =
-    // sineShaper(warp(shape,knee,x)):pow(power)
     sineShaper(warp(shape,knee,x:max(0):min(1))):pow(power)
   with {
     power = (4*shape/3)+(1/3);
@@ -161,7 +117,6 @@ with {
     shape = shapeSliderVal(shapeSlider);
   };
   shapeSlider =
-    // select2(releasing, 1-slider)
     select2(releasing
            , attackShape
            , releaseShape);
@@ -175,18 +130,15 @@ with {
     // : hbargraph("shapeBG", 0.3, 0.7)
   with {
     range = 2* (.5-start);
-    // lower shapes then 0.3 give jumps in the phase at low durations (d < (3/16:pow(2)))
-    // also they give stuck ramps at nr of compares < 14
-    // shapeSliderVal(shapeSlider) = hslider("shape", 0.5, 0.30, 0.70, 0.01);
     start = 0.3;
   };
-
-  ishape =
-    shapeSliderVal(shapeSlider);
 };
 };
 
 
+///////////////////////////////////////////////////////////////////////////////
+//                                compressor                             //
+///////////////////////////////////////////////////////////////////////////////
 lookahead_compressor_N_chan(strength,thresh,att,rel,knee,link,meter,N) =
   si.bus(N) <: si.bus(N*2):
   (
@@ -214,9 +166,9 @@ lookahead_compression_gain_mono(strength,thresh,att,rel,knee) =
   : ba.slidingMin(attackSamples+1,maxAttackSamples)
   : ba.db2linear
     <:
-    select2(SINsmoo
+    select2(SINsmoo(testingFeatures)
            , SIN(attack,release)
-             :(!,_) // for testing
+             :(!,_)
            ,smootherCascade(4, release, attack ))
 with {
   gain_computer(strength,thresh,knee,level) =
@@ -231,42 +183,35 @@ with {
 //                                    GUI                                   //
 ///////////////////////////////////////////////////////////////////////////////
 
-AB(p) = ab:hgroup("[2]A/B",sel(aG(p),bG(p)));
+AB(0,p) = p;
+AB(1,p) = ab:hgroup("[2]",sel(aG(p),bG(p)));
 sel(a,b,x) = select2(x,a,b);
 aG(x) = vgroup("[0]a", x);
 bG(x) = vgroup("[1]b", x);
 
-SINsmoo = AB(checkbox("SIN / 4 pole smoother"));
+SINsmoo(0) = 0;
+SINsmoo(1) =
+  AB(testingFeatures,checkbox("SIN / 4-pole smoother"));
 
-B = si.bus(2);
 ab = checkbox("[1]a/b");
-// bypass = AB(bypassP);
-// bypassP = checkbox("[00]bypass");
-inputGain = AB(hslider("[00]input gain", 0, -24, 24, 1)):si.smoo;
-prePost = AB(prePostP);
-prePostP = checkbox("[01]prePost");
-strength = AB(strengthP);
+inputGain = AB(testingFeatures,hslider("[00]input gain", 0, -24, 24, 1)):si.smoo;
+strength = AB(testingFeatures,strengthP);
 strengthP = hslider("[02]strength", 100, 0, 100, 1) * 0.01;
-thresh = AB(threshP);
+thresh = AB(testingFeatures,threshP);
 threshP = hslider("[03]thresh",-1,-30,0,1);
-attack = AB(attackP);
+attack = AB(testingFeatures,attackP);
 attackP = hslider("[04]attack[unit:ms] [scale:log]",30, 0, maxAttack*1000,1)*0.001;
-attackShape = AB(attackShapeP);
+attackShape = AB(testingFeatures,attackShapeP);
 attackShapeP = half+hslider("[05]attack shape" , 2, 0-half, half, 0.1);
-// release = AB(releaseP);
-release = AB(releaseP);
+release = AB(testingFeatures,releaseP);
 releaseP = hslider("[06]release[unit:ms] [scale:log]",42,1,1000,1)*0.001;
-releaseShape = AB(releaseShapeP);
+releaseShape = AB(testingFeatures,releaseShapeP);
 releaseShapeP = half+hslider("[07]release shape" , -3, 0-half, half, 0.1);
-knee = AB(kneeP);
+knee = AB(testingFeatures,kneeP);
 kneeP = hslider("[08]knee",2,0,30,1);
-link = AB(linkP);
+link = AB(testingFeatures,linkP);
 linkP = hslider("[09]link", 100, 0, 100, 1) *0.01;
 
-attackOP = AB(attackOpP);
-attackOpP = hslider("[10]attack 4-pole[unit:ms] [scale:log]",30, 0, maxAttack*1000,1)*0.001;
-releaseOP = AB(releaseOpP);
-releaseOpP = hslider("[11]release 4-pole[unit:ms] [scale:log]",42,0,1000,1)*0.001;
 nrShapes = 9;
 half = (nrShapes-1)*.5;
 
@@ -289,6 +234,9 @@ meter(i) =
 ///////////////////////////////////////////////////////////////////////////////
 //                                    test                                   //
 ///////////////////////////////////////////////////////////////////////////////
+
+postProc(0) = si.bus(NrChannels),par(i, NrChannels, !);
+postProc(1) = si.bus(NrChannels*2);
 
 SIN_tester =
   hgroup("",
@@ -319,78 +267,6 @@ test2 =
 with {
   loop(prev,x) = no.lfnoise0(abs(prev*69)%9:pow(2)+1);
 };
-// TODO:
-// will algo
-// https://www.desmos.com/calculator/xeystvebfz
-// https://www.desmos.com/calculator/ir2xakmtav
-// sine shaper: https://www.desmos.com/calculator/a9esb5hpzu
-// mult by shaper to get gain, div by shaper to calc dif
-// piecewise:
-// https://www.desmos.com/calculator/kinlygqpcf
-// knee:
-// https://www.desmos.com/calculator/b3nqkydhye
-// https://www.desmos.com/calculator/v6natnftsw
-// https://www.desmos.com/calculator/zfksmqczif
-// https://www.desmos.com/calculator/sbsdegqezh
-// https://www.desmos.com/calculator/pobazzinqv
-// https://www.desmos.com/calculator/znpkazx5zl
-// https://www.desmos.com/calculator/jgi4uhuifs
-// https://www.desmos.com/calculator/0m5ks4hraa
-//
-// complete:
-// https://www.desmos.com/calculator/otuch9nfsc
-// s(s(x)) with auto knee
-// https://www.desmos.com/calculator/hlushh63kc
-// both, with colors:
-// https://www.desmos.com/calculator/u5jhxh5tk1
-// compare to sine:
-// https://www.desmos.com/calculator/zybaewqrai
-// extra scaling:
-// https://www.desmos.com/calculator/qk8gymjfsl
-// scaling plus area under curve:
-// https://www.desmos.com/calculator/vcl8vrty1yi
-// no scaling area under curve
-// https://www.desmos.com/calculator/wjtyrllnhd
-// https://www.desmos.com/calculator/apeaxg6yxm
-// add negative phase:
-// https://www.desmos.com/calculator/nbf4dbuuj5
-// derivative/speedDif:
-// https://www.desmos.com/calculator/j7wk2oedsi
-
-// TODO: stop ramp if we are not there yet on the steepest point.
-// steepest => derivative of the derivative approaches 0.
-// not there yet =>
-// fullDif
-//
-// TODO:
-// for when the max slope is not big enough:
-// make a table of shape in to ramp at maxSlope out
-// find (binary search) the shape that gives the wanted slope at the maxslope of that shape
-// set ramp to that maxslope, shape offset untill done
-// *****  OR  ******
-// find the stepsize at which the slope matches at ramp=0.5
-
-// TODO: continiously variable shape: see if we are going to make it and if not adapt shape, each sample
-// TODO: when changerate too big, set shape to 0.5 and try again
-// TODO: fix too slow speed at the beginning of short duration ramps when ramp is near ramp', but not equal: make a normal step.
-// TODO: when ramp is zero, and gain<x : fade to x
-// TODO: if you make the number of shapes the user can select small, say 16, you can use 16 lookup tables for the phase corrector
-// TODO: use negative ramps when needed?
-// for example when speed doesn't match up otherwise,
-//   (this one needs an shape that always goes up)
-// or when we're doing the release, and for the attack we need to change direction
-//   (needs a shape that folows the sine, so at negative phases we have negative speed)
-// TODO: for the shape difs at the outer edges, where it goes out of scope, use the values at the edges
-// TODO: turnaround:
-// when attacking and the going into release, keep attack ramp going untill speed is 0, then switch to release ramp
-// TODO: makeup gain: implement as an offset to the wanted GR, before the smoothing, that way any automation is smoothet by us.
-// same with strength
-// TODO: link: before smoother
-// TODO: binary search as a function lin the libraries
-// TODO: auto makup gain by area under curve
-// TODO: make sure we use ints where we can
-// TODO: fix the out of bound reads from tabulateNd.cub:
-// make the parameter write ranges a bit bigger than the read ranges
 N=4;
 T = ma.T;
 PI = ma.PI;
