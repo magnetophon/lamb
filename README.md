@@ -11,8 +11,8 @@ When it has the middle value, the curve is a slice of pure sine.
 ## user preferences
 
 The start of the dsp file has a few user changeable values:
-- SampleRate  
-  **ATTENTION** Make sure you set this correctly for proper functioning of the plugin.
+- MaxSampleRate  
+  **ATTENTION** If you want to use the plugin with a samplerate of more than 192k, make sure you change this.  
 - NrChannels  
   Speaks for itself.
 - testingFeatures  

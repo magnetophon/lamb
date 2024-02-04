@@ -10,7 +10,7 @@ import("stdfaust.lib");
 ///////////////////////////////////////////////////////////////////////////////
 
 
-SampleRate = 48000;
+MaxSampleRate = 192000;
 // Make sure you set this correctly for proper functioning of the plugin
 
 NrChannels = 2;
@@ -39,7 +39,7 @@ process =
 
 attackSamples = ba.sec2samp(attack);
 maxAttackSamples =
-  maxAttack*SampleRate
+  maxAttack*MaxSampleRate
 ;
 
 SIN(attack,release) = loop~(_,_)
