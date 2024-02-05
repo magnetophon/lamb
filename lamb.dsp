@@ -50,7 +50,7 @@ with {
   with {
   duration =
     (attack*attacking)+(release*releasing);
-  gain = prevGain+gainStep ;
+  gain = (prevGain+gainStep):min(x@attackSamples);
   gainStep =
     select2(releasing
            , rawGainStep :max(dif)
