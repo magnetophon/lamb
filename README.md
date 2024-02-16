@@ -14,6 +14,10 @@ you can change both the length and the shape of their curve.
 The shapes look like [this](https://www.desmos.com/calculator/iuvx0mrsyi); _t_ in Desmos corresponds to the _shape_ parameter in the plugin.  
 When it has the middle value, the curve is a slice of pure sine.  
 
+TODO: https://www.desmos.com/calculator/ubmqgogu2s
+old scaled: https://www.desmos.com/calculator/fa6rreh99a
+resample docs: https://henquist.github.io/2.0.0/
+
 With the default settings, there is practically zero distortion, even at 20Hz:
 <p align=”center”>
     <img src="images/measurement.png" alt="meassurement">

@@ -27,10 +27,15 @@ testingFeatures = 0;
 
 
 process =
-  // SIN_tester;
-  par(i, NrChannels, _*ba.db2linear(inputGain)):
-  lookahead_compressor_N_chan(strength,thresh,attack,release,knee,link,meter,NrChannels)
-  :postProc(testingFeatures)
+  SIN_tester
+  // par(i, NrChannels, _*ba.db2linear(inputGain)):
+  // lookahead_compressor_N_chan(strength,thresh,attack,release,knee,link,meter,NrChannels)
+  // :postProc(testingFeatures)
+  // os.lf_sawpos(1)
+  // : newCurve(
+  // checkbox("releasing")
+  // , hslider("shape", 0, 0, 1, 0.01)
+  // )
 ;
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -58,15 +63,15 @@ with {
            ) with {
     rawGainStep =
       shapeDif(shapeSlider,ramp,duration,ma.SR)*fullDif;
-    fullDif =dif/(1-warpedSine(shapeSlider,ramp));
+    fullDif =dif/(1-warpedSine(releasing,shapeSlider,ramp));
   };
   shapeDifFormula(shapeSlider,phase,len) =
     warpedSineFormula(shapeSlider,phase+len)
     - warpedSineFormula(shapeSlider,phase);
 
   shapeDif(shape,phase,duration,sr) =
-    warpedSine(shapeSlider,phase+(1 / sr / duration))
-    - warpedSine(shapeSlider,phase);
+    warpedSine(releasing,shapeSlider,phase+(1 / sr / duration))
+    - warpedSine(releasing,shapeSlider,phase);
 
   dif = x-prevGain;
   releasing =
@@ -77,7 +82,7 @@ with {
   ramp =
     (start,end)
   , shapeDif(shapeSlider,prevRamp+rampStep,duration',ma.SR)
-    * ((dif'/dif)/(1-warpedSine(shapeSlider',prevRamp)))
+    * ((dif'/dif)/(1-warpedSine(releasing,shapeSlider',prevRamp)))
     :seq(i, 16, compare)
     : ((+:_*.5),!) // average start and end, throw away the rest
     :max(0):min(1)
@@ -96,7 +101,7 @@ with {
       bigger = compSlope>slope(middle);
       slope(x) =
         shapeDif(shapeSlider,x,duration,ma.SR)
-        *(1/(1-warpedSine(shapeSlider,x)));
+        *(1/(1-warpedSine(releasing,shapeSlider,x)));
       middle = (start+end)*.5;
     };
   };
@@ -111,7 +116,8 @@ with {
     factor = (1/shape-2)/(1/shape-1);
   };
   sineShaper(x) = (sin((x*0.5 + 0.75)*2*ma.PI)+1)*0.5;
-  warpedSine(shapeSlider,x) =
+
+  OLDwarpedSine(releasing,shapeSlider,x) =
     ba.tabulateNd(0, warpedSineFormula,(nrShapes, 1<<16,0, 0,nrShapes, 1, shapeSlider,x)).lin;
 
   warpedSineFormula(shapeSlider,x) =
@@ -139,6 +145,46 @@ with {
   };
 };
 };
+
+// *************************************** the NEW curves: ******************************
+
+// Based on an algorithm by Dario Sanfilippo:
+// https://www.desmos.com/calculator/2hxvf9q194
+// Adapted by Bart Brouns:
+// https://www.desmos.com/calculator/ubmqgogu2s
+// simplified:
+// https://www.desmos.com/calculator/cog4ujr7cs
+
+f(x0,x1,y0,y1,k,x) = y0+(y1-y0)
+                     * (1-exp((k*(x-x0) /(x1-x0))))
+                     / (1-exp(k)) ;
+// f0m1(c,x) =
+// f(0,xm1(c),0,xm1(c),k0m1(c),x);
+fm1m2(c,x) =
+  f(0,1,0,1,-2.42*(c),x);
+// xm1(c) = 0.5-0.5*pow(c,0.25);
+// k0m1(c) = 2.45*c;
+s(p) = sin(p*ma.PI+1.5*ma.PI)*0.5+0.5;
+// c1(c,x) = s(f0m1(c,x));
+c2(c,x) = s(fm1m2(c,x));
+CurveFormula(c,x) =
+  select2(c==0
+          // , c2(c,x)
+         , c2(c:pow(1+0.42*c),x)
+         , s(x)
+         );
+Curve(c,x) =
+  CurveFormula(c,x);
+// ba.tabulateNd(0, CurveFormula,(nrShapes, 1<<19,0, 0,1, 1, shapeSlider,x)).lin;
+newCurve(releasing,c,x)=
+  select2(releasing
+         , Curve(c,x *-1+1 )
+           *-1+1
+         , Curve(c,x)
+         );
+
+warpedSine(releasing,shapeSlider,x) =
+  newCurve(releasing,shapeSlider,x);
 
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -207,11 +253,13 @@ threshP = hslider("[03]thresh",-1,-30,0,1);
 attack = AB(testingFeatures,attackP);
 attackP = hslider("[04]attack[unit:ms] [scale:log]",30, 0, maxAttack*1000,1)*0.001;
 attackShape = AB(testingFeatures,attackShapeP);
-attackShapeP = half+hslider("[05]attack shape" , 2, 0-half, half, 0.1);
+// attackShapeP = half+hslider("[05]attack shape" , 2, 0-half, half, 0.1);
+attackShapeP = hslider("[05]attack shape" , 0.5, 0, 1, 0.01);
 release = AB(testingFeatures,releaseP);
 releaseP = hslider("[06]release[unit:ms] [scale:log]",42,1,1000,1)*0.001;
 releaseShape = AB(testingFeatures,releaseShapeP);
-releaseShapeP = half+hslider("[07]release shape" , -3, 0-half, half, 0.1);
+// releaseShapeP = half+hslider("[07]release shape" , -3, 0-half, half, 0.1);
+releaseShapeP = hslider("[07]release shape" , 0.75, 0, 1, 0.01);
 knee = AB(testingFeatures,kneeP);
 kneeP = hslider("[08]knee",2,0,30,1);
 link = AB(testingFeatures,linkP);
