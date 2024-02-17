@@ -254,11 +254,11 @@ SINsmoo(1) =
   AB(testingFeatures,checkbox("SIN / 4-pole smoother"));
 
 ab = checkbox("[1]a/b");
-inputGain = AB(testingFeatures,hslider("[00]input gain", 0, -24, 24, 1)):si.smoo;
+inputGain = AB(testingFeatures,hslider("[00]input gain", 0, -24, 24, 0.1)):si.smoo;
 strength = AB(testingFeatures,strengthP);
 strengthP = hslider("[02]strength", 100, 0, 100, 1) * 0.01;
 thresh = AB(testingFeatures,threshP);
-threshP = hslider("[03]thresh",-1,-30,0,1);
+threshP = hslider("[03]thresh",-1,-30,0,0.1);
 attack = AB(testingFeatures,attackP);
 attackP = hslider("[04]attack[unit:ms] [scale:log]",30, 0, maxAttack*1000,1)*0.001;
 attackShape = AB(testingFeatures,attackShapeP);
@@ -270,7 +270,7 @@ releaseShape = AB(testingFeatures,releaseShapeP);
 // releaseShapeP = half+hslider("[07]release shape" , -3, 0-half, half, 0.1);
 releaseShapeP = hslider("[07]release shape" , 0.75, 0, 1, 0.01);
 knee = AB(testingFeatures,kneeP);
-kneeP = hslider("[08]knee",2,0,30,1);
+kneeP = hslider("[08]knee",2,0,30,0.1);
 link = AB(testingFeatures,linkP);
 linkP = hslider("[09]link", 100, 0, 100, 1) *0.01;
 
