@@ -113,11 +113,12 @@ with {
 
 
   warpedSine(releasing,shapeSlider,x) =
-    select2(checkbox("new")
-           , OLDwarpedSine(releasing,shapeSlider,x)
-           , newCurve(releasing,shapeSlider,x)
-           )
-  ;
+    newCurve(releasing,shapeSlider,x);
+  // select2(checkbox("new")
+  // select2(1
+  // , OLDwarpedSine(releasing,shapeSlider,x)
+  // , newCurve(releasing,shapeSlider,x)
+  // );
 
 
 
