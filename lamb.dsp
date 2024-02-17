@@ -73,7 +73,11 @@ with {
     warpedSine(releasing,shapeSlider,phase+(1 / sr / duration))
     - warpedSine(releasing,shapeSlider,phase);
 
-  dif = x-prevGain;
+  hold = ba.slidingMin(attackSamples+1,maxAttackSamples,x);
+  dif =
+    hold
+    - prevGain;
+
   releasing =
     dif>0;
   attacking =
@@ -214,13 +218,13 @@ lookahead_compression_gain_N_chan(strength,thresh,att,rel,knee,link,N) =
 
 lookahead_compression_gain_mono(strength,thresh,att,rel,knee) =
   ba.linear2db : gain_computer(strength,thresh,knee)
-  : ba.slidingMin(attackSamples+1,maxAttackSamples)
   : ba.db2linear
     <:
     select2(SINsmoo(testingFeatures)
            , SIN(attack,release)
              :(!,_)
-           ,smootherCascade(4, release, attack ))
+           , ba.slidingMin(attackSamples+1,maxAttackSamples)
+             : smootherCascade(4, release, attack ))
 with {
   gain_computer(strength,thresh,knee,level) =
     select3((level>(thresh-(knee/2)))+(level>(thresh+(knee/2))),
@@ -295,10 +299,12 @@ SIN_tester =
   hgroup("",
          vgroup("[2]test", test)
          <:vgroup("[1]SIN",
-                  (ba.slidingMin(attackSamples+1,maxAttackSamples):SIN(attack,release))
+                  (
+                    // ba.slidingMin(attackSamples+1,maxAttackSamples):
+                    SIN(attack,release))
                   ,_@attackSamples
-                   // ,ba.slidingMin(attackSamples,maxAttackSamples)
-                  ,(((ba.slidingMin(attackSamples+1,maxAttackSamples):smootherCascade(4, release, attack )),_@attackSamples):min)
+                   // ,ba.slidingMin(attackSamples+1,maxAttackSamples)
+                   // ,(((ba.slidingMin(attackSamples+1,maxAttackSamples):smootherCascade(4, release, attack )),_@attackSamples):min)
                  ));
 test = (select3(hslider("test", 2, 0, 2, 1)
                , test0
