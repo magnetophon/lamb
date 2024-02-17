@@ -162,14 +162,9 @@ with {
 f(x0,x1,y0,y1,k,x) = y0+(y1-y0)
                      * (1-exp((k*(x-x0) /(x1-x0))))
                      / (1-exp(k)) ;
-// f0m1(c,x) =
-// f(0,xm1(c),0,xm1(c),k0m1(c),x);
 fm1m2(c,x) =
   f(0,1,0,1,-2.42*(c),x);
-// xm1(c) = 0.5-0.5*pow(c,0.25);
-// k0m1(c) = 2.45*c;
 s(p) = sin(p*ma.PI+1.5*ma.PI)*0.5+0.5;
-// c1(c,x) = s(f0m1(c,x));
 c2(c,x) = s(fm1m2(c,x));
 CurveFormula(c,x) =
   select2(c==0
@@ -178,8 +173,8 @@ CurveFormula(c,x) =
          , s(x)
          );
 Curve(c,x) =
-  CurveFormula(c,x);
-// ba.tabulateNd(0, CurveFormula,(nrShapes, 1<<19,0, 0,1, 1, shapeSlider,x)).lin;
+  // CurveFormula(c,x);
+  ba.tabulateNd(0, CurveFormula,(nrShapes, 1<<16,0, 0,1, 1, c,x)).lin;
 newCurve(releasing,c,x)=
   select2(releasing
          , Curve(c,x *-1+1 )
@@ -324,7 +319,7 @@ test1 = select3(
 test2 =
   (loop~_)
 with {
-  loop(prev,x) = no.lfnoise0(abs(prev*69)%9:pow(2)+1);
+  loop(prev,x) = no.lfnoise0(abs(prev*69)%9:pow(0.75)*5+1);
 };
 N=4;
 T = ma.T;
