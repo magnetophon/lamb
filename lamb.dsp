@@ -185,9 +185,9 @@ CurveFormula(c,x) =
          , s(x)
          );
 Curve(c,x) =
-  CurveFormula(c,x);
-// ba.tabulateNd(0, CurveFormula,(nrShapes, 1<<16,0, 0,1, 1, c,x)).lin;
-// ba.tabulateNd(0, CurveFormula,(nrShapes, 1<<19,0, 0,1, 1, c,x)).lin;
+  // CurveFormula(c,x);
+  // ba.tabulateNd(0, CurveFormula,(nrShapes, 1<<16,0, 0,1, 1, c,x)).lin;
+  ba.tabulateNd(0, CurveFormula,(nrShapes, 1<<19,0, 0,1, 1, c,x)).lin;
 newCurve(releasing,c,x)=
   select2(releasing
          , Curve(c,x *-1+1 )
