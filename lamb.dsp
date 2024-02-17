@@ -27,15 +27,15 @@ testingFeatures = 0;
 
 
 process =
-  SIN_tester
-  // par(i, NrChannels, _*ba.db2linear(inputGain)):
-  // lookahead_compressor_N_chan(strength,thresh,attack,release,knee,link,meter,NrChannels)
-  // :postProc(testingFeatures)
-  // os.lf_sawpos(1)
-  // : newCurve(
-  // checkbox("releasing")
-  // , hslider("shape", 0, 0, 1, 0.01)
-  // )
+  // SIN_tester
+  par(i, NrChannels, _*ba.db2linear(inputGain)):
+  lookahead_compressor_N_chan(strength,thresh,attack,release,knee,link,meter,NrChannels)
+  :postProc(testingFeatures)
+   // os.lf_sawpos(1)
+   // : newCurve(
+   // checkbox("releasing")
+   // , hslider("shape", 0, 0, 1, 0.01)
+   // )
 ;
 
 ///////////////////////////////////////////////////////////////////////////////
