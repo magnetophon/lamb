@@ -110,6 +110,17 @@ with {
     };
   };
   // ******************************************** the curves: ******************************
+
+
+  warpedSine(releasing,shapeSlider,x) =
+    select2(checkbox("new")
+           , OLDwarpedSine(releasing,shapeSlider,x)
+           , newCurve(releasing,shapeSlider,x)
+           )
+  ;
+
+
+
   kneeCurve(shape,knee,x) =
     select3( (x>shape-(knee*.5)) + (x>shape+(knee*.5))
            , 0
@@ -173,8 +184,9 @@ CurveFormula(c,x) =
          , s(x)
          );
 Curve(c,x) =
-  // CurveFormula(c,x);
-  ba.tabulateNd(0, CurveFormula,(nrShapes, 1<<16,0, 0,1, 1, c,x)).lin;
+  CurveFormula(c,x);
+// ba.tabulateNd(0, CurveFormula,(nrShapes, 1<<16,0, 0,1, 1, c,x)).lin;
+// ba.tabulateNd(0, CurveFormula,(nrShapes, 1<<19,0, 0,1, 1, c,x)).lin;
 newCurve(releasing,c,x)=
   select2(releasing
          , Curve(c,x *-1+1 )
@@ -182,8 +194,6 @@ newCurve(releasing,c,x)=
          , Curve(c,x)
          );
 
-warpedSine(releasing,shapeSlider,x) =
-  newCurve(releasing,shapeSlider,x);
 
 
 ///////////////////////////////////////////////////////////////////////////////
