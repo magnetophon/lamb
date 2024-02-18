@@ -364,7 +364,7 @@ releaseShape = AB(testingFeatures,releaseShapeP);
 // releaseShapeP = half+hslider("[07]release shape" , -3, 0-half, half, 0.1);
 releaseShapeP = hslider("[07]release shape" , 0, 0, 1, 0.01);
 knee = AB(testingFeatures,kneeP);
-kneeP = hslider("[08]knee",2,0,30,0.1);
+kneeP = hslider("[08]knee",1,0,30,0.1);
 link = AB(testingFeatures,linkP);
 linkP = hslider("[09]link", 0, 0, 100, 1) *0.01;
 
@@ -372,19 +372,19 @@ linkP = hslider("[09]link", 0, 0, 100, 1) *0.01;
 postAtt = hslider("post attack[ms]", 0, 0, 2000, 1)*0.001;
 postRel = hslider("post release[ms]", 2000, 0, 20000, 1)*0.001;
 
-BTgroup(x) = hgroup("BT", x);
-bottomGroup(x) = BTgroup(vgroup("bottom", x));
-topGroup(x) = BTgroup(vgroup("top", x));
+BTgroup(x) = hgroup("[0]parallel gains", x);
+bottomGroup(x) = BTgroup(vgroup("[0]bottom", x));
+topGroup(x) = BTgroup(vgroup("[1]top", x));
 
-bottomThres = bottomGroup(hslider("[03]leveler thresh",-1,-30,0,0.1));
-bottomAtt = bottomGroup(hslider("[04]leveler attack[unit:ms] [scale:log]",120, 0, 1000,0.1)*0.001);
-bottomRel = bottomGroup(hslider("[06]leveler release[unit:s] [scale:log]",4800,1,10000,0.1)*0.001);
+bottomThres = bottomGroup(hslider("[03]leveler thresh",0,-30,30,0.1));
+bottomAtt = bottomGroup(hslider("[04]leveler attack[unit:ms] [scale:log]",180, 10, 1000,1)*0.001);
+bottomRel = bottomGroup(hslider("[06]leveler release[unit:s] [scale:log]",4500,100,10000,10)*0.001);
 bottomKnee = bottomGroup(hslider("[08]leveler knee",3,0,30,0.1));
 
-topThres = topGroup(hslider("[03]leveler thresh",-1,-30,0,0.1));
-topAtt = topGroup(hslider("[04]leveler attack[unit:ms] [scale:log]",9, 0, 1000,0.1)*0.001);
-topRel = topGroup(hslider("[06]leveler release[unit:s] [scale:log]",60,1,10000,0.1)*0.001);
-topKnee = topGroup(hslider("[08]leveler knee",30,0,30,0.1));
+topThres = topGroup(hslider("[03]leveler thresh",0,-30,30,0.1));
+topAtt = topGroup(hslider("[04]leveler attack[unit:ms] [scale:log]",0.9, 0.1, 100,0.1)*0.001);
+topRel = topGroup(hslider("[06]leveler release[unit:s] [scale:log]",30,1,1000,1)*0.001);
+topKnee = topGroup(hslider("[08]leveler knee",12,0,30,0.1));
 
 // *******************************   more constants *********************************************************
 
