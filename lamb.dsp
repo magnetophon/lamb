@@ -10,7 +10,9 @@ import("stdfaust.lib");
 ///////////////////////////////////////////////////////////////////////////////
 
 
-MaxSampleRate = 192000;
+// MaxSampleRate = 192000;
+MaxSampleRate = 48000;
+// MaxSampleRate = 100;
 // Make sure you set this correctly for proper functioning of the plugin
 
 NrChannels = 2;
@@ -26,20 +28,26 @@ testingFeatures = 0;
 ///////////////////////////////////////////////////////////////////////////////
 
 
-process =
+process(x,y) =
   // SIN_tester
-  levelerGroup(leveler):
-  lambGroup(lamb)
-  // os.lf_sawpos(1)
-  // : newCurve(
-  // checkbox("releasing")
-  // , hslider("shape", 0, 0, 1, 0.01)
-  // )
+  preGain(x,y)
+  : levelerGroup(leveler)
+  :( preGain(x,y) , _)
+  : lambGroup(lamb)
+    // : lambGroup(lamb(x,y))
+    // os.lf_sawpos(1)
+    // : newCurve(
+    // checkbox("releasing")
+    // , hslider("shape", 0, 0, 1, 0.01)
+    // )
 ;
-lamb =
-  par(i, NrChannels, _*ba.db2linear(inputGain))
-  : lookahead_compressor_N_chan(strength,thresh,attack,release,knee,link,meter,NrChannels)
-  : postProc(testingFeatures);
+lamb(x,y,levelerGain) =
+  lookahead_compressor_N_chan(levelerGain,strength,thresh,attack,release,knee,link,meter,NrChannels,x,y)
+  : postProc(testingFeatures) ;
+
+preGain(x,y) =
+  (x*ba.db2linear(inputGain))
+, (y*ba.db2linear(inputGain));
 
 ///////////////////////////////////////////////////////////////////////////////
 //                         SIN  smoother                                     //
@@ -137,7 +145,7 @@ with {
   sineShaper(x) = (sin((x*0.5 + 0.75)*2*ma.PI)+1)*0.5;
 
   OLDwarpedSine(releasing,shapeSlider,x) =
-    ba.tabulateNd(0, warpedSineFormula,(nrShapes, 1<<16,0, 0,nrShapes, 1, shapeSlider,x)).lin;
+    ba.tabulateNd(0, warpedSineFormula,(nrShapes, 1<<16,0, 0,nrShapes, maxRelease, shapeSlider,x)).lin;
 
   warpedSineFormula(shapeSlider,x) =
     sineShaper(warp(shape,knee,x:max(0):min(1))):pow(power)
@@ -189,8 +197,8 @@ CurveFormula(c,x) =
          );
 Curve(c,x) =
   // CurveFormula(c,x);
-  // ba.tabulateNd(0, CurveFormula,(nrShapes, 1<<16,0, 0,1, 1, c,x)).lin;
-  ba.tabulateNd(0, CurveFormula,(nrShapes, 1<<19,0, 0,1, 1, c,x)).lin;
+  ba.tabulateNd(0, CurveFormula,(nrShapes, 1<<16,0, 0,1, 1, c,x)).lin;
+
 newCurve(releasing,c,x)=
   select2(releasing
          , Curve(c,x *-1+1 )
@@ -203,11 +211,11 @@ newCurve(releasing,c,x)=
 ///////////////////////////////////////////////////////////////////////////////
 //                                compressor                             //
 ///////////////////////////////////////////////////////////////////////////////
-lookahead_compressor_N_chan(strength,thresh,att,rel,knee,link,meter,N) =
+lookahead_compressor_N_chan(levelerGain,strength,thresh,att,rel,knee,link,meter,N) =
   si.bus(N) <: si.bus(N*2):
   (
     par(i, N, _@attackSamples)
-   ,((par(i,N,abs) : lookahead_compression_gain_N_chan(strength,thresh,att,rel,knee,link,N))
+   ,((par(i,N,abs) : lookahead_compression_gain_N_chan(levelerGain,strength,thresh,att,rel,knee,link,N))
      : par(i, N, (meter(i)))
        <: si.bus(N*2)
     )
@@ -217,17 +225,18 @@ lookahead_compressor_N_chan(strength,thresh,att,rel,knee,link,meter,N) =
    , si.bus(N)
    );
 
-lookahead_compression_gain_N_chan(strength,thresh,att,rel,knee,link,1) =
-  lookahead_compression_gain_mono(strength,thresh,att,rel,knee);
+lookahead_compression_gain_N_chan(levelerGain,strength,thresh,att,rel,knee,link,1) =
+  lookahead_compression_gain_mono(levelerGain,strength,thresh,att,rel,knee);
 
-lookahead_compression_gain_N_chan(strength,thresh,att,rel,knee,link,N) =
+lookahead_compression_gain_N_chan(levelerGain,strength,thresh,att,rel,knee,link,N) =
   si.bus(N)
   <: (si.bus(N),(ba.parallelMax(N) <: si.bus(N))) : ro.interleave(N,2) : par(i,N,(it.interpolate_linear(link)))
-  : par(i,N,lookahead_compression_gain_mono(strength,thresh,att,rel,knee)) ;
+  : par(i,N,lookahead_compression_gain_mono(levelerGain,strength,thresh,att,rel,knee)) ;
 
-lookahead_compression_gain_mono(strength,thresh,att,rel,knee) =
+lookahead_compression_gain_mono(levelerGain,strength,thresh,att,rel,knee) =
   ba.linear2db : gain_computer(strength,thresh,knee)
   : ba.db2linear
+  : min(levelerGain)
     <:
     select2(SINsmoo(testingFeatures)
            , SIN(attack,release)
@@ -250,12 +259,9 @@ leveler(x,y) =
   : fakeFeedback
   : compArray
   : ba.parallelMin(nrComps)
-  : slowSmoother
-  : ba.linear2db
-  : hbargraph("[99]total GR", -24, 0)
-  : ba.db2linear
-    <:(_*x,_*y)
-
+    // : slowSmoother
+  : attachMeter(hbargraph("[99]total GR", -24, 0))
+    // <:(_*x,_*y)
 with {
   level(x,y) =
     max(abs(x),abs(y)):ba.linear2db;
@@ -285,9 +291,7 @@ with {
     gain_computer(1,thresh,knee,level)
     : ba.db2linear
     : si.onePoleSwitching(rel,att)
-    : ba.linear2db
-    : hgroup("par GR", vbargraph("GR %i", -24, 0))
-    : ba.db2linear
+    : attachMeter(hgroup("par GR", vbargraph("GR %i", -24, 0)))
   ;
   slowSmoother = seq(i, nrSlowSmoothers, attRel);
   attRel = si.onePoleSwitching(postRel/nrSlowSmoothers,postAtt/nrSlowSmoothers);
@@ -295,27 +299,6 @@ with {
   nrComps = 8;
   nrSlowSmoothers = 3;
   prePost = 1;
-  postAtt = hslider("post attack[ms]", 0, 0, 2000, 1)*0.001;
-  postRel = hslider("post release[ms]", 2000, 0, 20000, 1)*0.001;
-
-  BTgroup(x) = hgroup("BT", x);
-  bottomGroup(x) = BTgroup(vgroup("bottom", x));
-  topGroup(x) = BTgroup(vgroup("top", x));
-
-  bottomThres = bottomGroup(thresh);
-  bottomAtt = bottomGroup(attack);
-  bottomRel = bottomGroup(release);
-  bottomKnee = bottomGroup(knee);
-
-  topThres = topGroup(thresh);
-  topAtt = topGroup(attack);
-  topRel = topGroup(release);
-  topKnee = topGroup(knee);
-
-  thresh = hslider("[03]thresh",-1,-30,0,0.1);
-  attack = hslider("[04]attack[unit:ms] [scale:log]",30, 0, 1000,1)*0.001;
-  release = hslider("[06]release[unit:ms] [scale:log]",200,1,5000,1)*0.001;
-  knee = hslider("[08]knee",2,0,30,0.1);
 };
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -347,6 +330,13 @@ levelerGroup(x) = totalGroup(vgroup("leveler", x));
 lambGroup(x) = totalGroup(vgroup("lamb", x));
 totalGroup(x) = hgroup("", x);
 
+meter(i) =
+  _<: attach(_, (ba.linear2db:max(-24):min(0):hbargraph(
+                   "v:[10]meters/%i[unit:dB]", -24, 0)
+                ));
+attachMeter(b) =
+  _<: attach(_, (ba.linear2db:max(-24):min(0): b));
+
 AB(0,p) = p;
 AB(1,p) = ab:hgroup("[2]",sel(aG(p),bG(p)));
 sel(a,b,x) = select2(x,a,b);
@@ -364,24 +354,47 @@ strengthP = hslider("[02]strength", 100, 0, 100, 1) * 0.01;
 thresh = AB(testingFeatures,threshP);
 threshP = hslider("[03]thresh",-1,-30,0,0.1);
 attack = AB(testingFeatures,attackP);
-attackP = hslider("[04]attack[unit:ms] [scale:log]",30, 0, maxAttack*1000,1)*0.001;
+attackP = hslider("[04]attack[unit:ms] [scale:log]",9, 0, maxAttack*1000,0.1)*0.001;
 attackShape = AB(testingFeatures,attackShapeP);
 // attackShapeP = half+hslider("[05]attack shape" , 2, 0-half, half, 0.1);
-attackShapeP = hslider("[05]attack shape" , 0.5, 0, 1, 0.01);
+attackShapeP = hslider("[05]attack shape" , 0, 0, 1, 0.01);
 release = AB(testingFeatures,releaseP);
-releaseP = hslider("[06]release[unit:ms] [scale:log]",42,1,1000,1)*0.001;
+releaseP = hslider("[06]release[unit:ms] [scale:log]",30,1,maxRelease*1000,1)*0.001;
 releaseShape = AB(testingFeatures,releaseShapeP);
 // releaseShapeP = half+hslider("[07]release shape" , -3, 0-half, half, 0.1);
-releaseShapeP = hslider("[07]release shape" , 0.75, 0, 1, 0.01);
+releaseShapeP = hslider("[07]release shape" , 0, 0, 1, 0.01);
 knee = AB(testingFeatures,kneeP);
 kneeP = hslider("[08]knee",2,0,30,0.1);
 link = AB(testingFeatures,linkP);
-linkP = hslider("[09]link", 100, 0, 100, 1) *0.01;
+linkP = hslider("[09]link", 0, 0, 100, 1) *0.01;
 
-nrShapes = 9;
+//************************************** leveler **********************************************************
+postAtt = hslider("post attack[ms]", 0, 0, 2000, 1)*0.001;
+postRel = hslider("post release[ms]", 2000, 0, 20000, 1)*0.001;
+
+BTgroup(x) = hgroup("BT", x);
+bottomGroup(x) = BTgroup(vgroup("bottom", x));
+topGroup(x) = BTgroup(vgroup("top", x));
+
+bottomThres = bottomGroup(hslider("[03]leveler thresh",-1,-30,0,0.1));
+bottomAtt = bottomGroup(hslider("[04]leveler attack[unit:ms] [scale:log]",120, 0, 1000,0.1)*0.001);
+bottomRel = bottomGroup(hslider("[06]leveler release[unit:s] [scale:log]",4800,1,10000,0.1)*0.001);
+bottomKnee = bottomGroup(hslider("[08]leveler knee",3,0,30,0.1));
+
+topThres = topGroup(hslider("[03]leveler thresh",-1,-30,0,0.1));
+topAtt = topGroup(hslider("[04]leveler attack[unit:ms] [scale:log]",9, 0, 1000,0.1)*0.001);
+topRel = topGroup(hslider("[06]leveler release[unit:s] [scale:log]",60,1,10000,0.1)*0.001);
+topKnee = topGroup(hslider("[08]leveler knee",30,0,30,0.1));
+
+// *******************************   more constants *********************************************************
+
+nrShapes = 8;
 half = (nrShapes-1)*.5;
 
-maxAttack = 0.1;
+// 50 ms
+maxAttack = 0.05;
+// 0.5 sec
+maxRelease = 0.5:max(maxAttack);
 
 SINtest = toggle(soft,loud) with {
   toggle(a,b) = select2(block,b,a);
@@ -392,10 +405,6 @@ SINtest = toggle(soft,loud) with {
 };
 
 
-meter(i) =
-  _<: attach(_, (ba.linear2db:max(-24):min(0):hbargraph(
-                   "v:[10]meters/%i[unit:dB]", -24, 0)
-                ));
 
 ///////////////////////////////////////////////////////////////////////////////
 //                                    test                                   //
