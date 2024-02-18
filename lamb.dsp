@@ -28,15 +28,18 @@ testingFeatures = 0;
 
 process =
   // SIN_tester
-  par(i, NrChannels, _*ba.db2linear(inputGain)):
-  lookahead_compressor_N_chan(strength,thresh,attack,release,knee,link,meter,NrChannels)
-  :postProc(testingFeatures)
-   // os.lf_sawpos(1)
-   // : newCurve(
-   // checkbox("releasing")
-   // , hslider("shape", 0, 0, 1, 0.01)
-   // )
+  levelerGroup(leveler):
+  lambGroup(lamb)
+  // os.lf_sawpos(1)
+  // : newCurve(
+  // checkbox("releasing")
+  // , hslider("shape", 0, 0, 1, 0.01)
+  // )
 ;
+lamb =
+  par(i, NrChannels, _*ba.db2linear(inputGain))
+  : lookahead_compressor_N_chan(strength,thresh,attack,release,knee,link,meter,NrChannels)
+  : postProc(testingFeatures);
 
 ///////////////////////////////////////////////////////////////////////////////
 //                         SIN  smoother                                     //
@@ -230,19 +233,119 @@ lookahead_compression_gain_mono(strength,thresh,att,rel,knee) =
            , SIN(attack,release)
              :(!,_)
            , ba.slidingMin(attackSamples+1,maxAttackSamples)
-             : smootherCascade(4, release, attack ))
+             : smootherCascade(4, release, attack ));
+gain_computer(strength,thresh,knee,level) =
+  select3((level>(thresh-(knee/2)))+(level>(thresh+(knee/2))),
+          0,
+          ((level-thresh+(knee/2)) : pow(2)/(2*max(ma.EPSILON,knee))),
+          (level-thresh))
+  : max(0)*-strength;
+
+///////////////////////////////////////////////////////////////////////////////
+//                                 Leveler                                   //
+///////////////////////////////////////////////////////////////////////////////
+
+leveler(x,y) =
+  level(x,y)
+  : fakeFeedback
+  : compArray
+  : ba.parallelMin(nrComps)
+  : slowSmoother
+  : ba.linear2db
+  : hbargraph("[99]total GR", -24, 0)
+  : ba.db2linear
+    <:(_*x,_*y)
+
 with {
-  gain_computer(strength,thresh,knee,level) =
-    select3((level>(thresh-(knee/2)))+(level>(thresh+(knee/2))),
-            0,
-            ((level-thresh+(knee/2)) : pow(2)/(2*max(ma.EPSILON,knee))),
-            (level-thresh))
-    : max(0)*-strength;
+  level(x,y) =
+    max(abs(x),abs(y)):ba.linear2db;
+  fakeFeedback = _;
+  compArray(x) =
+    // (strength,thresh,att,rel,knee,prePost)
+    (threshs,atts,rels,knees)
+    : ro.interleave(nrComps,4)
+    : par(i, nrComps, gain(i,x));
+
+  // strengths = par(i, nrComps, 1);
+  threshs =
+    LinArray(bottomThres,topThres,nrComps);
+  atts =
+    LogArray(bottomAtt,topAtt,nrComps)
+    // : par(i, nrComps, hbargraph("att %i", 0, 0.1))
+  ;
+  rels =
+    LogArray(bottomRel,topRel,nrComps)
+  ;
+  knees =
+    LinArray(bottomKnee,topKnee,nrComps);
+  // prePosts = par(i, nrComps, 1);
+
+  gain(i,level,thresh,att,rel,knee) =
+    // co.peak_compression_gain_mono_db(1,thresh,att,rel,knee,prePost,x);
+    gain_computer(1,thresh,knee,level)
+    : ba.db2linear
+    : si.onePoleSwitching(rel,att)
+    : ba.linear2db
+    : hgroup("par GR", vbargraph("GR %i", -24, 0))
+    : ba.db2linear
+  ;
+  slowSmoother = seq(i, nrSlowSmoothers, attRel);
+  attRel = si.onePoleSwitching(postRel/nrSlowSmoothers,postAtt/nrSlowSmoothers);
+
+  nrComps = 8;
+  nrSlowSmoothers = 3;
+  prePost = 1;
+  postAtt = hslider("post attack[ms]", 0, 0, 2000, 1)*0.001;
+  postRel = hslider("post release[ms]", 2000, 0, 20000, 1)*0.001;
+
+  BTgroup(x) = hgroup("BT", x);
+  bottomGroup(x) = BTgroup(vgroup("bottom", x));
+  topGroup(x) = BTgroup(vgroup("top", x));
+
+  bottomThres = bottomGroup(thresh);
+  bottomAtt = bottomGroup(attack);
+  bottomRel = bottomGroup(release);
+  bottomKnee = bottomGroup(knee);
+
+  topThres = topGroup(thresh);
+  topAtt = topGroup(attack);
+  topRel = topGroup(release);
+  topKnee = topGroup(knee);
+
+  thresh = hslider("[03]thresh",-1,-30,0,0.1);
+  attack = hslider("[04]attack[unit:ms] [scale:log]",30, 0, 1000,1)*0.001;
+  release = hslider("[06]release[unit:ms] [scale:log]",200,1,5000,1)*0.001;
+  knee = hslider("[08]knee",2,0,30,0.1);
 };
 
 ///////////////////////////////////////////////////////////////////////////////
+//                           parameter arrays                                //
+///////////////////////////////////////////////////////////////////////////////
+LinArray(bottom,top,0) =   0:! ;
+LinArray(bottom,top,nrElements) =     par(i,nrElements,   ((top-bottom)*(i/(nrElements-1)))+bottom);
+
+// make a log array of values, from bottom to top
+LogArray(bottom,top,nrElements) =     par(i,nrElements,   pow((pow((top/bottom),1/(nrElements-1))),i)*bottom);
+
+shapedArray(bottom,top,shape,0) =   0:! ;
+shapedArray(bottom,top, shape ,nrElements) =
+  par(i,nrElements,
+      (i/(nrElements-1))
+      // :shaper(shape)
+      *(top-bottom)
+      +bottom
+     );
+// with {
+// https://www.desmos.com/calculator/pn4myus6x4
+shaper(s,x) = (x-x*s)/(s-x*2*s+1);
+// };
+///////////////////////////////////////////////////////////////////////////////
 //                                    GUI                                   //
 ///////////////////////////////////////////////////////////////////////////////
+
+levelerGroup(x) = totalGroup(vgroup("leveler", x));
+lambGroup(x) = totalGroup(vgroup("lamb", x));
+totalGroup(x) = hgroup("", x);
 
 AB(0,p) = p;
 AB(1,p) = ab:hgroup("[2]",sel(aG(p),bG(p)));
