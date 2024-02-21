@@ -21,10 +21,6 @@ nrChannels = 2;
 enableGRout = 1;
 // gain reduction outputs
 
-enableAB = 0;
-// an A/B comparison system
-// allows you to switch between two sets of parameters
-
 selectSmoother = 0;
 // 0 = just the sophisticated smoother, heavy on the CPU, long compile time
 // 1 = just a regular 4-pole smoother with lookahead
@@ -47,6 +43,14 @@ selectParallelGains = 2;
 
 nrComps = 8;
 // the number of parallel compressors
+
+enableAB = 0;
+// an A/B comparison system
+// allows you to switch between two sets of parameters
+
+enableDiffMeters = 1;
+// a meter that shows you more or less GR of the peak limiter
+// it can not show just the fast GR, since the smoother interacts with parallelGains
 
 ///////////////////////////////////////////////////////////////////////////////
 //                                  process                                     //
@@ -259,8 +263,18 @@ lookahead_compressor_N_chan(parGain,strength,thresh,att,rel,knee,link,N) =
   )
   :((ro.interleave(N,2)
      : par(i,N, *))
-   , si.bus(N)
-   );
+   , (si.bus(N)
+      : diffMeters(enableDiffMeters,N,parGain)));
+
+diffMeters(0,N,parGain) =
+  si.bus(N);
+diffMeters(1,N,parGain) =
+  par(i, N,
+      _<: attach(_,
+                 (ba.linear2db -(parGain:ba.slidingMin(attackSamples+1,maxAttackSamples):ba.linear2db))
+                 :min(0):vgroup("[99]fast gain reduction[unit:dB]",  hbargraph("%i", -24, 0))
+                )
+     );
 
 lookahead_compression_gain_N_chan(parGain,strength,thresh,att,rel,knee,link,1) =
   lookahead_compression_gain_mono(parGain,strength,thresh,att,rel,knee);
@@ -333,8 +347,10 @@ with {
     gain_computer(1,thresh,knee,level)
     : ba.db2linear
     : si.onePoleSwitching(rel,att)
-    : attachMeter(hgroup("[98]", vbargraph("GR %i", -24, 0)))
-  ;
+      // use for nrComps < 10
+    : attachMeter(hgroup("[98] gain reduction", vbargraph("%i", -24, 0)));
+  // use for nrComps > 10    Cannot be empty because faust will make up a name containing the numner
+  // : attachMeter(hgroup("[98] gain reduction", vbargraph("GR", -24, 0)));
   slowSmoother = seq(i, nrSlowSmoothers, attRel);
   attRel = si.onePoleSwitching(postRel/nrSlowSmoothers,postAtt/nrSlowSmoothers);
 
@@ -403,7 +419,9 @@ meterV(i) =
   );
 
 attachMeter(b) =
-  _<: attach(_, (ba.linear2db:max(-24):min(0): b));
+  _<: attach(_, (ba.linear2db
+                 // :max(-24):min(0)
+                 : b));
 
 AB(0,p) = p;
 AB(1,p) = ab:hgroup("[2]",sel(aG(p),bG(p)));
@@ -489,16 +507,15 @@ SIN_tester =
                    // ,ba.slidingMin(attackSamples+1,maxAttackSamples)
                    // ,(((ba.slidingMin(attackSamples+1,maxAttackSamples):smootherCascade(4, release, attack )),_@attackSamples):min)
                  ));
-test = (select3(hslider("test", 2, 0, 2, 1)
-               , test0
-               , test1
-               , test2
-               )
-
-       , no.lfnoise(hslider("rate", 100, 0.1, 20000, 0.1))
-       )
-       :it.interpolate_linear(hslider("Xfade", 0, 0, 1, 0.01))
-;
+test =
+  (select3(hslider("test", 2, 0, 2, 1)
+          , test0
+          , test1
+          , test2
+          )
+, no.lfnoise(hslider("rate", 100, 0.1, 20000, 0.1))
+  )
+  :it.interpolate_linear(hslider("Xfade", 0, 0, 1, 0.01));
 
 test0 = select2(os.lf_sawpos(0.5)>0.5, -1,1);
 test1 = select3(
