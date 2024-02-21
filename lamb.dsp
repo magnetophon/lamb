@@ -13,7 +13,7 @@ import("stdfaust.lib");
 // MaxSampleRate = 192000;
 MaxSampleRate = 48000;
 // MaxSampleRate = 100; // for svg
-// Make sure you set this correctly for proper functioning of the plugin
+// This has impact on the compile time and the cpu usage
 
 nrChannels = 2;
 // Speaks for itself.
@@ -56,31 +56,38 @@ nrComps = 8;
 process =
   lambSel(selectParallelGains);
 
-lambSel(0,x,y) =
-  (limiterGroup(selectParallelGains,preGain(x,y)) , 1)
-  : lamb
+lambSel(0) =
+  (limiterGroup(selectParallelGains,preGain))
+  : lamb(1)
   : postProc(enableGRout);
 
-lambSel(1,x,y) =
-  parallelGainsGroup(selectParallelGains,preGain(x,y):parallelGains)
-  <: (_*x,_*y);
+lambSel(1) =
+  preGain<:
+  (
+    ( parallelGainsGroup(selectParallelGains,parallelGains)
+      <: si.bus(nrChannels))
+  , si.bus(nrChannels))
+  : ro.interleave(nrChannels,2)
+  : par(i, nrChannels, *)
+;
 
-lambSel(2,x,y) =
-  preGain(x,y)
-  : parallelGainsGroup(selectParallelGains,parallelGains)
-  :( preGain(x,y) , _)
-  : lamb
-  : postProc(enableGRout);
+lambSel(2) =
+  preGain
+  <:( (parallelGainsGroup(selectParallelGains,parallelGains)
+      , si.bus(nrChannels))
+      : lamb
+    )
+  : postProc(enableGRout)
+;
 
-lambSel(3,x,y) =
+lambSel(3) =
   SIN_tester;
 
-lamb(x,y,parGain) =
-  limiterGroup(selectParallelGains,lookahead_compressor_N_chan(parGain,strength,thresh,attack,release,knee,link,nrChannels,x,y));
+lamb(parGain) =
+  limiterGroup(selectParallelGains,lookahead_compressor_N_chan(parGain,strength,thresh,attack,release,knee,link,nrChannels));
 
-preGain(x,y) =
-  (x*ba.db2linear(inputGain))
-, (y*ba.db2linear(inputGain));
+preGain =
+  par(i, nrChannels, _*inputGain);
 
 ///////////////////////////////////////////////////////////////////////////////
 //                         SIN  smoother                                     //
@@ -163,8 +170,6 @@ with {
   // , OLDwarpedSine(releasing,shapeSlider,x)
   // , newCurve(releasing,shapeSlider,x)
   // );
-
-
 
   kneeCurve(shape,knee,x) =
     select3( (x>shape-(knee*.5)) + (x>shape+(knee*.5))
@@ -272,14 +277,8 @@ lookahead_compression_gain_mono(parGain,strength,thresh,att,rel,knee) =
   gain_computer(strength,thresh,knee)
   : ba.db2linear
   : min(parGain)
-    // : (_<:(_,_))
-    // : SIN(attack,release)
-  : smootherSel(selectSmoother)
+  : smootherSel(selectSmoother);
 
-    // , ba.slidingMin(attackSamples+1,maxAttackSamples)
-    // : smootherCascade(4, release, attack ))
-
-;
 gain_computer(strength,thresh,knee,level) =
   select3((level>(thresh-(knee/2)))+(level>(thresh+(knee/2))),
           0,
@@ -301,17 +300,16 @@ smootherSel(2) =
 //                                 ParallelGains                                   //
 ///////////////////////////////////////////////////////////////////////////////
 
-parallelGains(x,y) =
-  level(x,y)
+parallelGains =
+  level
   : fakeFeedback
   : compArray
   : ba.parallelMin(nrComps)
     // : slowSmoother
   : attachMeter(hbargraph("[99]parallel gains GR", -24, 0))
-    // <:(_*x,_*y)
 with {
-  level(x,y) =
-    max(abs(x),abs(y)):ba.linear2db;
+  level =
+    ba.parallelMax(nrChannels):ba.linear2db;
   // TODO: clip the level at lim thresh?
   fakeFeedback = _;
   compArray(x) =
@@ -417,7 +415,7 @@ SINsmoo =
   AB(enableAB,checkbox("SIN / 4-pole smoother"));
 
 ab = checkbox("[1]a/b");
-inputGain = AB(enableAB,hslider("[01]input gain", 0, -24, 24, 0.1)):si.smoo;
+inputGain = AB(enableAB,hslider("[01]input gain", 0, -24, 24, 0.1)):ba.db2linear:si.smoo;
 strength = AB(enableAB,strengthP);
 strengthP = hslider("[02]strength", 100, 0, 100, 1) * 0.01;
 thresh = AB(enableAB,threshP);
