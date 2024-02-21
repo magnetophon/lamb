@@ -316,7 +316,7 @@ smootherSel(2) =
 
 parallelGains =
   level
-  : fakeFeedback
+  // : fakeFeedback
   : compArray
   : ba.parallelMin(nrComps)
     // : slowSmoother
@@ -327,24 +327,23 @@ with {
   // TODO: clip the level at lim thresh?
   fakeFeedback = _;
   compArray(x) =
-    (threshs,atts,rels,knees)
-    : ro.interleave(nrComps,4)
+    (strengths,threshs,atts,rels,knees)
+    : ro.interleave(nrComps,5)
     : par(i, nrComps, gain(i,x));
 
-  // strengths = par(i, nrComps, 1);
+  strengths =
+    LinArray(bottomStrength,topStrength,nrComps);
   threshs =
     LinArray(bottomThres,topThres,nrComps);
   atts =
-    LogArray(bottomAtt,topAtt,nrComps)
-  ;
+    LogArray(bottomAtt,topAtt,nrComps);
   rels =
-    LogArray(bottomRel,topRel,nrComps)
-  ;
+    LogArray(bottomRel,topRel,nrComps) ;
   knees =
     LinArray(bottomKnee,topKnee,nrComps);
 
-  gain(i,level,thresh,att,rel,knee) =
-    gain_computer(1,thresh,knee,level)
+  gain(i,level,strength,thresh,att,rel,knee) =
+    gain_computer(strength,thresh,knee,level)
     : ba.db2linear
     : si.onePoleSwitching(rel,att)
       // use for nrComps < 10
@@ -461,11 +460,13 @@ BTgroup(x) = hgroup("[0]", x);
 bottomGroup(x) = BTgroup(vgroup("[0]", x));
 topGroup(x) = BTgroup(vgroup("[1]", x));
 
+bottomStrength = bottomGroup(hslider("[02]slow strength",100,0,100,1)*0.01);
 bottomThres = bottomGroup(hslider("[03]slow thresh",0,-30,30,0.1));
 bottomAtt = bottomGroup(hslider("[04]slow attack[unit:ms] [scale:log]",180, 10, 1000,1)*0.001);
 bottomRel = bottomGroup(hslider("[06]slow release[unit:s] [scale:log]",200,10,5000,1)*0.001);
 bottomKnee = bottomGroup(hslider("[08]slow knee",3,0,30,0.1));
 
+topStrength = topGroup(hslider("[02]fast strength",100,0,100,1)*0.01);
 topThres = topGroup(hslider("[03]fast thresh",0,-30,30,0.1));
 topAtt = topGroup(hslider("[04]fast attack[unit:ms] [scale:log]",0.9, 0.1, 100,0.1)*0.001);
 topRel = topGroup(hslider("[06]fast release[unit:s] [scale:log]",30,1,1000,1)*0.001);
