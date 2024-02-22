@@ -10,13 +10,13 @@ import("stdfaust.lib");
 ///////////////////////////////////////////////////////////////////////////////
 
 
-// MaxSampleRate = 192000;
-MaxSampleRate = 48000;
-// MaxSampleRate = 100; // for svg
+// maxSampleRate = 192000;
+maxSampleRate = 48000;
+// maxSampleRate = 100; // for svg
 // This has impact on the compile time and the cpu usage
 
 nrChannels = 2;
-// Speaks for itself.
+// the number of input and output channels
 
 enableGRout = 1;
 // gain reduction outputs
@@ -26,18 +26,19 @@ selectSmoother = 0;
 // 1 = just a regular 4-pole smoother with lookahead
 // 2 = switchable between the two
 
-selectParallelGains = 2;
+selectConfiguration = 2;
 // 0 = just the peak limiter
 // 1 = just the parallelGains
 // 2 = both
-// 3 = a "debugger" for the smoother algo, only usefull for developing
+// 3 = both, plus a leveler
+// 4 = a "debugger" for the smoother algo, only usefull for developing
 // TODO: leveler, allows for setting the max avg GR
 // uses smoothed FB of parallelGains
 //
 // the parallelGains is "nrComps" parallel compressors, ranging from slow to fast
 // the parallelGains GR is the minimum of all of them
 //
-// when selectParallelGains = 2, the final GR is the minimum of the paraGains GR
+// when selectConfiguration = 2, the final GR is the minimum of the paraGains GR
 // and the un-smoothed GR as determined by the limiter strength, threshold and gain
 // the result of this is passed trough the lookahead smoother
 
@@ -58,37 +59,80 @@ enableDiffMeters = 1;
 
 
 process =
-  lambSel(selectParallelGains);
+  lambSel(selectConfiguration);
 
 lambSel(0) =
-  (limiterGroup(selectParallelGains,preGain))
+  (limiterGroup(selectConfiguration,preGain))
   : lamb(1)
   : postProc(enableGRout);
 
 lambSel(1) =
   preGain<:
   (
-    ( parallelGainsGroup(selectParallelGains,parallelGains)
+    ( parallelGainsGroup(selectConfiguration,parallelGains)
       <: si.bus(nrChannels))
   , si.bus(nrChannels))
   : ro.interleave(nrChannels,2)
-  : par(i, nrChannels, *)
-;
+  : par(i, nrChannels, *);
 
 lambSel(2) =
   preGain
-  <:( (parallelGainsGroup(selectParallelGains,parallelGains)
+  <:( (parallelGainsGroup(selectConfiguration,parallelGains)
       , si.bus(nrChannels))
       : lamb
     )
-  : postProc(enableGRout)
-;
+  : postProc(enableGRout);
 
 lambSel(3) =
+  preGain
+  <:(
+  leveler
+  <:
+  (parallelGainsGroup(selectConfiguration,parallelGains)
+  , si.bus(nrChannels))
+  : lamb)
+  ~FBproc
+   : postProc(enableGRout);
+
+FBproc =
+  ba.parallelMax(nrChannels)
+, par(i, nrChannels, !)
+;
+
+leveler(prevGain) =
+  ( si.bus(nrChannels)
+    <: ( si.bus(nrChannels)
+       , (levelerGain<:si.bus(nrChannels))))
+  : ro.interleave(nrChannels,2)
+  : par(i, nrChannels, *)
+with {
+  levelerGain =
+    (avgGain - maxAvg + inputGain)
+    : max(0)
+      *-1
+    : hbargraph("leveler gain reduction", -24, 0)
+    : ba.db2linear;
+  att = hslider("att", 50, 0.1, 1000, 0.1)*0.001;
+  rel = hslider("rel", 500, 1, 10000, 1)*0.001;
+
+  avgGain =
+    // par(i, nrChannels, abs)
+    // : ba.parallelMax(nrChannels)
+    prevGain
+    : si.onePoleSwitching(att,rel)
+    : ba.slidingRMSp(rmsSamples,maxSampleRate)
+    :ba.linear2db;
+  rmsSamples = ba.sec2samp(rmsTime);
+  rmsTime = hslider("leveler rms[unit:ms]", 50, 1000/maxSampleRate, 1000, 1)*0.001;
+  maxAvg = hslider("max AVG", -3, -24, 24, 0.1);
+};
+
+
+lambSel(4) =
   SIN_tester;
 
 lamb(parGain) =
-  limiterGroup(selectParallelGains,lookahead_compressor_N_chan(parGain,strength,thresh,attack,release,knee,link,nrChannels));
+  limiterGroup(selectConfiguration,lookahead_compressor_N_chan(parGain,strength,thresh,attack,release,knee,link,nrChannels));
 
 preGain =
   par(i, nrChannels, _*inputGain);
@@ -99,7 +143,7 @@ preGain =
 
 attackSamples = ba.sec2samp(attack);
 maxAttackSamples =
-  maxAttack*MaxSampleRate
+  maxAttack*maxSampleRate
 ;
 
 SIN(attack,release) = loop~(_,_)
@@ -356,8 +400,8 @@ with {
   nrSlowSmoothers = 3;
 };
 
-postProc(0) = meters(selectParallelGains):si.bus(nrChannels),par(i, nrChannels, !);
-postProc(1) = meters(selectParallelGains):si.bus(nrChannels*2);
+postProc(0) = meters(selectConfiguration):si.bus(nrChannels),par(i, nrChannels, !);
+postProc(1) = meters(selectConfiguration):si.bus(nrChannels*2);
 meters(0) = combineGroup(metersV);
 meters(1) = metersH;
 meters(2) = metersH;
@@ -391,7 +435,7 @@ shaper(s,x) = (x-x*s)/(s-x*2*s+1);
 ///////////////////////////////////////////////////////////////////////////////
 //                                    GUI                                   //
 ///////////////////////////////////////////////////////////////////////////////
-// selectParallelGains
+// selectConfiguration
 // 0 = just the peak limiter
 // 1 = just the parallelGains
 // 2 = both
@@ -468,7 +512,7 @@ bottomKnee = bottomGroup(hslider("[08]slow knee",3,0,30,0.1));
 
 topStrength = topGroup(hslider("[02]fast strength",100,0,100,1)*0.01);
 topThres = topGroup(hslider("[03]fast thresh",0,-30,30,0.1));
-topAtt = topGroup(hslider("[04]fast attack[unit:ms] [scale:log]",0.9, 0.1, 100,0.1)*0.001);
+topAtt = topGroup(hslider("[04]fast attack[unit:ms] [scale:log]",0.9, 1000/maxSampleRate, 100,0.1)*0.001);
 topRel = topGroup(hslider("[06]fast release[unit:s] [scale:log]",30,1,1000,1)*0.001);
 topKnee = topGroup(hslider("[08]fast knee",12,0,30,0.1));
 
