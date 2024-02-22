@@ -21,12 +21,12 @@ nrChannels = 2;
 enableGRout = 1;
 // gain reduction outputs
 
-selectSmoother = 0;
+selectSmoother = 1;
 // 0 = just the sophisticated smoother, heavy on the CPU, long compile time
 // 1 = just a regular 4-pole smoother with lookahead
 // 2 = switchable between the two
 
-selectConfiguration = 2;
+selectConfiguration = 0;
 // 0 = just the peak limiter
 // 1 = just the parallelGains
 // 2 = both
@@ -59,6 +59,7 @@ enableDiffMeters = 1;
 
 
 process =
+  // min(releaseHold~_);
   lambSel(selectConfiguration);
 
 lambSel(0) =
@@ -300,7 +301,7 @@ newCurve(releasing,c,x)=
 lookahead_compressor_N_chan(parGain,strength,thresh,att,rel,knee,link,N) =
   si.bus(N) <: si.bus(N*2):
   (
-    par(i, N, _@attackSamples)
+    par(i, N, _@(attackSamples+relHoldSamples))
    ,((par(i,N,abs) : lookahead_compression_gain_N_chan(parGain,strength,thresh,att,rel,knee,link,N))
      <: si.bus(N*2)
     )
@@ -335,7 +336,17 @@ lookahead_compression_gain_mono(parGain,strength,thresh,att,rel,knee) =
   gain_computer(strength,thresh,knee)
   : ba.db2linear
   : min(parGain)
-  : smootherSel(selectSmoother);
+  : (releaseHold~_)
+  : smootherSel(selectSmoother)
+    with {
+  releaseHold(prevGain,rawGR) =
+    max(
+      min(prevGain,rawGR@relHoldSamples)
+    , releaseLookahead(rawGR));
+  releaseLookahead(rawGR) = rawGR:ba.slidingMin(relHoldSamples,maxSampleRate);
+};
+
+relHoldSamples = hslider("release hold[unit:ms]", 50, 1000/maxSampleRate, 1000, 1)*0.001:ba.sec2samp;
 
 gain_computer(strength,thresh,knee,level) =
   select3((level>(thresh-(knee/2)))+(level>(thresh+(knee/2))),
@@ -507,7 +518,7 @@ topGroup(x) = BTgroup(vgroup("[1]", x));
 bottomStrength = bottomGroup(hslider("[02]slow strength",100,0,100,1)*0.01);
 bottomThres = bottomGroup(hslider("[03]slow thresh",0,-30,30,0.1));
 bottomAtt = bottomGroup(hslider("[04]slow attack[unit:ms] [scale:log]",180, 10, 1000,1)*0.001);
-bottomRel = bottomGroup(hslider("[06]slow release[unit:s] [scale:log]",200,10,5000,1)*0.001);
+bottomRel = bottomGroup(hslider("[06]slow release[unit:s] [scale:log]",200,5,5000,5)*0.001);
 bottomKnee = bottomGroup(hslider("[08]slow knee",3,0,30,0.1));
 
 topStrength = topGroup(hslider("[02]fast strength",100,0,100,1)*0.01);
@@ -558,7 +569,7 @@ test =
           , test1
           , test2
           )
-, no.lfnoise(hslider("rate", 100, 0.1, 20000, 0.1))
+  , no.lfnoise(hslider("rate", 100, 0.1, 20000, 0.1))
   )
   :it.interpolate_linear(hslider("Xfade", 0, 0, 1, 0.01));
 
