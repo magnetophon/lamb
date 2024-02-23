@@ -19,14 +19,14 @@ nrChannels = 2;
 // the number of input and output channels
 
 enableGRout = 1;
-// gain reduction outputs
+// enable gain reduction outputs
 
 selectSmoother = 1;
 // 0 = just the sophisticated smoother, heavy on the CPU, long compile time
 // 1 = just a regular 4-pole smoother with lookahead
 // 2 = switchable between the two
 
-selectConfiguration = 0;
+selectConfiguration = 3;
 // 0 = just the peak limiter
 // 1 = just the parallelGains
 // 2 = both
@@ -49,9 +49,11 @@ enableAB = 0;
 // an A/B comparison system
 // allows you to switch between two sets of parameters
 
-enableDiffMeters = 1;
+enableDiffMeters = 0;
 // a meter that shows you more or less GR of the peak limiter
 // it can not show just the fast GR, since the smoother interacts with parallelGains
+
+// parallelGainsOrder = 3;
 
 ///////////////////////////////////////////////////////////////////////////////
 //                                  process                                     //
@@ -108,13 +110,13 @@ leveler(prevGain) =
   : par(i, nrChannels, *)
 with {
   levelerGain =
-    (avgGain - maxAvg + inputGain)
+    (avgGain - maxAvg)
     : max(0)
       *-1
-    : hbargraph("leveler gain reduction", -24, 0)
+    : levelerGroup(hbargraph("[99]leveler gain reduction", -24, 0))
     : ba.db2linear;
-  att = hslider("att", 50, 0.1, 1000, 0.1)*0.001;
-  rel = hslider("rel", 500, 1, 10000, 1)*0.001;
+  att = levelerGroup(hslider("[01]leveler attack", 400, 1, 1000, 1))*0.001;
+  rel = levelerGroup(hslider("[02]leveler release", 2000, 1, 10000, 1))*0.001;
 
   avgGain =
     // par(i, nrChannels, abs)
@@ -124,8 +126,8 @@ with {
     : ba.slidingRMSp(rmsSamples,maxSampleRate)
     :ba.linear2db;
   rmsSamples = ba.sec2samp(rmsTime);
-  rmsTime = hslider("leveler rms[unit:ms]", 50, 1000/maxSampleRate, 1000, 1)*0.001;
-  maxAvg = hslider("max AVG", -3, -24, 24, 0.1);
+  rmsTime = levelerGroup(hslider("[03]leveler rms[unit:ms]", 400, 1000/maxSampleRate, 1000, 1))*0.001;
+  maxAvg = levelerGroup(hslider("[04]leveler threshold[unit:dB]", -3, -24, 24, 0.1));
 };
 
 
@@ -346,7 +348,7 @@ lookahead_compression_gain_mono(parGain,strength,thresh,att,rel,knee) =
   releaseLookahead(rawGR) = rawGR:ba.slidingMin(relHoldSamples,maxSampleRate);
 };
 
-relHoldSamples = hslider("release hold[unit:ms]", 50, 1000/maxSampleRate, 1000, 1)*0.001:ba.sec2samp;
+relHoldSamples = hslider("release hold[unit:ms]", 50, 1000/maxSampleRate, maxAttack*1000, 1)*0.001:ba.sec2samp;
 
 gain_computer(strength,thresh,knee,level) =
   select3((level>(thresh-(knee/2)))+(level>(thresh+(knee/2))),
@@ -413,9 +415,12 @@ with {
 
 postProc(0) = meters(selectConfiguration):si.bus(nrChannels),par(i, nrChannels, !);
 postProc(1) = meters(selectConfiguration):si.bus(nrChannels*2);
+
 meters(0) = combineGroup(metersV);
 meters(1) = metersH;
 meters(2) = metersH;
+meters(3) = meters(2);
+
 metersH =
   ( si.bus(nrChannels)
   , par(i, nrChannels, (meterH(i))));
@@ -451,14 +456,20 @@ shaper(s,x) = (x-x*s)/(s-x*2*s+1);
 // 1 = just the parallelGains
 // 2 = both
 // 3 = a "debugger" for the smoother algo, only usefull for developing
+
+levelerGroup(x) = combineGroup(vgroup("[0]leveler", x));
+
 parallelGainsGroup(0,x) = vgroup("[0]", x);
-limiterGroup(0,x) = combineGroup(vgroup("[0]", x));
-
 parallelGainsGroup(1,x) = parallelGainsGroup(0,x);
-limiterGroup(1,x) = limiterGroup(0,x);
+parallelGainsGroup(2,x) = combineGroup(vgroup("[1]parallel gains", x));
+parallelGainsGroup(3,x) = parallelGainsGroup(2,x);
 
-parallelGainsGroup(2,x) = combineGroup(vgroup("[0]parallel gains", x));
-limiterGroup(2,x) = combineGroup(vgroup("[1]peak limiter", x));
+limiterGroup(0,x) = combineGroup(vgroup("[0]", x));
+limiterGroup(1,x) = limiterGroup(0,x);
+limiterGroup(2,x) = combineGroup(vgroup("[2]peak limiter", x));
+limiterGroup(3,x) =limiterGroup(2,x);
+
+
 combineGroup(x) = hgroup("[02]", x);
 
 meterH(i) =
@@ -517,7 +528,7 @@ topGroup(x) = BTgroup(vgroup("[1]", x));
 
 bottomStrength = bottomGroup(hslider("[02]slow strength",100,0,100,1)*0.01);
 bottomThres = bottomGroup(hslider("[03]slow thresh",0,-30,30,0.1));
-bottomAtt = bottomGroup(hslider("[04]slow attack[unit:ms] [scale:log]",180, 10, 1000,1)*0.001);
+bottomAtt = bottomGroup(hslider("[04]slow attack[unit:ms] [scale:log]",180, 1, 1000,1)*0.001);
 bottomRel = bottomGroup(hslider("[06]slow release[unit:s] [scale:log]",200,5,5000,5)*0.001);
 bottomKnee = bottomGroup(hslider("[08]slow knee",3,0,30,0.1));
 
