@@ -21,19 +21,17 @@ nrChannels = 2;
 enableGRout = 1;
 // enable gain reduction outputs
 
-selectSmoother = 1;
+selectSmoother = 0;
 // 0 = just the sophisticated smoother, heavy on the CPU, long compile time
 // 1 = just a regular 4-pole smoother with lookahead
 // 2 = switchable between the two
 
-selectConfiguration = 3;
+selectConfiguration = 2;
 // 0 = just the peak limiter
 // 1 = just the parallelGains
 // 2 = both
-// 3 = both, plus a leveler
+// 3 = both, plus a leveler. TODO: FF/FB
 // 4 = a "debugger" for the smoother algo, only usefull for developing
-// TODO: leveler, allows for setting the max avg GR
-// uses smoothed FB of parallelGains
 //
 // the parallelGains is "nrComps" parallel compressors, ranging from slow to fast
 // the parallelGains GR is the minimum of all of them
@@ -53,15 +51,17 @@ enableDiffMeters = 0;
 // a meter that shows you more or less GR of the peak limiter
 // it can not show just the fast GR, since the smoother interacts with parallelGains
 
-// parallelGainsOrder = 3;
+parallelGainsVarOrder = 1;
+// the order of the smoothers in the parallelGains is variable
+
+
+maxOrder = 8;
 
 ///////////////////////////////////////////////////////////////////////////////
 //                                  process                                     //
 ///////////////////////////////////////////////////////////////////////////////
 
-
 process =
-  // min(releaseHold~_);
   lambSel(selectConfiguration);
 
 lambSel(0) =
@@ -126,8 +126,8 @@ with {
     : ba.slidingRMSp(rmsSamples,maxSampleRate)
     :ba.linear2db;
   rmsSamples = ba.sec2samp(rmsTime);
-  rmsTime = levelerGroup(hslider("[03]leveler rms[unit:ms]", 400, 1000/maxSampleRate, 1000, 1))*0.001;
-  maxAvg = levelerGroup(hslider("[04]leveler threshold[unit:dB]", -3, -24, 24, 0.1));
+  rmsTime = levelerGroup(hslider("[03]leveler rms[unit:ms]", 400, minAttTimeMs, 1000, 1))*0.001;
+  maxAvg = levelerGroup(hslider("[04]leveler threshold[unit:dB]", -3, -30, 30, 0.1));
 };
 
 
@@ -319,7 +319,7 @@ diffMeters(1,N,parGain) =
   par(i, N,
       _<: attach(_,
                  (ba.linear2db -(parGain:ba.slidingMin(attackSamples+1,maxAttackSamples):ba.linear2db))
-                 :min(0):vgroup("[99]fast gain reduction[unit:dB]",  hbargraph("%i", -24, 0))
+                 :min(0):vgroup("[99]fast gain reduction[unit:dB]",  hbargraph("%i", -12, 0))
                 )
      );
 
@@ -348,7 +348,6 @@ lookahead_compression_gain_mono(parGain,strength,thresh,att,rel,knee) =
   releaseLookahead(rawGR) = rawGR:ba.slidingMin(relHoldSamples,maxSampleRate);
 };
 
-relHoldSamples = hslider("release hold[unit:ms]", 50, 1000/maxSampleRate, maxAttack*1000, 1)*0.001:ba.sec2samp;
 
 gain_computer(strength,thresh,knee,level) =
   select3((level>(thresh-(knee/2)))+(level>(thresh+(knee/2))),
@@ -361,7 +360,7 @@ smootherSel(0) =
   SIN(attack,release) :(!,_);
 smootherSel(1) =
   ba.slidingMin(attackSamples+1,maxAttackSamples)
-  : smootherCascade(4, release, attack ) ;
+  : smoother(4, release, attack ) ;
 smootherSel(2) =
   _<: select2(SINsmoo
              , smootherSel(0)
@@ -377,41 +376,81 @@ parallelGains =
   : compArray
   : ba.parallelMin(nrComps)
     // : slowSmoother
-  : attachMeter(hbargraph("[99]parallel gains GR", -24, 0))
+  : attachMeter(hbargraph("[99]parallel gains GR", -12, 0))
 with {
   level =
     ba.parallelMax(nrChannels):ba.linear2db;
   // TODO: clip the level at lim thresh?
   fakeFeedback = _;
+
   compArray(x) =
-    (strengths,threshs,atts,rels,knees)
-    : ro.interleave(nrComps,5)
+    (strengths,threshs,atts,rels,ordersAtt,ordersRel,knees)
+    : ro.interleave(nrComps,7)
     : par(i, nrComps, gain(i,x));
 
-  strengths =
-    LinArray(bottomStrength,topStrength,nrComps);
-  threshs =
-    LinArray(bottomThres,topThres,nrComps);
-  atts =
-    LogArray(bottomAtt,topAtt,nrComps);
-  rels =
-    LogArray(bottomRel,topRel,nrComps) ;
-  knees =
-    LinArray(bottomKnee,topKnee,nrComps);
+strengths =
+  LinArray(bottomStrength,topStrength,nrComps);
+threshs =
+  LinArray(bottomThres,topThres,nrComps);
+atts =
+  LogArray(bottomAtt,topAtt,nrComps);
+rels =
+  LogArray(bottomRel,topRel,nrComps);
+ordersAtt =
+  LinArray(bottomOrderAtt,topOrderAtt,nrComps)
+  : par(i, nrComps, _+0.5:floor);
+ordersRel =
+  LinArray(bottomOrderRel,topOrderRel,nrComps)
+  : par(i, nrComps, _+0.5:floor);
+varOrders =
+  LogArray(bottomOrder,topOrder,nrComps)
+  : par(i, nrComps, _+0.5:floor);
+knees =
+  LinArray(bottomKnee,topKnee,nrComps);
 
-  gain(i,level,strength,thresh,att,rel,knee) =
-    gain_computer(strength,thresh,knee,level)
-    : ba.db2linear
-    : si.onePoleSwitching(rel,att)
-      // use for nrComps < 10
-    : attachMeter(hgroup("[98] gain reduction", vbargraph("%i", -24, 0)));
-  // use for nrComps > 10    Cannot be empty because faust will make up a name containing the numner
-  // : attachMeter(hgroup("[98] gain reduction", vbargraph("GR", -24, 0)));
-  slowSmoother = seq(i, nrSlowSmoothers, attRel);
-  attRel = si.onePoleSwitching(postRel/nrSlowSmoothers,postAtt/nrSlowSmoothers);
-
-  nrSlowSmoothers = 3;
+gain(i,level,strength,thresh,att,rel,orderAtt,orderRel,knee) =
+  gain_computer(strength,thresh,knee,level)
+  : ba.db2linear
+  : smootherSelect(parallelGainsVarOrder,orderRel,orderAtt,rel,att)
+    // use for nrComps < 10
+  : attachMeter(hgroup("[98] gain reduction", vbargraph("%i", -12, 0)));
+// use for nrComps > 10    Cannot be empty because faust will make up a name containing the numner
+// : attachMeter(hgroup("[98] gain reduction", vbargraph("GR", -12, 0)));
+postSmoother = smoother(postOrder,postAtt,postRel);
+postOrder = 3;
 };
+
+
+smoother(order, att, rel, xx) =
+  smootherOrder(order,order, att, rel, xx);
+
+smootherOrder(maxOrder,order, att, rel, xx) =
+  smootherARorder(maxOrder,order, order, att, rel, xx);
+
+smootherARorder(maxOrder,orderAtt, orderRel, att, rel, xx) =
+  xx : seq(i, maxOrder, loop(i) ~ _)
+with {
+  loop(i,fb, x) = coeff(i) * fb + (1.0 - coeff(i)) * x
+  with {
+  cutoffCorrection(order) = 1.0 / sqrt(pow(2.0, 1.0 / order) - 1.0);
+  coeff(i) =
+    ba.if(x > fb, attCoeff(i), relCoeff(i) );
+  attCoeff(i) =
+    exp(-TWOPIT * cutoffCorrection(orderAtt) / max(ma.EPSILON, att))
+    * (i<orderAtt);
+  relCoeff(i) =
+    exp(-TWOPIT * cutoffCorrection(orderRel) / max(ma.EPSILON, rel))
+    * (i<orderRel);
+  TWOPIT = 2 * ma.PI * ma.T;
+};
+};
+
+smootherSelect(0,orderAtt, orderRel,att,rel) =
+  // smoother(4, att, rel);
+  smootherARorder(4,4, 1, att, rel);
+smootherSelect(1,orderAtt, orderRel,att,rel) =
+  smootherARorder(maxOrder,orderAtt, orderRel, att, rel);
+
 
 postProc(0) = meters(selectConfiguration):si.bus(nrChannels),par(i, nrChannels, !);
 postProc(1) = meters(selectConfiguration):si.bus(nrChannels*2);
@@ -475,17 +514,17 @@ combineGroup(x) = hgroup("[02]", x);
 meterH(i) =
   attachMeter(
     hbargraph(
-      "v:[99]gain reduction/%i[unit:dB]", -24, 0)
+      "v:[99]gain reduction/%i[unit:dB]", -12, 0)
   );
 meterV(i) =
   attachMeter(
     vbargraph(
-      "h:[99]gain reduction/%i[unit:dB]", -24, 0)
+      "h:[99]gain reduction/%i[unit:dB]", -12, 0)
   );
 
 attachMeter(b) =
   _<: attach(_, (ba.linear2db
-                 // :max(-24):min(0)
+                 // :max(-12):min(0)
                  : b));
 
 AB(0,p) = p;
@@ -509,14 +548,17 @@ attackShape = AB(enableAB,attackShapeP);
 // attackShapeP = half+hslider("[05]attack shape" , 2, 0-half, half, 0.1);
 attackShapeP = hslider("[05]attack shape" , 0, 0, 1, 0.01);
 release = AB(enableAB,releaseP);
-releaseP = hslider("[06]release[unit:ms] [scale:log]",30,1,maxRelease*1000,1)*0.001;
+releaseP = hslider("[06]release[unit:ms] [scale:log]",60,1,maxRelease*1000,1)*0.001;
 releaseShape = AB(enableAB,releaseShapeP);
 // releaseShapeP = half+hslider("[07]release shape" , -3, 0-half, half, 0.1);
-releaseShapeP = hslider("[07]release shape" , 0, 0, 1, 0.01);
+releaseShapeP = hslider("[07]release shape" , 0.5, 0, 1, 0.01);
+relHoldSamples = AB(enableAB,relHoldSamplesP);
+relHoldSamplesP = hslider("[08]release hold[unit:ms]", 50,
+                          minAttTimeMs, maxAttack*1000, 1)*0.001:ba.sec2samp;
 knee = AB(enableAB,kneeP);
-kneeP = hslider("[08]knee",1,0,30,0.1);
+kneeP = hslider("[09]knee",1,0,30,0.1);
 link = AB(enableAB,linkP);
-linkP = hslider("[09]link", 0, 0, 100, 1) *0.01;
+linkP = hslider("[10]link", 0, 0, 100, 1) *0.01;
 
 //************************************** parallelGains **********************************************************
 postAtt = hslider("post attack[ms]", 0, 0, 2000, 1)*0.001;
@@ -527,16 +569,22 @@ bottomGroup(x) = BTgroup(vgroup("[0]", x));
 topGroup(x) = BTgroup(vgroup("[1]", x));
 
 bottomStrength = bottomGroup(hslider("[02]slow strength",100,0,100,1)*0.01);
-bottomThres = bottomGroup(hslider("[03]slow thresh",0,-30,30,0.1));
-bottomAtt = bottomGroup(hslider("[04]slow attack[unit:ms] [scale:log]",180, 1, 1000,1)*0.001);
-bottomRel = bottomGroup(hslider("[06]slow release[unit:s] [scale:log]",200,5,5000,5)*0.001);
+bottomThres = bottomGroup(hslider("[03]slow thresh",3,-30,30,0.1));
+bottomAtt = bottomGroup(hslider("[04]slow attack[unit:ms] [scale:log]",100, 10, 3000,10)*0.001);
+bottomOrderAtt = bottomGroup(hslider("[05]slow attack order", 4, 1, maxOrder, 1));
+bottomRel = bottomGroup(hslider("[06]slow release[unit:s] [scale:log]",7000,50,20000,50)*0.001);
+bottomOrderRel = bottomGroup(hslider("[07]slow release order", 1, 1, maxOrder, 1));
 bottomKnee = bottomGroup(hslider("[08]slow knee",3,0,30,0.1));
 
 topStrength = topGroup(hslider("[02]fast strength",100,0,100,1)*0.01);
-topThres = topGroup(hslider("[03]fast thresh",0,-30,30,0.1));
-topAtt = topGroup(hslider("[04]fast attack[unit:ms] [scale:log]",0.9, 1000/maxSampleRate, 100,0.1)*0.001);
-topRel = topGroup(hslider("[06]fast release[unit:s] [scale:log]",30,1,1000,1)*0.001);
-topKnee = topGroup(hslider("[08]fast knee",12,0,30,0.1));
+topThres = topGroup(hslider("[03]fast thresh",-1,-30,30,0.1));
+topAtt = topGroup(hslider("[04]fast attack[unit:ms] [scale:log]",1, minAttTimeMs, 300,0.1)*0.001);
+topOrderAtt = topGroup(hslider("[05]fast attack order", 4, 1, maxOrder, 1));
+topRel = topGroup(hslider("[06]fast release[unit:s] [scale:log]",300,10,10000,10)*0.001);
+topOrderRel = topGroup(hslider("[07]fast release order", 1, 1, maxOrder, 1));
+topKnee = topGroup(hslider("[08]fast knee",0,0,30,0.1));
+
+minAttTimeMs = 1000/maxSampleRate;
 
 // *******************************   more constants *********************************************************
 
@@ -593,21 +641,3 @@ test2 =
 with {
   loop(prev,x) = no.lfnoise0(abs(prev*69)%9:pow(0.75)*5+1);
 };
-N=4;
-T = ma.T;
-PI = ma.PI;
-TWOPI = 2.0 * PI;
-TWOPIT = TWOPI * T;
-/* Cascaded one-pole smoothers with attack and release times. */
-smoother(N, att, rel, x) = loop ~ _
-with {
-  loop(fb) = coeff * fb + (1.0 - coeff) * x
-  with {
-  cutoffCorrection = 1.0 / sqrt(pow(2.0, 1.0 / N) - 1.0);
-  coeff = ba.if(x > fb, attCoeff, relCoeff);
-  TWOPITC = TWOPIT * cutoffCorrection;
-  attCoeff = exp(-TWOPITC / att);
-  relCoeff = exp(-TWOPITC / rel);
-};
-};
-smootherCascade(N, att, rel, x) = x : seq(i, N, smoother(N, att, rel));
