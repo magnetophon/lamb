@@ -28,20 +28,20 @@ selectSmoother = 0;
 
 selectConfiguration = 2;
 // 0 = just the peak limiter
-// 1 = just the parallelGains
+// 1 = just the serialGains
 // 2 = both
 // 3 = both, plus a leveler. TODO: FF/FB
 // 4 = a "debugger" for the smoother algo, only usefull for developing
 //
-// the parallelGains is "nrComps" parallel compressors, ranging from slow to fast
-// the parallelGains GR is the minimum of all of them
+// the serialGains is "nrComps" serial compressors, ranging from slow to fast
+// the serialGains GR is the sum of all of them
 //
-// when selectConfiguration = 2, the final GR is the minimum of the paraGains GR
+// when selectConfiguration = 2, the final GR is the minimum of the serialGains GR
 // and the un-smoothed GR as determined by the limiter strength, threshold and gain
 // the result of this is passed trough the lookahead smoother
 
 nrComps = 8;
-// the number of parallel compressors
+// the number of serial compressors
 
 enableAB = 0;
 // an A/B comparison system
@@ -49,10 +49,10 @@ enableAB = 0;
 
 enableDiffMeters = 0;
 // a meter that shows you more or less GR of the peak limiter
-// it can not show just the fast GR, since the smoother interacts with parallelGains
+// it can not show just the fast GR, since the smoother interacts with serialGains
 
-parallelGainsVarOrder = 1;
-// the order of the smoothers in the parallelGains is variable
+serialGainsVarOrder = 1;
+// the order of the smoothers in the serialGains is variable
 
 
 maxOrder = 8;
@@ -72,7 +72,7 @@ lambSel(0) =
 lambSel(1) =
   preGain<:
   (
-    ( parallelGainsGroup(selectConfiguration,parallelGains)
+    ( serialGainsGroup(selectConfiguration,serialGains)
       <: si.bus(nrChannels))
   , si.bus(nrChannels))
   : ro.interleave(nrChannels,2)
@@ -80,7 +80,7 @@ lambSel(1) =
 
 lambSel(2) =
   preGain
-  <:( (parallelGainsGroup(selectConfiguration,parallelGains)
+  <:( (serialGainsGroup(selectConfiguration,serialGains)
       , si.bus(nrChannels))
       : lamb
     )
@@ -91,7 +91,7 @@ lambSel(3) =
   <:(
   leveler
   <:
-  (parallelGainsGroup(selectConfiguration,parallelGains)
+  (serialGainsGroup(selectConfiguration,serialGains)
   , si.bus(nrChannels))
   : lamb)
   ~FBproc
@@ -340,7 +340,7 @@ lookahead_compression_gain_mono(parGain,strength,thresh,att,rel,knee) =
   : min(parGain)
   : (releaseHold~_)
   : smootherSel(selectSmoother)
-    with {
+with {
   releaseHold(prevGain,rawGR) =
     max(
       min(prevGain,rawGR@relHoldSamples)
@@ -367,57 +367,75 @@ smootherSel(2) =
              , smootherSel(1));
 
 ///////////////////////////////////////////////////////////////////////////////
-//                                 ParallelGains                                   //
+//                                 SerialGains                                   //
 ///////////////////////////////////////////////////////////////////////////////
 
-parallelGains =
+serialGains =
   level
   // : fakeFeedback
   : compArray
-  : ba.parallelMin(nrComps)
     // : slowSmoother
-  : attachMeter(hbargraph("[99]parallel gains GR", -12, 0))
+  : attachMeter(hbargraph("[99]serial gains GR", -12, 0))
 with {
   level =
     ba.parallelMax(nrChannels):ba.linear2db;
   // TODO: clip the level at lim thresh?
   fakeFeedback = _;
 
-  compArray(x) =
+  compArray(level) =
     (strengths,threshs,atts,rels,ordersAtt,ordersRel,knees)
-    : ro.interleave(nrComps,7)
-    : par(i, nrComps, gain(i,x));
+    : (( 0,level)
+      , ro.interleave(nrComps,7))
+      // : par(i, nrComps, gainSerial(i,x))
+      // : ba.parallelMin(nrComps)
+    : seq(i, nrComps, gainSeq(i))
+    : (ba.db2linear,!)
+  ;
 
-strengths =
-  LinArray(bottomStrength,topStrength,nrComps);
-threshs =
-  LinArray(bottomThres,topThres,nrComps);
-atts =
-  LogArray(bottomAtt,topAtt,nrComps);
-rels =
-  LogArray(bottomRel,topRel,nrComps);
-ordersAtt =
-  LinArray(bottomOrderAtt,topOrderAtt,nrComps)
-  : par(i, nrComps, _+0.5:floor);
-ordersRel =
-  LinArray(bottomOrderRel,topOrderRel,nrComps)
-  : par(i, nrComps, _+0.5:floor);
-varOrders =
-  LogArray(bottomOrder,topOrder,nrComps)
-  : par(i, nrComps, _+0.5:floor);
-knees =
-  LinArray(bottomKnee,topKnee,nrComps);
+  strengths =
+    LinArray(bottomStrength,topStrength,nrComps);
+  threshs =
+    LinArray(bottomThres,topThres,nrComps);
+  atts =
+    LogArray(bottomAtt,topAtt,nrComps);
+  rels =
+    LogArray(bottomRel,topRel,nrComps);
+  ordersAtt =
+    LinArray(bottomOrderAtt,topOrderAtt,nrComps)
+    : par(i, nrComps, _+0.5:floor);
+  ordersRel =
+    LinArray(bottomOrderRel,topOrderRel,nrComps)
+    : par(i, nrComps, _+0.5:floor);
+  varOrders =
+    LogArray(bottomOrder,topOrder,nrComps)
+    : par(i, nrComps, _+0.5:floor);
+  knees =
+    LinArray(bottomKnee,topKnee,nrComps);
 
-gain(i,level,strength,thresh,att,rel,orderAtt,orderRel,knee) =
-  gain_computer(strength,thresh,knee,level)
-  : ba.db2linear
-  : smootherSelect(parallelGainsVarOrder,orderRel,orderAtt,rel,att)
-    // use for nrComps < 10
-  : attachMeter(hgroup("[98] gain reduction", vbargraph("%i", -12, 0)));
-// use for nrComps > 10    Cannot be empty because faust will make up a name containing the numner
-// : attachMeter(hgroup("[98] gain reduction", vbargraph("GR", -12, 0)));
-postSmoother = smoother(postOrder,postAtt,postRel);
-postOrder = 3;
+
+  gainSeq(i,prevGR,level,strength,thresh,att,rel,orderAtt,orderRel,knee) =
+    (prevGR+GR)
+  , (level+GR)
+  , si.bus((nrComps-1-i)*7)
+  with {
+    GR =
+      gain_computer(strength,thresh,knee,level)
+      : ba.db2linear
+      : smootherSelect(serialGainsVarOrder,orderRel,orderAtt,rel,att)
+
+      : (ba.linear2db:hgroup("[98] gain reduction", vbargraph("%i", -12, 0))) ;
+  };
+
+  gainSerial(i,level,strength,thresh,att,rel,orderAtt,orderRel,knee) =
+    gain_computer(strength,thresh,knee,level)
+    : ba.db2linear
+    : smootherSelect(serialGainsVarOrder,orderRel,orderAtt,rel,att)
+      // use for nrComps < 10
+    : attachMeter(hgroup("[98] gain reduction", vbargraph("%i", -12, 0)));
+  // use for nrComps > 10    Cannot be empty because faust will make up a name containing the numner
+  // : attachMeter(hgroup("[98] gain reduction", vbargraph("GR", -12, 0)));
+  postSmoother = smoother(postOrder,postAtt,postRel);
+  postOrder = 3;
 };
 
 
@@ -492,16 +510,16 @@ shaper(s,x) = (x-x*s)/(s-x*2*s+1);
 ///////////////////////////////////////////////////////////////////////////////
 // selectConfiguration
 // 0 = just the peak limiter
-// 1 = just the parallelGains
+// 1 = just the serialGains
 // 2 = both
 // 3 = a "debugger" for the smoother algo, only usefull for developing
 
 levelerGroup(x) = combineGroup(vgroup("[0]leveler", x));
 
-parallelGainsGroup(0,x) = vgroup("[0]", x);
-parallelGainsGroup(1,x) = parallelGainsGroup(0,x);
-parallelGainsGroup(2,x) = combineGroup(vgroup("[1]parallel gains", x));
-parallelGainsGroup(3,x) = parallelGainsGroup(2,x);
+serialGainsGroup(0,x) = vgroup("[0]", x);
+serialGainsGroup(1,x) = serialGainsGroup(0,x);
+serialGainsGroup(2,x) = combineGroup(vgroup("[1]serial gains", x));
+serialGainsGroup(3,x) = serialGainsGroup(2,x);
 
 limiterGroup(0,x) = combineGroup(vgroup("[0]", x));
 limiterGroup(1,x) = limiterGroup(0,x);
@@ -560,7 +578,7 @@ kneeP = hslider("[09]knee",1,0,30,0.1);
 link = AB(enableAB,linkP);
 linkP = hslider("[10]link", 0, 0, 100, 1) *0.01;
 
-//************************************** parallelGains **********************************************************
+//************************************** serialGains **********************************************************
 postAtt = hslider("post attack[ms]", 0, 0, 2000, 1)*0.001;
 postRel = hslider("post release[ms]", 2000, 0, 20000, 1)*0.001;
 
@@ -572,7 +590,7 @@ bottomStrength = bottomGroup(hslider("[02]slow strength",100,0,100,1)*0.01);
 bottomThres = bottomGroup(hslider("[03]slow thresh",3,-30,30,0.1));
 bottomAtt = bottomGroup(hslider("[04]slow attack[unit:ms] [scale:log]",100, 10, 3000,10)*0.001);
 bottomOrderAtt = bottomGroup(hslider("[05]slow attack order", 4, 1, maxOrder, 1));
-bottomRel = bottomGroup(hslider("[06]slow release[unit:s] [scale:log]",7000,50,20000,50)*0.001);
+bottomRel = bottomGroup(hslider("[06]slow release[unit:s] [scale:log]",7000,50,10000,50)*0.001);
 bottomOrderRel = bottomGroup(hslider("[07]slow release order", 1, 1, maxOrder, 1));
 bottomKnee = bottomGroup(hslider("[08]slow knee",3,0,30,0.1));
 
