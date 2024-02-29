@@ -21,12 +21,12 @@ nrChannels = 2;
 enableGRout = 1;
 // enable gain reduction outputs
 
-selectSmoother = 0;
+selectSmoother = 1;
 // 0 = just the sophisticated smoother, heavy on the CPU, long compile time
 // 1 = just a regular 4-pole smoother with lookahead
 // 2 = switchable between the two
 
-selectConfiguration = 2;
+selectConfiguration = 3;
 // 0 = just the peak limiter
 // 1 = just the serialGains
 // 2 = both
@@ -88,21 +88,79 @@ lambSel(2) =
 
 lambSel(3) =
   preGain
-  <:(
-  leveler
   <:
-  (serialGainsGroup(selectConfiguration,serialGains)
-  , si.bus(nrChannels))
-  : lamb)
+  (
+    (
+      (
+        leveler
+        <:
+        (
+          serialGainsGroup(selectConfiguration,serialGains)
+        )
+      )
+    , si.bus(nrChannels)
+    )
+    : lamb
+  )
   ~FBproc
-   : postProc(enableGRout);
-
-FBproc =
-  ba.parallelMax(nrChannels)
-, par(i, nrChannels, !)
+   : postProc(enableGRout)
 ;
 
-leveler(prevGain) =
+FBproc =
+  par(i, nrChannels, !)
+, (ba.parallelMin(nrChannels):ba.linear2db)
+;
+
+///////////////////////////////////////////////////////////////////////////////
+//                                process                                     //
+///////////////////////////////////////////////////////////////////////////////
+
+// go down if the serialGains plus limiter are doing more work then the deadZone
+// (fastGR*-1)> deadZone
+// go up if leveler is down
+// both with variable speed
+// attTime = inf when prevGain
+
+leveler(fastGR) =
+  loop~_
+with {
+  loop(prevLevGR) =
+    levGR
+    // , audio
+  , si.bus(nrChannels)
+  with {
+  levGR = (prevLevGR+diff)
+          :min(0)
+           // :max(hslider("maxL", 0, -12, 12, 0.1))
+           // :min(hslider("minL", 0, -12, 12, 0.1))
+           // :attachMeter(hgroup("", vbargraph("leveler GR", -24, 0)));
+          : hgroup("", hbargraph("leveler GR", -24, 0));
+  diff = select2(((fastGR*-1)+prevLevGR)<deadZone
+                , down
+                , up)
+  ;
+  down =
+    (fastGR-prevLevGR+deadZone)
+    :min(0)
+    :max(-1)
+     * (downSpeed/ma.SR)
+  ;
+  up =
+    upSpeed/ma.SR
+
+  ;
+  upSpeed = hslider("up speed[unit:dB/S]", 0, 0, 2, 0.01);
+  downSpeed = hslider("down speed[unit:dB/S]", 0, 0, 2, 0.01);
+  deadZone = hslider("deadZone[unit:dB]", 0, 0, 12, 0.1);
+};
+
+  // hslider("lev gain", 0, -12, 12, 0.1),
+  // si.bus(nrChannels);
+};
+
+
+//*********************************************************************************
+OLDLeveler(prevGain) =
   ( si.bus(nrChannels)
     <: ( si.bus(nrChannels)
        , (levelerGain<:si.bus(nrChannels))))
@@ -337,7 +395,7 @@ lookahead_compression_gain_N_chan(parGain,strength,thresh,att,rel,knee,link,N) =
 lookahead_compression_gain_mono(parGain,strength,thresh,att,rel,knee) =
   gain_computer(strength,thresh,knee)
   : ba.db2linear
-  : min(parGain)
+  : min(parGain) // TODO: leave pargain in dB and do the min before the conversion here?
   : (releaseHold~_)
   : smootherSel(selectSmoother)
 with {
@@ -370,12 +428,14 @@ smootherSel(2) =
 //                                 SerialGains                                   //
 ///////////////////////////////////////////////////////////////////////////////
 
-serialGains =
-  level
+serialGains(levelerGain) =
+  level+levelerGain
   // : fakeFeedback
   : compArray
     // : slowSmoother
-  : attachMeter(hbargraph("[99]serial gains GR", -12, 0))
+  : hbargraph("[99]serial gains GR", -12, 0)
+    + levelerGain
+  :ba.db2linear
 with {
   level =
     ba.parallelMax(nrChannels):ba.linear2db;
@@ -389,7 +449,7 @@ with {
       // : par(i, nrComps, gainSerial(i,x))
       // : ba.parallelMin(nrComps)
     : seq(i, nrComps, gainSeq(i))
-    : (ba.db2linear,!)
+    : (_,!)
   ;
 
   strengths =
