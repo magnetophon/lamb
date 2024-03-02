@@ -122,37 +122,67 @@ FBproc =
 // attTime = inf when prevGain
 
 leveler(fastGR) =
-  loop~_
+  (si.bus(nrChannels))
+  <: (level,si.bus(nrChannels))
+  : (levelerGroup(
+        loop(fastGR)~_
+      )
+    , si.bus(nrChannels))
 with {
-  loop(prevLevGR) =
+  level =
+    ba.parallelMax(nrChannels):ba.linear2db;
+  loop(fastGR,prevLevGR,levelX) =
     levGR
-    // , audio
-  , si.bus(nrChannels)
   with {
   levGR = (prevLevGR+diff)
           :min(0)
            // :max(hslider("maxL", 0, -12, 12, 0.1))
            // :min(hslider("minL", 0, -12, 12, 0.1))
-           // :attachMeter(hgroup("", vbargraph("leveler GR", -24, 0)));
-          : hgroup("", hbargraph("leveler GR", -24, 0));
-  diff = select2(((fastGR*-1)+prevLevGR)<deadZone
+           // :attachMeter(hgroup("", vbargraph("leveler GR[unit:dB]", -24, 0)));
+          : hgroup("", hbargraph("leveler GR[unit:dB]", -24, 0));
+  diff = select2(levReleasing
                 , down
                 , up)
   ;
+  levReleasing = (localDif*-1)<deadDown;
   down =
-    (fastGR-prevLevGR+deadZone)
+    (localDif-deadDown)
     :min(0)
     :max(-1)
      * (downSpeed/ma.SR)
+     * downSpeedFactor
   ;
+  localDif = fastGR-prevLevGR;
   up =
     upSpeed/ma.SR
-
+    * upSpeedFactor
   ;
-  upSpeed = hslider("up speed[unit:dB/S]", 0, 0, 2, 0.01);
-  downSpeed = hslider("down speed[unit:dB/S]", 0, 0, 2, 0.01);
-  deadZone = hslider("deadZone[unit:dB]", 0, 0, 12, 0.1);
-};
+  upSpeedFactor =
+    (levelX-threshP+deadUp)
+    // : si.smoo
+    :hbargraph("sum[unit:dB]", -30, 30)
+    :min(0)
+     /levKneeUp
+     *-1
+    :hbargraph("lim", -2, 1)
+    :min(1)
+     // :max(-1)
+     // +1
+     // : si.smoo
+     // : si.smoo
+     // : si.smoo
+     // * levReleasing
+    : si.onePoleSwitching(hslider("Art", 0, 0, 0.5, 0.001),hslider("rel", 0, 0, 0.5, 0.001))
+    : hbargraph("[8]usf", 0, 1);
+
+  downSpeedFactor = (localDif*-1-deadDown)/levKnee:max(0):min(1)*(1-levReleasing):hbargraph("[4]dsf", 0, 1);
+  downSpeed = hslider("[1]down speed[unit:dB/S]", 1, 0, 2, 0.01);
+  deadDown = hslider("[2]dead down[unit:dB]", 3, ma.EPSILON, 12, 0.1);
+  levKnee = hslider("[3]levKnee down[unit:dB]", 12, 0, 30, 0.1);
+  upSpeed = hslider("[5]up speed[unit:dB/S]", 0, 0, 2, 0.01);
+  deadUp = hslider("[6]dead up[unit:dB]", 0, -30, 30, 0.1);
+  levKneeUp = hslider("[7]levKnee Up[unit:dB]", 12, 0, 160, 0.1);
+  };
 
   // hslider("lev gain", 0, -12, 12, 0.1),
   // si.bus(nrChannels);
@@ -171,7 +201,7 @@ with {
     (avgGain - maxAvg)
     : max(0)
       *-1
-    : levelerGroup(hbargraph("[99]leveler gain reduction", -24, 0))
+    : levelerGroup(hbargraph("[99]leveler gain reduction[unit:dB]", -24, 0))
     : ba.db2linear;
   att = levelerGroup(hslider("[01]leveler attack", 400, 1, 1000, 1))*0.001;
   rel = levelerGroup(hslider("[02]leveler release", 2000, 1, 10000, 1))*0.001;
@@ -377,7 +407,7 @@ diffMeters(1,N,parGain) =
   par(i, N,
       _<: attach(_,
                  (ba.linear2db -(parGain:ba.slidingMin(attackSamples+1,maxAttackSamples):ba.linear2db))
-                 :min(0):vgroup("[99]fast gain reduction[unit:dB]",  hbargraph("%i", -12, 0))
+                 :min(0):vgroup("[99]fast gain reduction[unit:dB]",  hbargraph("%i[unit:dB]", -6, 0))
                 )
      );
 
@@ -433,7 +463,7 @@ serialGains(levelerGain) =
   // : fakeFeedback
   : compArray
     // : slowSmoother
-  : hbargraph("[99]serial gains GR", -12, 0)
+  : hbargraph("[99]serial gains GR[unit:dB]", -6, 0)
     + levelerGain
   :ba.db2linear
 with {
@@ -483,7 +513,7 @@ with {
       : ba.db2linear
       : smootherSelect(serialGainsVarOrder,orderRel,orderAtt,rel,att)
 
-      : (ba.linear2db:hgroup("[98] gain reduction", vbargraph("%i", -12, 0))) ;
+      : (ba.linear2db:hgroup("[98] gain reduction", vbargraph("%i[unit:dB]", -6, 0))) ;
   };
 
   gainSerial(i,level,strength,thresh,att,rel,orderAtt,orderRel,knee) =
@@ -491,7 +521,7 @@ with {
     : ba.db2linear
     : smootherSelect(serialGainsVarOrder,orderRel,orderAtt,rel,att)
       // use for nrComps < 10
-    : attachMeter(hgroup("[98] gain reduction", vbargraph("%i", -12, 0)));
+    : attachMeter(hgroup("[98] gain reduction", vbargraph("%i[unit:dB]", -6, 0)));
   // use for nrComps > 10    Cannot be empty because faust will make up a name containing the numner
   // : attachMeter(hgroup("[98] gain reduction", vbargraph("GR", -12, 0)));
   postSmoother = smoother(postOrder,postAtt,postRel);
