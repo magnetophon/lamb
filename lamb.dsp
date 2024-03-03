@@ -130,58 +130,57 @@ leveler(fastGR) =
     , si.bus(nrChannels))
 with {
   level =
-    ba.parallelMax(nrChannels):ba.linear2db;
+    par(i, nrChannels, abs)
+    : ba.parallelMax(nrChannels):ba.linear2db;
   loop(fastGR,prevLevGR,levelX) =
     levGR
   with {
-  levGR = (prevLevGR+diff)
-          :min(0)
-           // :max(hslider("maxL", 0, -12, 12, 0.1))
-           // :min(hslider("minL", 0, -12, 12, 0.1))
-           // :attachMeter(hgroup("", vbargraph("leveler GR[unit:dB]", -24, 0)));
-          : hgroup("", hbargraph("leveler GR[unit:dB]", -24, 0));
-  diff = select2(levReleasing
-                , down
-                , up)
-  ;
-  levReleasing = (localDif*-1)<deadDown;
-  down =
-    (localDif-deadDown)
-    :min(0)
-    :max(-1)
-     * (downSpeed/ma.SR)
-     * downSpeedFactor
-  ;
-  localDif = fastGR-prevLevGR;
-  up =
-    upSpeed/ma.SR
-    * upSpeedFactor
-  ;
-  upSpeedFactor =
-    (levelX-threshP+deadUp)
-    // : si.smoo
-    :hbargraph("sum[unit:dB]", -30, 30)
-    :min(0)
-     /levKneeUp
-     *-1
-    :hbargraph("lim", -2, 1)
-    :min(1)
-     // :max(-1)
-     // +1
-     // : si.smoo
-     // : si.smoo
-     // : si.smoo
-     // * levReleasing
-    : si.onePoleSwitching(hslider("Art", 0, 0, 0.5, 0.001),hslider("rel", 0, 0, 0.5, 0.001))
-    : hbargraph("[8]usf", 0, 1);
+    levGR = (prevLevGR+diff)
+            :min(0)
+             // :max(hslider("maxL", 0, -12, 12, 0.1))
+             // :min(hslider("minL", 0, -12, 12, 0.1))
+             // :attachMeter(hgroup("", vbargraph("leveler GR[unit:dB]", -24, 0)));
+            : hgroup("", hbargraph("leveler GR[unit:dB]", -24, 0));
+    diff = select2(levReleasing
+                  , down
+                  , up)
+    ;
+    levReleasing = (localDif*-1)<deadDown;
+    down =
+      (localDif-deadDown)
+      :min(0)
+      :max(-1)
+       * (downSpeed/ma.SR)
+       * downSpeedFactor
+    ;
+    localDif = fastGR-prevLevGR;
+    up =
+      upSpeed/ma.SR
+      * upSpeedFactor
+    ;
+    upSpeedFactor =
+      (levelX
+       +prevLevGR
+       -threshP
+       // +deadUp
+      )
+      :min(0)
+       // :hbargraph("sum[unit:dB]", -90, 0)
+       /levKneeUp
+       *-1
+      :min(1)
+       * levReleasing
+      : si.onePoleSwitching(hslider("Art", 0, 0, 0.5, 0.001),0)
+      : Curve(hslider("curve", 0, 0, 1, 0.01))
+      : hbargraph("[8]usf", 0, 1);
 
-  downSpeedFactor = (localDif*-1-deadDown)/levKnee:max(0):min(1)*(1-levReleasing):hbargraph("[4]dsf", 0, 1);
-  downSpeed = hslider("[1]down speed[unit:dB/S]", 1, 0, 2, 0.01);
-  deadDown = hslider("[2]dead down[unit:dB]", 3, ma.EPSILON, 12, 0.1);
-  levKnee = hslider("[3]levKnee down[unit:dB]", 12, 0, 30, 0.1);
-  upSpeed = hslider("[5]up speed[unit:dB/S]", 0, 0, 2, 0.01);
-  deadUp = hslider("[6]dead up[unit:dB]", 0, -30, 30, 0.1);
-  levKneeUp = hslider("[7]levKnee Up[unit:dB]", 12, 0, 160, 0.1);
+    downSpeedFactor = (localDif*-1-deadDown)/levKneeDown:max(0):min(1)*(1-levReleasing):hbargraph("[4]dsf", 0, 1);
+    downSpeed = hslider("[1]down speed[unit:dB/S]", 2, 0, 6, 0.01);
+    deadDown = hslider("[2]dead down[unit:dB]", 3, ma.EPSILON, 12, 0.1);
+    levKneeDown = hslider("[3]levKnee down[unit:dB]", 12, 0, 30, 0.1);
+    upSpeed = hslider("[5]up speed[unit:dB/S]", 1, 0, 6, 0.01);
+    deadUp = hslider("[6]dead up[unit:dB]", 0, -30, 30, 0.1);
+    levKneeUp = hslider("[7]levKnee Up[unit:dB]", 12, 0, 90, 0.1);
   };
 
   // hslider("lev gain", 0, -12, 12, 0.1),
@@ -299,55 +298,56 @@ with {
       middle = (start+end)*.5;
     };
   };
-  // ******************************************** the curves: ******************************
 
-
-  warpedSine(releasing,shapeSlider,x) =
-    newCurve(releasing,shapeSlider,x);
-  // select2(checkbox("new")
-  // select2(1
-  // , OLDwarpedSine(releasing,shapeSlider,x)
-  // , newCurve(releasing,shapeSlider,x)
-  // );
-
-  kneeCurve(shape,knee,x) =
-    select3( (x>shape-(knee*.5)) + (x>shape+(knee*.5))
-           , 0
-           , (x-shape + (knee*.5)):pow(2)/(knee*2)
-           , x-shape);
-  warp(shape,knee,x) =
-    (x-factor*kneeCurve(shape,knee,x))/(2*shape) with {
-    factor = (1/shape-2)/(1/shape-1);
-  };
-  sineShaper(x) = (sin((x*0.5 + 0.75)*2*ma.PI)+1)*0.5;
-
-  OLDwarpedSine(releasing,shapeSlider,x) =
-    ba.tabulateNd(0, warpedSineFormula,(nrShapes, 1<<16,0, 0,nrShapes, maxRelease, shapeSlider,x)).lin;
-
-  warpedSineFormula(shapeSlider,x) =
-    sineShaper(warp(shape,knee,x:max(0):min(1))):pow(power)
-  with {
-    power = (4*shape/3)+(1/3);
-    knee = min(2*shape,2-(2*shape));
-    shape = shapeSliderVal(shapeSlider);
-  };
-  shapeSlider =
-    select2(releasing
-           , attackShape
-           , releaseShape);
-
-
-  shapeSliderVal(shapeSlider) =
-    shapeSlider
-    / (nrShapes-1)
-    * range
-    + start
-    // : hbargraph("shapeBG", 0.3, 0.7)
-  with {
-    range = 2* (.5-start);
-    start = 0.3;
-  };
 };
+};
+// ******************************************** the curves: ******************************
+
+
+warpedSine(releasing,shapeSlider,x) =
+  newCurve(releasing,shapeSlider,x);
+// select2(checkbox("new")
+// select2(1
+// , OLDwarpedSine(releasing,shapeSlider,x)
+// , newCurve(releasing,shapeSlider,x)
+// );
+
+kneeCurve(shape,knee,x) =
+  select3( (x>shape-(knee*.5)) + (x>shape+(knee*.5))
+         , 0
+         , (x-shape + (knee*.5)):pow(2)/(knee*2)
+         , x-shape);
+warp(shape,knee,x) =
+  (x-factor*kneeCurve(shape,knee,x))/(2*shape) with {
+  factor = (1/shape-2)/(1/shape-1);
+};
+sineShaper(x) = (sin((x*0.5 + 0.75)*2*ma.PI)+1)*0.5;
+
+OLDwarpedSine(releasing,shapeSlider,x) =
+  ba.tabulateNd(0, warpedSineFormula,(nrShapes, 1<<16,0, 0,nrShapes, maxRelease, shapeSlider,x)).lin;
+
+warpedSineFormula(shapeSlider,x) =
+  sineShaper(warp(shape,knee,x:max(0):min(1))):pow(power)
+with {
+  power = (4*shape/3)+(1/3);
+  knee = min(2*shape,2-(2*shape));
+  shape = shapeSliderVal(shapeSlider);
+};
+shapeSlider =
+  select2(releasing
+         , attackShape
+         , releaseShape);
+
+
+shapeSliderVal(shapeSlider) =
+  shapeSlider
+  / (nrShapes-1)
+  * range
+  + start
+  // : hbargraph("shapeBG", 0.3, 0.7)
+with {
+  range = 2* (.5-start);
+  start = 0.3;
 };
 
 // *************************************** the NEW curves: ******************************
@@ -376,7 +376,7 @@ Curve(c,x) =
   // CurveFormula(c,x);
   ba.tabulateNd(0, CurveFormula,(nrShapes, 1<<16,0, 0,1, 1, c,x)).lin;
 
-newCurve(releasing,c,x)=
+newCurve(releasing,c,x) =
   select2(releasing
          , Curve(c,x *-1+1 )
            *-1+1
@@ -468,7 +468,8 @@ serialGains(levelerGain) =
   :ba.db2linear
 with {
   level =
-    ba.parallelMax(nrChannels):ba.linear2db;
+    par(i, nrChannels, abs)
+    : ba.parallelMax(nrChannels):ba.linear2db;
   // TODO: clip the level at lim thresh?
   fakeFeedback = _;
 
@@ -688,7 +689,7 @@ topStrength = topGroup(hslider("[02]fast strength",100,0,100,1)*0.01);
 topThres = topGroup(hslider("[03]fast thresh",-1,-30,30,0.1));
 topAtt = topGroup(hslider("[04]fast attack[unit:ms] [scale:log]",1, minAttTimeMs, 300,0.1)*0.001);
 topOrderAtt = topGroup(hslider("[05]fast attack order", 4, 1, maxOrder, 1));
-topRel = topGroup(hslider("[06]fast release[unit:s] [scale:log]",300,10,10000,10)*0.001);
+topRel = topGroup(hslider("[06]fast release[unit:s] [scale:log]",300,10,1000,10)*0.001);
 topOrderRel = topGroup(hslider("[07]fast release order", 1, 1, maxOrder, 1));
 topKnee = topGroup(hslider("[08]fast knee",0,0,30,0.1));
 
