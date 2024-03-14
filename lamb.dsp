@@ -21,7 +21,7 @@ nrChannels = 2;
 enableGRout = 1;
 // enable gain reduction outputs
 
-selectSmoother = 1;
+selectSmoother = 0;
 // 0 = just the sophisticated smoother, heavy on the CPU, long compile time
 // 1 = just a regular 4-pole smoother with lookahead
 // 2 = switchable between the two
@@ -51,7 +51,10 @@ enableDiffMeters = 0;
 // a meter that shows you more or less GR of the peak limiter
 // it can not show just the fast GR, since the smoother interacts with serialGains
 
-serialGainsVarOrder = 1;
+levVarOrder = 0;
+// the order of the smoothers in the serialGains is variable
+//
+serialGainsVarOrder = 0;
 // the order of the smoothers in the serialGains is variable
 
 
@@ -62,14 +65,14 @@ maxOrder = 8;
 ///////////////////////////////////////////////////////////////////////////////
 
 process =
-  lambSel(selectConfiguration);
+  configSelector(selectConfiguration);
 
-lambSel(0) =
+configSelector(0) =
   (limiterGroup(selectConfiguration,preGain))
   : lamb(1)
   : postProc(enableGRout);
 
-lambSel(1) =
+configSelector(1) =
   preGain<:
   (
     ( serialGainsGroup(selectConfiguration,serialGains)
@@ -78,7 +81,7 @@ lambSel(1) =
   : ro.interleave(nrChannels,2)
   : par(i, nrChannels, *);
 
-lambSel(2) =
+configSelector(2) =
   preGain
   <:( (serialGainsGroup(selectConfiguration,serialGains)
       , si.bus(nrChannels))
@@ -86,7 +89,7 @@ lambSel(2) =
     )
   : postProc(enableGRout);
 
-lambSel(3) =
+configSelector(3) =
   preGain
   <:
   (
@@ -135,52 +138,118 @@ with {
   loop(fastGR,prevLevGR,levelX) =
     levGR
   with {
-    levGR = (prevLevGR+diff)
-            :min(0)
-             // :max(hslider("maxL", 0, -12, 12, 0.1))
-             // :min(hslider("minL", 0, -12, 12, 0.1))
-             // :attachMeter(hgroup("", vbargraph("leveler GR[unit:dB]", -24, 0)));
-            : hgroup("", hbargraph("leveler GR[unit:dB]", -24, 0));
+    levGR =
+      // (prevLevGR+diff)
+      newGR
+      // (diff)
+      // :min(0)
+
+      // :max(hslider("maxL", 0, -12, 12, 0.1))
+      // :min(hslider("minL", 0, -12, 12, 0.1))
+      // :attachMeter(hgroup("", vbargraph("leveler GR[unit:dB]", -24, 0)));
+      : hgroup("", hbargraph("leveler GR[unit:dB]", -24, 0));
+
+    newGR =
+      (
+        (
+          localDif
+          // fastGR
+          // : min(0)
+          : smootherSelect(levVarOrder,levOrder,levOrder,levRel,levAtt)
+            // : smootherOrder(maxOrder,levOrder
+            //                 , levRel
+            //                   /(upSpeedFactor:max(ma.EPSILON))
+            //                   // *1@(4*maxAttackSamples)
+            //                 , levAtt
+            //                   /(downSpeedFactor:max(ma.EPSILON))
+            //                   // *1@(4*maxAttackSamples)
+            //                )
+        )
+        // - prevLevGR
+        // -deadDown
+      )
+      // *1@(8*maxAttackSamples)
+    ;
+    levOrder= hslider("order", 1, 1, maxOrder, 1);
+    levRel =
+      hslider("[5]levRel", 2, 0, 10, 0.1)
+      /(upSpeedFactor:max(ma.EPSILON));
+    levAtt =
+      hslider("[1]levAtt", 1, 0, 5, 0.05)
+      /(downSpeedFactor:max(ma.EPSILON));
+
     diff = select2(levReleasing
                   , down
                   , up)
     ;
-    levReleasing = (localDif*-1)<deadDown;
+    levReleasing =
+      prevLevGR>fastGR;
+    // (localDif*-1)<deadDown;
     down =
-      (localDif-deadDown)
-      :min(0)
-      :max(-1)
-       * (downSpeed/ma.SR)
-       * downSpeedFactor
+      prevLevGR+
+      (
+        (localDif-deadDown)
+        :min(0)
+         // :max(-1)
+         * (downSpeed/ma.SR)
+         * downSpeedFactor
+      )
     ;
     localDif = fastGR-prevLevGR;
+
     up =
-      upSpeed/ma.SR
-      * upSpeedFactor
+      // max(fastGR,prevLevGR)
+      // prevLevGR+localDif
+      // (prevLevGR)
+      // +
+      (localDif+deadUp)
+      // : min(0)
+      // :min(down)
+      :max(prevLevGR)
+       // :max(down)
+       // : min(0)
+       // Order(maxOrder,hslider("order", 1, 1, maxO, step),
+      : smootherOrder(maxOrder,hslider("order", 1, 1, maxOrder, 1)
+                      , hslider("upRel", 0, 0, 5, 0.001)
+                        /(upSpeedFactor:max(ma.EPSILON))
+                        *1@(4*maxAttackSamples)
+                      , 0
+                     )
     ;
+    OLDup =
+      prevLevGR+
+      (upSpeed/ma.SR
+       * upSpeedFactor) ;
+
     upSpeedFactor =
       (levelX
        +prevLevGR
-       -threshP
-       // +deadUp
+       // -threshP
+       +deadUp
       )
       :min(0)
        // :hbargraph("sum[unit:dB]", -90, 0)
-       /levKneeUp
+       /((levKneeUp-deadUp):max(ma.EPSILON))
        *-1
       :min(1)
        * levReleasing
-      : si.onePoleSwitching(hslider("Art", 0, 0, 0.5, 0.001),0)
-      : Curve(hslider("curve", 0, 0, 1, 0.01))
+       // : si.onePoleSwitching(hslider("Art", 0, 0, 0.5, 0.001),0)
+      : smoother(1,hslider("[7]Rellll", 60, 0, 500, 1)*0.001
+                   // , hslider("Art", 0, 0, 0.5, 0.001)
+                 , 0
+                )
+        // : Curve(hslider("curve", 0, 0, 1, 0.01))
       : hbargraph("[8]usf", 0, 1);
 
-    downSpeedFactor = (localDif*-1-deadDown)/levKneeDown:max(0):min(1)*(1-levReleasing):hbargraph("[4]dsf", 0, 1);
+    downSpeedFactor = (localDif*-1-deadDown)/levKneeDown:max(0):min(1)
+                                                                // *(1-levReleasing)
+                      :hbargraph("[4]dsf", 0, 1);
     downSpeed = hslider("[1]down speed[unit:dB/S]", 2, 0, 6, 0.01);
-    deadDown = hslider("[2]dead down[unit:dB]", 3, ma.EPSILON, 12, 0.1);
-    levKneeDown = hslider("[3]levKnee down[unit:dB]", 12, 0, 30, 0.1);
-    upSpeed = hslider("[5]up speed[unit:dB/S]", 1, 0, 6, 0.01);
-    deadUp = hslider("[6]dead up[unit:dB]", 0, -30, 30, 0.1);
-    levKneeUp = hslider("[7]levKnee Up[unit:dB]", 12, 0, 90, 0.1);
+    deadDown = hslider("[2]dead down[unit:dB]", 6, ma.EPSILON, 12, 0.1);
+    levKneeDown = hslider("[3]levKnee down[unit:dB]", 24, ma.EPSILON, 30, 0.1);
+    upSpeed = hslider("[5]up speed[unit:dB/S]", 2, 0, 6, 0.01);
+    deadUp = hslider("[6]dead up[unit:dB]", 6, 0, 30, 0.1);
+    levKneeUp = hslider("[7]levKnee Up[unit:dB]", 24, 0, 90, 0.1);
   };
 
   // hslider("lev gain", 0, -12, 12, 0.1),
@@ -218,7 +287,7 @@ with {
 };
 
 
-lambSel(4) =
+configSelector(4) =
   SIN_tester;
 
 lamb(parGain) =
@@ -244,12 +313,20 @@ with {
   with {
   duration =
     (attack*attacking)+(release*releasing);
-  gain = (prevGain+gainStep):min(x@attackSamples);
+  gain =
+    (prevGain+gainStep)
+    <:select2(attacking
+             , max(_,prevGain)
+             , min(_,prevGain))
+    :min(x@attackSamples);
+
   gainStep =
-    select2(releasing
-           , rawGainStep :max(dif)
-           , rawGainStep :min(dif)
-           ) with {
+    rawGainStep
+    // select2(releasing
+    // , rawGainStep :max(dif)
+    // , rawGainStep :min(dif)
+    // )
+  with {
     rawGainStep =
       shapeDif(shapeSlider,ramp,duration,ma.SR)*fullDif;
     fullDif =dif/(1-warpedSine(releasing,shapeSlider,ramp));
@@ -277,6 +354,7 @@ with {
   , shapeDif(shapeSlider,prevRamp+rampStep,duration',ma.SR)
     * ((dif'/dif)/(1-warpedSine(releasing,shapeSlider',prevRamp)))
     :seq(i, 16, compare)
+     // :seq(i, 24, compare)
     : ((+:_*.5),!) // average start and end, throw away the rest
     :max(0):min(1)
   with {
@@ -299,7 +377,12 @@ with {
     };
   };
 
+  shapeSlider =
+    select2(releasing
+           , attackShape
+           , releaseShape);
 };
+
 };
 // ******************************************** the curves: ******************************
 
@@ -333,10 +416,6 @@ with {
   knee = min(2*shape,2-(2*shape));
   shape = shapeSliderVal(shapeSlider);
 };
-shapeSlider =
-  select2(releasing
-         , attackShape
-         , releaseShape);
 
 
 shapeSliderVal(shapeSlider) =
@@ -371,7 +450,9 @@ CurveFormula(c,x) =
           // , c2(c,x)
          , c2(c:pow(1+0.42*c),x)
          , s(x)
-         );
+         )
+  :max(0):min(1)
+;
 Curve(c,x) =
   // CurveFormula(c,x);
   ba.tabulateNd(0, CurveFormula,(nrShapes, 1<<16,0, 0,1, 1, c,x)).lin;
@@ -433,7 +514,7 @@ with {
     max(
       min(prevGain,rawGR@relHoldSamples)
     , releaseLookahead(rawGR));
-  releaseLookahead(rawGR) = rawGR:ba.slidingMin(relHoldSamples,maxSampleRate);
+  releaseLookahead(rawGR) = rawGR:ba.slidingMin(relHoldSamples+1,maxSampleRate);
 };
 
 
@@ -530,6 +611,7 @@ with {
 };
 
 
+// fixed order
 smoother(order, att, rel, xx) =
   smootherOrder(order,order, att, rel, xx);
 
@@ -556,7 +638,7 @@ with {
 
 smootherSelect(0,orderAtt, orderRel,att,rel) =
   // smoother(4, att, rel);
-  smootherARorder(4,4, 1, att, rel);
+  smootherARorder(1,1, 1, att, rel);
 smootherSelect(1,orderAtt, orderRel,att,rel) =
   smootherARorder(maxOrder,orderAtt, orderRel, att, rel);
 
@@ -623,7 +705,7 @@ combineGroup(x) = hgroup("[02]", x);
 meterH(i) =
   attachMeter(
     hbargraph(
-      "v:[99]gain reduction/%i[unit:dB]", -12, 0)
+      "v:[99]gain reduction/%i[unit:dB]", -24, 0)
   );
 meterV(i) =
   attachMeter(
@@ -679,17 +761,17 @@ topGroup(x) = BTgroup(vgroup("[1]", x));
 
 bottomStrength = bottomGroup(hslider("[02]slow strength",100,0,100,1)*0.01);
 bottomThres = bottomGroup(hslider("[03]slow thresh",3,-30,30,0.1));
-bottomAtt = bottomGroup(hslider("[04]slow attack[unit:ms] [scale:log]",100, 10, 3000,10)*0.001);
+bottomAtt = bottomGroup(hslider("[04]slow attack[unit:ms] [scale:log]",700, 10, 3000,10)*0.001);
 bottomOrderAtt = bottomGroup(hslider("[05]slow attack order", 4, 1, maxOrder, 1));
-bottomRel = bottomGroup(hslider("[06]slow release[unit:s] [scale:log]",7000,50,10000,50)*0.001);
+bottomRel = bottomGroup(hslider("[06]slow release[unit:s] [scale:log]",700,50,5000,50)*0.001);
 bottomOrderRel = bottomGroup(hslider("[07]slow release order", 1, 1, maxOrder, 1));
-bottomKnee = bottomGroup(hslider("[08]slow knee",3,0,30,0.1));
+bottomKnee = bottomGroup(hslider("[08]slow knee",4,0,30,0.1));
 
 topStrength = topGroup(hslider("[02]fast strength",100,0,100,1)*0.01);
 topThres = topGroup(hslider("[03]fast thresh",-1,-30,30,0.1));
-topAtt = topGroup(hslider("[04]fast attack[unit:ms] [scale:log]",1, minAttTimeMs, 300,0.1)*0.001);
+topAtt = topGroup(hslider("[04]fast attack[unit:ms] [scale:log]",9, minAttTimeMs, 300,0.1)*0.001);
 topOrderAtt = topGroup(hslider("[05]fast attack order", 4, 1, maxOrder, 1));
-topRel = topGroup(hslider("[06]fast release[unit:s] [scale:log]",300,10,1000,10)*0.001);
+topRel = topGroup(hslider("[06]fast release[unit:s] [scale:log]",60,10,1000,10)*0.001);
 topOrderRel = topGroup(hslider("[07]fast release order", 1, 1, maxOrder, 1));
 topKnee = topGroup(hslider("[08]fast knee",0,0,30,0.1));
 
@@ -697,11 +779,13 @@ minAttTimeMs = 1000/maxSampleRate;
 
 // *******************************   more constants *********************************************************
 
-nrShapes = 8;
+nrShapes = 3;
 half = (nrShapes-1)*.5;
 
 // 50 ms
 maxAttack = 0.05;
+// 1 s
+// maxAttack = 1;
 // 0.5 sec
 maxRelease = 0.5:max(maxAttack);
 
@@ -741,9 +825,9 @@ test =
   )
   :it.interpolate_linear(hslider("Xfade", 0, 0, 1, 0.01));
 
-test0 = select2(os.lf_sawpos(0.5)>0.5, -1,1);
+test0 = select2(os.lf_sawpos(hslider("block freq", 0.5, 0.1, 4, 0.1))>0.5, -1,1);
 test1 = select3(
-          ((os.lf_sawpos(1)>hslider("POS1", 0.25, 0, 1 , 0.01))+(os.lf_sawpos(1)>hslider("POS2", 0.5, 0, 1 , 0.01))),
+          ((os.lf_sawpos(hslider("block freq", 0.5, 0.1, 4, 0.1))>hslider("POS1", 0.25, 0, 1 , 0.01))+(os.lf_sawpos(1)>hslider("POS2", 0.5, 0, 1 , 0.01))),
           1, -1, 0);
 test2 =
   (loop~_)
