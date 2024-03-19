@@ -13,12 +13,12 @@ import("stdfaust.lib");
 // maxSampleRate = 192000;
 maxSampleRate = 48000;
 // maxSampleRate = 100; // for svg
-// This has impact on the compile time and the cpu usage
+// This has a lot of impact on the compile time and the cpu usage
 
 nrChannels = 2;
 // the number of input and output channels
 
-enableGRout = 1;
+enableGRout = 0;
 // enable gain reduction outputs
 
 selectSmoother = 0;
@@ -47,10 +47,6 @@ enableAB = 0;
 // an A/B comparison system
 // allows you to switch between two sets of parameters
 
-enableDiffMeters = 0;
-// a meter that shows you more or less GR of the peak limiter
-// it can not show just the fast GR, since the smoother interacts with serialGains
-
 levVarOrder = 0;
 // the order of the smoothers in the serialGains is variable
 //
@@ -69,13 +65,13 @@ process =
 
 configSelector(0) =
   (limiterGroup(selectConfiguration,preGain))
-  : lamb(1)
+  : lamb(meters(selectConfiguration),1)
   : postProc(enableGRout);
 
 configSelector(1) =
   preGain<:
   (
-    ( serialGainsGroup(selectConfiguration,serialGains)
+    ( serialGainsGroup(selectConfiguration,serialGains(1))
       <: si.bus(nrChannels))
   , si.bus(nrChannels))
   : ro.interleave(nrChannels,2)
@@ -83,11 +79,12 @@ configSelector(1) =
 
 configSelector(2) =
   preGain
-  <:( (serialGainsGroup(selectConfiguration,serialGains)
+  <:( (serialGainsGroup(selectConfiguration,serialGains(1))
       , si.bus(nrChannels))
-      : lamb
+      : lamb(meters(selectConfiguration))
     )
-  : postProc(enableGRout);
+  : postProc(enableGRout)
+;
 
 configSelector(3) =
   preGain
@@ -103,7 +100,7 @@ configSelector(3) =
       )
     , si.bus(nrChannels)
     )
-    : lamb
+    : lamb(meters(selectConfiguration))
   )
   ~FBproc
    : postProc(enableGRout)
@@ -290,8 +287,10 @@ with {
 configSelector(4) =
   SIN_tester;
 
-lamb(parGain) =
-  limiterGroup(selectConfiguration,lookahead_compressor_N_chan(parGain,strength,thresh,attack,release,knee,link,nrChannels));
+lamb(meters,parGain) =
+  limiterGroup(selectConfiguration,(parGain,strength,thresh,attack,attackShape,release,releaseShape,knee,link,relHoldSamples,si.bus(nrChannels)))
+  :lookahead_compressor_N_chan(nrChannels,meters)
+;
 
 preGain =
   par(i, nrChannels, _*inputGain);
@@ -300,17 +299,18 @@ preGain =
 //                         SIN  smoother                                     //
 ///////////////////////////////////////////////////////////////////////////////
 
-attackSamples = ba.sec2samp(attack);
 maxAttackSamples =
-  maxAttack*maxSampleRate
-;
+  maxAttack*maxSampleRate;
+maxRelHoldSamples =
+  maxRelHold*maxSampleRate;
 
-SIN(attack,release) = loop~(_,_)
+SIN(attack,attackShape,release,releaseShape) = loop~(_,_)
 with {
   loop(prevRamp,prevGain,x) =
     ramp
   , gain
   with {
+  attackSamples = ba.sec2samp(attack);
   duration =
     (attack*attacking)+(release*releasing);
   gain =
@@ -469,52 +469,47 @@ newCurve(releasing,c,x) =
 ///////////////////////////////////////////////////////////////////////////////
 //                                compressor                             //
 ///////////////////////////////////////////////////////////////////////////////
-lookahead_compressor_N_chan(parGain,strength,thresh,att,rel,knee,link,N) =
+lookahead_compressor_N_chan(N,meters,parGain,strength,thresh,attack,attackShape,release,releaseShape,knee,link,relHoldSamples) =
   si.bus(N) <: si.bus(N*2):
   (
     par(i, N, _@(attackSamples+relHoldSamples))
-   ,((par(i,N,abs) : lookahead_compression_gain_N_chan(parGain,strength,thresh,att,rel,knee,link,N))
+   ,((par(i,N,abs) : lookahead_compression_gain_N_chan(parGain,strength,thresh,attack,attackShape,release,releaseShape,knee,link,N,relHoldSamples))
      <: si.bus(N*2)
     )
   )
-  :((ro.interleave(N,2)
-     : par(i,N, *))
+  :(
+    (si.bus(N), meters)
+    :(ro.interleave(N,2)
+      : par(i,N, *))
    , (si.bus(N)
-      : diffMeters(enableDiffMeters,N,parGain)));
+      ))
+with {
+  attackSamples = ba.sec2samp(attack);
+};
 
-diffMeters(0,N,parGain) =
-  si.bus(N);
-diffMeters(1,N,parGain) =
-  par(i, N,
-      _<: attach(_,
-                 (ba.linear2db -(parGain:ba.slidingMin(attackSamples+1,maxAttackSamples):ba.linear2db))
-                 :min(0):vgroup("[99]fast gain reduction[unit:dB]",  hbargraph("%i[unit:dB]", -6, 0))
-                )
-     );
+lookahead_compression_gain_N_chan(parGain,strength,thresh,attack,attackShape,release,releaseShape,knee,link,1,relHoldSamples) =
+  lookahead_compression_gain_mono(parGain,strength,thresh,attack,attackShape,release,releaseShape,knee,relHoldSamples);
 
-lookahead_compression_gain_N_chan(parGain,strength,thresh,att,rel,knee,link,1) =
-  lookahead_compression_gain_mono(parGain,strength,thresh,att,rel,knee);
-
-lookahead_compression_gain_N_chan(parGain,strength,thresh,att,rel,knee,link,N) =
+lookahead_compression_gain_N_chan(parGain,strength,thresh,attack,attackShape,release,releaseShape,knee,link,N,relHoldSamples) =
   par(i, N, ba.linear2db)
   <: (si.bus(N),(ba.parallelMax(N) <: si.bus(N)))
   : ro.interleave(N,2)
   : par(i,N,(it.interpolate_linear(link))
        )
-  : par(i,N,lookahead_compression_gain_mono(parGain,strength,thresh,att,rel,knee)) ;
+  : par(i,N,lookahead_compression_gain_mono(parGain,strength,thresh,attack,attackShape,release,releaseShape,knee,relHoldSamples)) ;
 
-lookahead_compression_gain_mono(parGain,strength,thresh,att,rel,knee) =
+lookahead_compression_gain_mono(parGain,strength,thresh,attack,attackShape,release,releaseShape,knee,relHoldSamples) =
   gain_computer(strength,thresh,knee)
   : ba.db2linear
   : min(parGain) // TODO: leave pargain in dB and do the min before the conversion here?
   : (releaseHold~_)
-  : smootherSel(selectSmoother)
+  : smootherSel(selectSmoother,attack,attackShape,release,releaseShape)
 with {
   releaseHold(prevGain,rawGR) =
     max(
       min(prevGain,rawGR@relHoldSamples)
     , releaseLookahead(rawGR));
-  releaseLookahead(rawGR) = rawGR:ba.slidingMin(relHoldSamples+1,maxSampleRate);
+  releaseLookahead(rawGR) = rawGR:ba.slidingMin(relHoldSamples+1,maxRelHoldSamples);
 };
 
 
@@ -525,15 +520,18 @@ gain_computer(strength,thresh,knee,level) =
           (level-thresh))
   : max(0)*-strength;
 
-smootherSel(0) =
-  SIN(attack,release) :(!,_);
-smootherSel(1) =
+smootherSel(0,attack,attackShape,release,releaseShape) =
+  SIN(attack,attackShape,release,releaseShape) :(!,_);
+smootherSel(1,attack,attackShape,release,releaseShape) =
   ba.slidingMin(attackSamples+1,maxAttackSamples)
-  : smoother(4, release, attack ) ;
-smootherSel(2) =
+  : smoother(4, release, attack )
+with {
+  attackSamples = ba.sec2samp(attack);
+};
+smootherSel(2,attack,attackShape,release,releaseShape) =
   _<: select2(SINsmoo
-             , smootherSel(0)
-             , smootherSel(1));
+             , smootherSel(0,attack,attackShape,release,releaseShape)
+             , smootherSel(1,attack,attackShape,release,releaseShape));
 
 ///////////////////////////////////////////////////////////////////////////////
 //                                 SerialGains                                   //
@@ -644,20 +642,22 @@ smootherSelect(1,orderAtt, orderRel,att,rel) =
 
 
 // postProc(0) = meters(selectConfiguration):si.bus(nrChannels),par(i, nrChannels, _<:attach(!,_));
-postProc(0) = meters(selectConfiguration):si.bus(nrChannels),par(i, nrChannels, !);
-postProc(1) = meters(selectConfiguration):si.bus(nrChannels*2);
+postProc(0) = si.bus(nrChannels),par(i, nrChannels, !);
+postProc(1) = si.bus(nrChannels*2);
 
 meters(0) = combineGroup(metersV);
 meters(1) = metersH;
-meters(2) = metersH;
-meters(3) = meters(2);
+meters(2) = meters(1);
+meters(3) = meters(1);
 
 metersH =
-  ( si.bus(nrChannels)
-  , par(i, nrChannels, (meterH(i))));
+  ( par(i, nrChannels, (meterH(i)))
+  , si.bus(nrChannels)
+  );
 metersV =
-  ( si.bus(nrChannels)
-  , par(i, nrChannels, (meterV(i))));
+  ( par(i, nrChannels, (meterV(i)))
+  , si.bus(nrChannels)
+  );
 ///////////////////////////////////////////////////////////////////////////////
 //                           parameter arrays                                //
 ///////////////////////////////////////////////////////////////////////////////
@@ -745,7 +745,7 @@ releaseShape = AB(enableAB,releaseShapeP);
 releaseShapeP = hslider("[07]release shape" , 0.5, 0, 1, 0.01);
 relHoldSamples = AB(enableAB,relHoldSamplesP);
 relHoldSamplesP = hslider("[08]release hold[unit:ms]", 50,
-                          minAttTimeMs, maxAttack*1000, 1)*0.001:ba.sec2samp;
+                          minAttTimeMs, maxRelHold*1000, 1)*0.001:ba.sec2samp;
 knee = AB(enableAB,kneeP);
 kneeP = hslider("[09]knee",1,0,30,0.1);
 link = AB(enableAB,linkP);
@@ -788,6 +788,8 @@ maxAttack = 0.05;
 // maxAttack = 1;
 // 0.5 sec
 maxRelease = 0.5:max(maxAttack);
+// 50 ms
+maxRelHold = 0.05;
 
 SINtest = toggle(soft,loud) with {
   toggle(a,b) = select2(block,b,a);
