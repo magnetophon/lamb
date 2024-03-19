@@ -26,7 +26,7 @@ selectSmoother = 0;
 // 1 = just a regular 4-pole smoother with lookahead
 // 2 = switchable between the two
 
-selectConfiguration = 3;
+selectConfiguration = 0;
 // 0 = just the peak limiter
 // 1 = just the serialGains
 // 2 = both
@@ -643,6 +643,7 @@ smootherSelect(1,orderAtt, orderRel,att,rel) =
   smootherARorder(maxOrder,orderAtt, orderRel, att, rel);
 
 
+// postProc(0) = meters(selectConfiguration):si.bus(nrChannels),par(i, nrChannels, _<:attach(!,_));
 postProc(0) = meters(selectConfiguration):si.bus(nrChannels),par(i, nrChannels, !);
 postProc(1) = meters(selectConfiguration):si.bus(nrChannels*2);
 
@@ -715,7 +716,6 @@ meterV(i) =
 
 attachMeter(b) =
   _<: attach(_, (ba.linear2db
-                 // :max(-12):min(0)
                  : b));
 
 AB(0,p) = p;
