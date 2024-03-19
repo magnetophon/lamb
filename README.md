@@ -21,13 +21,8 @@ With the default settings, there is practically zero distortion, even at 20Hz:
 
 ## user preferences
 
-The start of the dsp file has a few user changeable values:
-- MaxSampleRate  
-  **ATTENTION** If you want to use the plugin with a samplerate of more than 192k, make sure you change this.  
-- NrChannels  
-  Speaks for itself.
-- testingFeatures  
-  0 for a simple plugin.  
-  1 for gain reduction outputs, an A/B comparison system and a comparison to a 4-pole smoother.
+  **ATTENTION** If you want to use the plugin with a samplerate of more than 48k, make sure you change 
+  MaxSampleRate at the start of lamb.dsp.  
+  There's a couple of other user preferences as well, documented in the dsp file.
 
 🐑
