@@ -21,7 +21,7 @@ nrChannels = 2;
 enableGRout = 1;
 // enable gain reduction outputs
 
-selectSmoother = 0;
+selectSmoother = 1;
 // 0 = just the sophisticated smoother, heavy on the CPU, long compile time
 // 1 = just a regular 4-pole smoother with lookahead
 // 2 = switchable between the two
@@ -472,7 +472,7 @@ newCurve(releasing,c,x) =
 lookahead_compressor_N_chan(parGain,strength,thresh,att,rel,knee,link,N) =
   si.bus(N) <: si.bus(N*2):
   (
-    par(i, N, _@(attackSamples+relHoldSamples))
+    par(i, N, _@(attackSamples+(relHoldSamples*useSmartHold)))
    ,((par(i,N,abs) : lookahead_compression_gain_N_chan(parGain,strength,thresh,att,rel,knee,link,N))
      <: si.bus(N*2)
     )
@@ -511,9 +511,11 @@ lookahead_compression_gain_mono(parGain,strength,thresh,att,rel,knee) =
   : smootherSel(selectSmoother)
 with {
   releaseHold(prevGain,rawGR) =
-    max(
-      min(prevGain,rawGR@relHoldSamples)
-    , releaseLookahead(rawGR));
+    select2(useSmartHold
+           , rawGR:ba.slidingMin(relHoldSamples+1,maxSampleRate)
+           , max(
+               min(prevGain,rawGR@relHoldSamples)
+             , releaseLookahead(rawGR)));
   releaseLookahead(rawGR) = rawGR:ba.slidingMin(relHoldSamples+1,maxSampleRate);
 };
 
@@ -750,6 +752,8 @@ knee = AB(enableAB,kneeP);
 kneeP = hslider("[09]knee",1,0,30,0.1);
 link = AB(enableAB,linkP);
 linkP = hslider("[10]link", 0, 0, 100, 1) *0.01;
+
+useSmartHold = checkbox("use smart hold");
 
 //************************************** serialGains **********************************************************
 postAtt = hslider("post attack[ms]", 0, 0, 2000, 1)*0.001;
