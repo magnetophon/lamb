@@ -21,7 +21,7 @@ nrChannels = 2;
 enableGRout = 1;
 // enable gain reduction outputs
 
-selectSmoother = 1;
+selectSmoother = 0;
 // 0 = just the sophisticated smoother, heavy on the CPU, long compile time
 // 1 = just a regular 4-pole smoother with lookahead
 // 2 = switchable between the two
