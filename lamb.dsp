@@ -836,3 +836,10 @@ test2 =
 with {
   loop(prev,x) = no.lfnoise0(abs(prev*69)%9:pow(0.75)*5+1);
 };
+
+///////////////////////////////////////////////////////////////////////////////
+//                                  notes                                    //
+///////////////////////////////////////////////////////////////////////////////
+// TODO: https://www.desmos.com/calculator/ubmqgogu2s
+// old scaled: https://www.desmos.com/calculator/fa6rreh99a
+// resample docs: https://henquist.github.io/2.0.0/
