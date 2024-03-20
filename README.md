@@ -24,5 +24,25 @@ This adds latency though.
   **ATTENTION** If you want to use the plugin with a samplerate of more than 48k, make sure you change 
   MaxSampleRate at the start of lamb.dsp.  
   There's a couple of other user preferences as well, documented in the dsp file.
+  
+  
+## Building
+
+This algorithm needs double precision to function.
+You can build it with any of the faust build scripts, for example:
+
+``` shell
+faust2jack -double -time -t 0 lamb.dsp
+
+```
+
+
+Or:
+
+``` shell
+faust2jaqt -double -time -t 0 lamb.dsp
+
+```
+
 
 🐑
