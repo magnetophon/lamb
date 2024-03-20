@@ -53,6 +53,10 @@ levVarOrder = 0;
 serialGainsVarOrder = 0;
 // the order of the smoothers in the serialGains is variable
 
+// Display a bargraph to show the current latency.
+// Mainly for https://github.com/magnetophon/lamb-rs to be able to report the latency to the host.
+enableLatencyMeter = 0;
+
 
 maxOrder = 8;
 
@@ -472,7 +476,7 @@ newCurve(releasing,c,x) =
 lookahead_compressor_N_chan(N,meters,parGain,strength,thresh,attack,attackShape,release,releaseShape,knee,link,relHoldSamples) =
   si.bus(N) <: si.bus(N*2):
   (
-    par(i, N, _@(attackSamples+relHoldSamples))
+    par(i, N, _@((attackSamples+relHoldSamples):latencyMeter(enableLatencyMeter)))
    ,((par(i,N,abs) : lookahead_compression_gain_N_chan(parGain,strength,thresh,attack,attackShape,release,releaseShape,knee,link,N,relHoldSamples))
      <: si.bus(N*2)
     )
@@ -485,6 +489,8 @@ lookahead_compressor_N_chan(N,meters,parGain,strength,thresh,attack,attackShape,
       ))
 with {
   attackSamples = ba.sec2samp(attack);
+  latencyMeter(0) = _;
+  latencyMeter(1) = hbargraph("[99]latency[unit:samples]", 0, maxAttackSamples+maxRelHoldSamples);
 };
 
 lookahead_compression_gain_N_chan(parGain,strength,thresh,attack,attackShape,release,releaseShape,knee,link,1,relHoldSamples) =
@@ -608,6 +614,8 @@ with {
   postOrder = 3;
 };
 
+// smoother adapted from Dario Sanfilippo
+// https://github.com/dariosanfilippo/limiterStereo/blob/da1c38cc393f08b5dd79e56ffd4e6256af07a708/limiterStereo.dsp#L90-L101
 
 // fixed order
 smoother(order, att, rel, xx) =
