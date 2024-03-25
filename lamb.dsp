@@ -415,7 +415,7 @@ warp(shape,knee,x) =
 sineShaper(x) = (sin((x*0.5 + 0.75)*2*ma.PI)+1)*0.5;
 
 OLDwarpedSine(releasing,shapeSlider,x) =
-  ba.tabulateNd(0, warpedSineFormula,(nrShapes, 1<<16,0, 0,nrShapes, maxRelease, shapeSlider,x)).lin;
+  ba.tabulateNd(1, warpedSineFormula,(nrShapes, 1<<16,0, 0,nrShapes, maxRelease, shapeSlider,x)).lin;
 
 warpedSineFormula(shapeSlider,x) =
   sineShaper(warp(shape,knee,x:max(0):min(1))):pow(power)
@@ -463,7 +463,7 @@ CurveFormula(c,x) =
 ;
 Curve(c,x) =
   // CurveFormula(c,x);
-  ba.tabulateNd(0, CurveFormula,(nrShapes, 1<<16,0, 0,1, 1, c,x)).lin;
+  ba.tabulateNd(1, CurveFormula,(nrShapes, 1<<16,0, 0,1, 1, c,x)).lin;
 
 newCurve(releasing,c,x) =
   select2(releasing
