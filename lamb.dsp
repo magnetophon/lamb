@@ -26,7 +26,7 @@ selectSmoother = 0;
 // 1 = just a regular 4-pole smoother with lookahead
 // 2 = switchable between the two
 
-selectConfiguration = 0;
+selectConfiguration = 2;
 // 0 = just the peak limiter
 // 1 = just the serialGains
 // 2 = both
@@ -84,9 +84,9 @@ configSelector(1) =
 
 configSelector(2) =
   preGain
-  <:( (serialGainsGroup(selectConfiguration,
-                        DJcompression_gain_N_chan(DJstrength,DJthresh,DJattack,fastRelease,DJknee,1,nrChannels)
-                        // si.bus(nrChannels)
+  <:( (limiterGroup(selectConfiguration,
+                    DJcompression_gain_N_chan(DJstrength,DJthresh,DJattack,fastRelease,DJknee,1,nrChannels)
+                    // si.bus(nrChannels)
                        )
       , si.bus(nrChannels))
       : lamb(meters(selectConfiguration))
@@ -723,7 +723,7 @@ meterH(i) =
 meterV(i) =
   attachMeter(
     vbargraph(
-      "h:[99]gain reduction/%i[unit:dB]", -12, 0)
+      "h:[99]gain reduction/%i[unit:dB]", -24, 0)
   );
 
 attachMeter(b) =
@@ -740,11 +740,11 @@ SINsmoo =
   AB(enableAB,checkbox("SIN / 4-pole smoother"));
 
 ab = checkbox("[1]a/b");
-inputGain = AB(enableAB,hslider("[01]input gain", 0, -24, 24, 0.1)):ba.db2linear:si.smoo;
+inputGain = AB(enableAB,hslider("[01]input gain", 0, -24, 60, 0.1)):ba.db2linear:si.smoo;
 strength = AB(enableAB,strengthP);
 strengthP = hslider("[02]strength", 100, 0, 100, 1) * 0.01;
 thresh = AB(enableAB,threshP);
-threshP = hslider("[03]thresh",-1,-30,0,0.1);
+threshP = hslider("[03]thresh a",-1,-30,0,0.1);
 attack = AB(enableAB,attackP);
 attackP = hslider("[04]attack[unit:ms] [scale:log]",9, 0, maxAttack*1000,0.1)*0.001;
 attackShape = AB(enableAB,attackShapeP);
@@ -857,7 +857,7 @@ with {
 // resample docs: https://henquist.github.io/2.0.0/
 
 ///////////////////////////////////////////////////////////////////////////////
-//                                  anti-pumt                                    //
+//                                  anti-pump                                    //
 ///////////////////////////////////////////////////////////////////////////////
 
 DJcomp =
@@ -912,12 +912,12 @@ with {
        : ba.db2linear
        : smootherARorder(maxOrder, orderRel,orderAtt, adaptiveRel, att)
          // , ((level-limThres):max(0)*-1: ba.db2linear)
-     , (gain_computer(1,limThres,limKnee,level): ba.db2linear)
+     , (gain_computer(1,thresh,limKnee,level): ba.db2linear)
     ):min
       // : smootherARorder(maxOrder, orderRelLim,4, releaseLim, 0)
     : ba.linear2db
       * strength
-    : hbargraph("slow GR[unit:dB]", -12, 0);
+    : hbargraph("slow GR[unit:dB]", -24, 0);
 
   adaptiveRel =
     fade_to_inf(
@@ -1015,16 +1015,20 @@ shaper(s,x) = (x-x*s)/(s-x*2*s+1);
 //                                    GUI                                   //
 ///////////////////////////////////////////////////////////////////////////////
 
-oneKnob = hslider("one knob", 0, 0, 1, 0.01):si.smoo;
+oneKnob = hslider("anti pump", 1, 0, 1, 0.01)*0.5:si.smoo;
 
 inputGainSlider = hslider("[01]input gain[unit:dB]", 0, -24, 24, 0.1):si.smoo;
-DJinputGain = (inputGainSlider + it.remap(0, 0.5, -3, 6,oneKnob:min(0.5))):ba.db2linear;
+DJinputGain = (
+  // inputGainSlider +
+  it.remap(0, 0.5, -3, 6,oneKnob:min(0.5))):ba.db2linear;
 DJstrength = it.remap(0, 0.5, 0, 1,oneKnob:min(0.5));
 // hslider("[02]strength[unit:%]", 100, 0, 100, 1) * 0.01;
 
 DJthresh =
-  // limThres + hslider("[03]thresh offset[unit:dB]",0,-12,12,0.1);
-  limThres + it.remap(0.5, 1, 0, 6,oneKnob:max(0.5));
+  thresh
+  - DJinputGain
+  + it.remap(0.5, 1, 0, 6,oneKnob:max(0.5));
+// -1;
 DJattack =
   0.009;
 // hslider("[04]attack[unit:ms] [scale:log]",9, 1000/48000, maxAttack*1000,0.1)*0.001;
