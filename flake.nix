@@ -14,6 +14,7 @@
     in pinnedPkgs.mkShell {
       packages = [
         pinnedPkgs.faust2jack
+        pinnedPkgs.x42-plugins
       ];
     };
   };

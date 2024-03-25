@@ -3,5 +3,6 @@
 pkgs.mkShell {
   buildInputs = [
     pkgs.faust2jack
+    pkgs.x42-plugins
   ];
 }
