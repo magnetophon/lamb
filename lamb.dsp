@@ -744,7 +744,7 @@ inputGain = AB(enableAB,hslider("[01]input gain", 0, -24, 60, 0.1)):ba.db2linear
 strength = AB(enableAB,strengthP);
 strengthP = hslider("[02]strength", 100, 0, 100, 1) * 0.01;
 thresh = AB(enableAB,threshP);
-threshP = hslider("[03]thresh a",-1,-30,0,0.1);
+threshP = hslider("[03]thresh",-1,-30,0,0.1);
 attack = AB(enableAB,attackP);
 attackP = hslider("[04]attack[unit:ms] [scale:log]",9, 0, maxAttack*1000,0.1)*0.001;
 attackShape = AB(enableAB,attackShapeP);
@@ -902,7 +902,7 @@ DJcompression_gain_N_chan(strength,thresh,att,rel,knee,link,N) =
 DJcompression_gain_mono(strength,thresh,att,rel,knee,level) =
   loop~(_,_)
        : (_,!)
-       : ba.db2linear
+ : ba.db2linear
 with {
   loop(prevGain,prevRef) =
     gain,ref
@@ -1020,7 +1020,7 @@ oneKnob = hslider("anti pump", 1, 0, 1, 0.01)*0.5:si.smoo;
 inputGainSlider = hslider("[01]input gain[unit:dB]", 0, -24, 24, 0.1):si.smoo;
 DJinputGain = (
   // inputGainSlider +
-  it.remap(0, 0.5, -3, 6,oneKnob:min(0.5))):ba.db2linear;
+  it.remap(0, 0.5, -9, 0,oneKnob:min(0.5))):ba.db2linear;
 DJstrength = it.remap(0, 0.5, 0, 1,oneKnob:min(0.5));
 // hslider("[02]strength[unit:%]", 100, 0, 100, 1) * 0.01;
 
