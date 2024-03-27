@@ -10,4 +10,8 @@ declare license "AGPLv3";
 
 
 process =
-  component("lamb.dsp")[enableLatencyMeter = 1;];
+  component("lamb.dsp")
+  [
+    enableLatencyMeter = 1;
+    selectPostProc = 2;
+  ];
