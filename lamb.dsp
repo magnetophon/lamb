@@ -23,9 +23,12 @@ selectOutputs = 0;
 // 1 = nrChannels audio + nrChannels gain reduction outputs
 // 2 = for lamb-rs:
 //  - nrChannels audio outputs
-//  - nrChannels max level outputs, downsampled to one value every samplesPerPixel samples
-//  - nrChannels gain reduction outputs, downsampled to one value every samplesPerPixel samples
-// enable gain reduction outputs
+//  - a max level output,
+//  downsampled to one value every samplesPerPixel samples
+//  selectable between pre- and post- limiter
+//  time aligned to the output audio
+//  - a gain reduction output,
+//  downsampled to one value every samplesPerPixel samples
 
 selectSmoother = 0;
 // 0 = just the sophisticated smoother, heavy on the CPU, long compile time
