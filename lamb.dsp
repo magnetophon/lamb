@@ -18,7 +18,7 @@ maxSampleRate = 48000;
 nrChannels = 2;
 // the number of input and output channels
 
-selectOutputs = 2;
+selectOutputs = 0;
 // 0 = just nrChannels audio outputs
 // 1 = nrChannels audio + nrChannels gain reduction outputs
 // 2 = for lamb-rs:
@@ -27,12 +27,12 @@ selectOutputs = 2;
 //  - nrChannels gain reduction outputs, downsampled to one value every samplesPerPixel samples
 // enable gain reduction outputs
 
-selectSmoother = 1;
+selectSmoother = 0;
 // 0 = just the sophisticated smoother, heavy on the CPU, long compile time
 // 1 = just a regular 4-pole smoother with lookahead
 // 2 = switchable between the two
 
-selectConfiguration = 2;
+selectConfiguration = 0;
 // 0 = just the peak limiter
 // 1 = just the serialGains
 // 2 = both
@@ -79,7 +79,7 @@ si.bus(nrChannels)
 <:
 si.bus(nrChannels)
 , (
-  (limiterGroup(selectConfiguration,preGain))
+  preGain
   : lamb(meters(selectConfiguration),1)
 )
   : postProc(nrChannels,selectOutputs)
@@ -89,7 +89,7 @@ configSelector(1) =
   preGain<:
   (
     // ( serialGainsGroup(selectConfiguration,serialGains(1))
-    ( serialGainsGroup(selectConfiguration,DJcompression_gain_N_chan(DJstrength,DJthresh,DJattack,fastRelease,DJknee,1,nrChannels))
+    ( DJcompression_gain_N_chan(DJstrength,DJthresh,DJattack,fastRelease,DJknee,1,nrChannels)
       <: si.bus(nrChannels))
   , si.bus(nrChannels))
   : ro.interleave(nrChannels,2)
@@ -102,34 +102,38 @@ configSelector(2) =
 ,
   (
     preGain
-    <:( (serialGainsGroup(selectConfiguration,
-                          DJcompression_gain_N_chan(DJstrength,DJthresh,DJattack,fastRelease,DJknee,1,nrChannels)
-                         )
-        , si.bus(nrChannels))
+    <:( (
+        DJcompression_gain_N_chan(DJstrength,DJthresh,DJattack,fastRelease,DJknee,1,nrChannels)
+      , si.bus(nrChannels))
         : lamb(meters(selectConfiguration))
       ))
   : postProc(nrChannels,selectOutputs)
 ;
 
 configSelector(3) =
-  preGain
+
+  si.bus(nrChannels)
   <:
+  si.bus(nrChannels)
+,
   (
+    preGain
+    <:
     (
       (
-        leveler
-        <:
         (
-          serialGainsGroup(selectConfiguration,serialGains)
+          leveler
+          <:
+          (
+            serialGainsGroup(selectConfiguration,serialGains)
+          )
         )
+      , si.bus(nrChannels)
       )
-    , si.bus(nrChannels)
+      : lamb(meters(selectConfiguration))
     )
-    : lamb(meters(selectConfiguration))
-  )
-  ~FBproc
-   : postProc(nrChannels,selectOutputs)
-;
+    ~FBproc)
+  : postProc(nrChannels,selectOutputs) ;
 
 FBproc =
   par(i, nrChannels, !)
@@ -313,12 +317,12 @@ configSelector(4) =
   SIN_tester;
 
 lamb(meters,parGain) =
-  limiterGroup(selectConfiguration,(parGain,strength,thresh,attack,attackShape,release,releaseShape,knee,link,relHoldSamples,si.bus(nrChannels)))
+  (parGain,strength,thresh,attack,attackShape,release,releaseShape,knee,link,relHoldSamples,si.bus(nrChannels))
   :lookahead_compressor_N_chan(nrChannels,meters)
 ;
 
 preGain =
-  par(i, nrChannels, _*inputGain);
+  par(i, nrChannels, _*inputGain(selectConfiguration));
 
 ///////////////////////////////////////////////////////////////////////////////
 //                         SIN  smoother                                     //
@@ -328,6 +332,13 @@ maxAttackSamples =
   maxAttack*maxSampleRate;
 maxRelHoldSamples =
   maxRelHold*maxSampleRate;
+attackSamples = ba.sec2samp(attack);
+fullLatency =
+  (attackSamples+relHoldSamples)
+  * (1-(selectConfiguration==1))
+  :latencyMeter(enableLatencyMeter);
+latencyMeter(0) = _;
+latencyMeter(1) = hbargraph("[99]latency[unit:samples]", 0, maxAttackSamples+maxRelHoldSamples);
 
 SIN(attack,attackShape,release,releaseShape) = loop~(_,_)
 with {
@@ -335,7 +346,6 @@ with {
     ramp
   , gain
   with {
-  attackSamples = ba.sec2samp(attack);
   duration =
     (attack*attacking)+(release*releasing);
   gain =
@@ -500,7 +510,7 @@ newCurve(releasing,c,x) =
 lookahead_compressor_N_chan(N,meters,parGain,strength,thresh,attack,attackShape,release,releaseShape,knee,link,relHoldSamples) =
   si.bus(N) <: si.bus(N*2):
   (
-    par(i, N, _@((attackSamples+relHoldSamples):latencyMeter(enableLatencyMeter)))
+    par(i, N, _@fullLatency)
    ,((par(i,N,abs) : lookahead_compression_gain_N_chan(parGain,strength,thresh,attack,attackShape,release,releaseShape,knee,link,N,relHoldSamples))
      <: si.bus(N*2)
     )
@@ -510,12 +520,7 @@ lookahead_compressor_N_chan(N,meters,parGain,strength,thresh,attack,attackShape,
     :(ro.interleave(N,2)
       : par(i,N, *))
   , (si.bus(N)
-    ))
-with {
-  attackSamples = ba.sec2samp(attack);
-  latencyMeter(0) = _;
-  latencyMeter(1) = hbargraph("[99]latency[unit:samples]", 0, maxAttackSamples+maxRelHoldSamples);
-};
+    )) ;
 
 lookahead_compression_gain_N_chan(parGain,strength,thresh,attack,attackShape,release,releaseShape,knee,link,1,relHoldSamples) =
   lookahead_compression_gain_mono(parGain,strength,thresh,attack,attackShape,release,releaseShape,knee,relHoldSamples);
@@ -556,7 +561,7 @@ smootherSel(1,attack,attackShape,release,releaseShape) =
   ba.slidingMin(attackSamples+1,maxAttackSamples)
   : smoother(4, release, attack )
 with {
-  attackSamples = ba.sec2samp(attack);
+  // attackSamples = ba.sec2samp(attack);
 };
 smootherSel(2,attack,attackShape,release,releaseShape) =
   _<: select2(SINsmoo
@@ -764,27 +769,52 @@ SINsmoo =
   AB(enableAB,checkbox("SIN / 4-pole smoother"));
 
 ab = checkbox("[1]a/b");
-inputGain = AB(enableAB,hslider("[01]input gain", 0, -24, 60, 0.1)):ba.db2linear:si.smoo;
-strength = AB(enableAB,strengthP);
+
+inputGain(0) =
+  limiterGroup(selectConfiguration,
+               gainAB) ;
+inputGain(selectConfiguration) =
+  gainAB;
+
+gainAB = AB(enableAB,hslider("[01]input gain", 0, -24, 60, 0.1)):ba.db2linear:si.smoo;
+strength =
+  limiterGroup(selectConfiguration,
+               AB(enableAB,strengthP));
 strengthP = hslider("[02]strength", 100, 0, 100, 1) * 0.01;
-thresh = AB(enableAB,threshP);
+thresh =
+  limiterGroup(selectConfiguration,
+               AB(enableAB,threshP));
 threshP = hslider("[03]thresh",-1,-30,0,0.1);
-attack = AB(enableAB,attackP);
+attack =
+  limiterGroup(selectConfiguration,
+               AB(enableAB,attackP));
 attackP = hslider("[04]attack[unit:ms] [scale:log]",9, 0, maxAttack*1000,0.1)*0.001;
-attackShape = AB(enableAB,attackShapeP);
+attackShape =
+  limiterGroup(selectConfiguration,
+               AB(enableAB,attackShapeP));
 // attackShapeP = half+hslider("[05]attack shape" , 2, 0-half, half, 0.1);
 attackShapeP = hslider("[05]attack shape" , 0, 0, 1, 0.01);
-release = AB(enableAB,releaseP);
+release =
+  limiterGroup(selectConfiguration,
+               AB(enableAB,releaseP));
 releaseP = hslider("[06]release[unit:ms] [scale:log]",60,1,maxRelease*1000,1)*0.001;
-releaseShape = AB(enableAB,releaseShapeP);
+releaseShape =
+  limiterGroup(selectConfiguration,
+               AB(enableAB,releaseShapeP));
 // releaseShapeP = half+hslider("[07]release shape" , -3, 0-half, half, 0.1);
 releaseShapeP = hslider("[07]release shape" , 0.5, 0, 1, 0.01);
-relHoldSamples = AB(enableAB,relHoldSamplesP);
+relHoldSamples =
+  limiterGroup(selectConfiguration,
+               AB(enableAB,relHoldSamplesP));
 relHoldSamplesP = hslider("[08]release hold[unit:ms]", 50,
                           minAttTimeMs, maxRelHold*1000, 1)*0.001:ba.sec2samp;
-knee = AB(enableAB,kneeP);
+knee =
+  limiterGroup(selectConfiguration,
+               AB(enableAB,kneeP));
 kneeP = hslider("[09]knee",1,0,30,0.1);
-link = AB(enableAB,linkP);
+link =
+  limiterGroup(selectConfiguration,
+               AB(enableAB,linkP));
 linkP = hslider("[10]link", 0, 0, 100, 1) *0.01;
 
 //************************************** serialGains **********************************************************
@@ -888,7 +918,7 @@ DJcomp =
   DJcompressor_N_chan(DJstrength,DJthresh,DJattack,fastRelease,DJknee,1,2) ;
 
 DJcompressor_N_chan(strength,thresh,att,rel,knee,link,N) =
-  par(i, N, _*inputGain)
+  par(i, N, _*inputGain(selectConfiguration))
   <: si.bus(N*2)
   : (
   si.bus(N)
@@ -902,225 +932,231 @@ DJcompressor_N_chan(strength,thresh,att,rel,knee,link,N) =
   )
 , si.bus(N)
   : postProc(N,selectOutputs)
-;
+  ;
 
-DJcompression_gain_N_chan(strength,thresh,att,rel,knee,link,1) =
-  abs:ba.linear2db
-  : DJcompression_gain_mono(strength,thresh,att,rel,knee);
+  DJcompression_gain_N_chan(strength,thresh,att,rel,knee,link,1) =
+    abs:ba.linear2db
+    : DJcompression_gain_mono(strength,thresh,att,rel,knee);
 
-DJcompression_gain_N_chan(strength,thresh,att,rel,knee,1,N) =
-  par(i, N, abs)
-  : ba.parallelMax(N)
-  : ba.linear2db
-  : DJcompression_gain_mono(strength,thresh,att,rel,knee);
+  DJcompression_gain_N_chan(strength,thresh,att,rel,knee,1,N) =
+    par(i, N, abs)
+    : ba.parallelMax(N)
+    : ba.linear2db
+    : DJcompression_gain_mono(strength,thresh,att,rel,knee);
 
-DJcompression_gain_N_chan(strength,thresh,att,rel,knee,link,N) =
-  par(i, N, abs:ba.linear2db)
-  <: (si.bus(N),(ba.parallelMax(N) <: si.bus(N)))
-  : ro.interleave(N,2)
-  : par(i,N,(it.interpolate_linear(link))
-       )
-  : par(i,N,DJcompression_gain_mono(strength,thresh,att,rel,knee)) ;
+  DJcompression_gain_N_chan(strength,thresh,att,rel,knee,link,N) =
+    par(i, N, abs:ba.linear2db)
+    <: (si.bus(N),(ba.parallelMax(N) <: si.bus(N)))
+    : ro.interleave(N,2)
+    : par(i,N,(it.interpolate_linear(link))
+         )
+    : par(i,N,DJcompression_gain_mono(strength,thresh,att,rel,knee)) ;
 
 
-DJcompression_gain_mono(strength,thresh,att,rel,knee,level) =
-  loop~(_,_)
-       : (_,!)
-       : ba.db2linear
-       : smootherARorder(maxOrder, orderRel,orderAtt, 0, att)
-with {
-  loop(prevGain,prevRef) =
-    gain,ref
+  DJcompression_gain_mono(strength,thresh,att,rel,knee,level) =
+    loop~(_,_)
+         : (_,!)
+         : ba.db2linear
+         : smootherARorder(maxOrder, orderRel,orderAtt, 0, att)
   with {
-  gain =
-    (  gain_computer(1,thresh,knee,level)
-       : ba.db2linear
-       : smootherARorder(maxOrder, orderRel,orderAtt, adaptiveRel, 0)
-         // , ((level-limThres):max(0)*-1: ba.db2linear)
-    )
-    // :min(gain_computer(1,thresh+limThres,limKnee,level): ba.db2linear)
-    // : smootherARorder(maxOrder, orderRelLim,4, releaseLim, 0)
-    : ba.linear2db
-      * strength
-    : hbargraph("slow GR[unit:dB]", -24, 0)
-  ;
-
-  adaptiveRel =
-    fade_to_inf(
-      // shaper(adaptShape,
-      1-dv
-      // )
-     ,rel) ;
-
-  ref =
-    // (prevGain+transitionRange)
-    (prevGain-dvBot)
-    // : min(transitionRange)
-    : ba.db2linear
-      // : smootherOrder(maxOrder,refOrder,refRel,0)
-    : smootherOrder(1,1,refRel,0)
-    : ba.linear2db
-    : hbargraph("ref[unit:dB]", -24, 0)
-  ;
-  refRel =
-    interpolate_logarithmic(
-      // shaper(refShape,
-      refDv
-      // )
-    , slowRelease,slowRelease/ma.EPSILON) ;
-  refDv =
-    it.remap(refBot, refTop, 1, 0,fastGR:min(refTop):max(refBot))
-    : hbargraph("ref dv", 0, 1);
-  dv =
-    it.remap(dvBot, dvTop, 1, 0,fastGR:min(dvTop):max(dvBot))
-    : hbargraph("dv", 0, 1);
-  idv= (fastGR
-        :min(0)
-         / (transitionRange
-           )
-         *-1):min(1)
-       : hbargraph("dv", 0, 1)
-  ;
-  fastGR =
-    (prevGain-prevRef)
-    // :min(0)
-    // :hbargraph("fast GR[unit:dB]", -24, 0)
-    // :hbargraph("fast GR plus[unit:dB]", 0, 12 )
-  ;
-};
-};
-
-
-// gain_computer(strength,thresh,knee,level) =
-// select3((level>(thresh-(knee/2)))+(level>(thresh+(knee/2))),
-// 0,
-// ((level-thresh+(knee/2)) : pow(2)/(2*max(ma.EPSILON,knee))),
-// (level-thresh))
-// : max(0)*-strength;
-
-postProc(N,0) =
-  par(i, N, !),si.bus(N),par(i, N, !);
-postProc(N,1) =
-  par(i, N, !),si.bus(N*2);
-postProc(N,2) =
-(
-  si.bus(N)
-  , ( si.bus(N)
-      <:  si.bus(N*2)
-    )
-, si.bus(N)
-)
-:(
-  ro.crossnn(N)
-, si.bus(N*2)
-)
-: (
-  si.bus(N)
-, par(i, 2, soloOp(max))
-, soloOp(min))
-: (
-  si.bus(N)
-, (select2(inputSel,_
-                    // @(attackSamples+relHoldSamples)
-           ,_):abs:rm.reduce(max,samplesPerPixel))
-, rm.reduce(min,samplesPerPixel)
-)
-with {
-  soloOp(op) =
-    si.bus(N)
-    <:(ba.parallelOp(op,N)
-      , si.bus(N)
+    loop(prevGain,prevRef) =
+      gain,ref
+    with {
+    gain =
+      (  gain_computer(1,thresh,knee,level)
+         : ba.db2linear
+         : smootherARorder(maxOrder, orderRel,orderAtt, adaptiveRel, 0)
+           // , ((level-limThres):max(0)*-1: ba.db2linear)
       )
-    : ba.selectn(N+1,channelSelect);
-  // 0 = all channels combined, 1 is first channel, 2 = second channel .. N = Nth channel
-  channelSelect = hslider("[0]channel select", 0, 0, N, 1);
-  inputSel = hslider("[1]input, output", 0, 0, 1, 1);
-  samplesPerPixel = hslider("[2]samples per pixel", 1, 1, 1024, 1);
-};
+      // :min(gain_computer(1,thresh+limThres,limKnee,level): ba.db2linear)
+      // : smootherARorder(maxOrder, orderRelLim,4, releaseLim, 0)
+      : ba.linear2db
+        * strength
+      : attachLatency(hbargraph("slow GR[unit:dB]", -24, 0))
+    ;
+
+    adaptiveRel =
+      fade_to_inf(
+        // shaper(adaptShape,
+        1-dv
+        // )
+       ,rel) ;
+
+    ref =
+      // (prevGain+transitionRange)
+      (prevGain-dvBot)
+      // : min(transitionRange)
+      : ba.db2linear
+        // : smootherOrder(maxOrder,refOrder,refRel,0)
+      : smootherOrder(1,1,refRel,0)
+      : ba.linear2db
+      : attachLatency(hbargraph("ref[unit:dB]", -24, 0))
+    ;
+    refRel =
+      interpolate_logarithmic(
+        // shaper(refShape,
+        refDv
+        // )
+      , slowRelease,slowRelease/ma.EPSILON) ;
+    refDv =
+      it.remap(refBot, refTop, 1, 0,fastGR:min(refTop):max(refBot))
+      : attachLatency(hbargraph("ref dv", 0, 1));
+    dv =
+      it.remap(dvBot, dvTop, 1, 0,fastGR:min(dvTop):max(dvBot))
+      : attachLatency(hbargraph("dv", 0, 1));
+    fastGR =
+      (prevGain-prevRef)
+      // :min(0)
+      // :hbargraph("fast GR[unit:dB]", -24, 0)
+      // :hbargraph("fast GR plus[unit:dB]", 0, 12 )
+    ;
+    attachLatency(m) = _<:attach(_,(_@fullLatency):m);
+  };
+  };
 
 
-///////////////////////////////////////////////////////////////////////////////
-//                              Utilities                                    //
-///////////////////////////////////////////////////////////////////////////////
+  // gain_computer(strength,thresh,knee,level) =
+  // select3((level>(thresh-(knee/2)))+(level>(thresh+(knee/2))),
+  // 0,
+  // ((level-thresh+(knee/2)) : pow(2)/(2*max(ma.EPSILON,knee))),
+  // (level-thresh))
+  // : max(0)*-strength;
 
-fade_to_inf(dv,v0) =
-  v0/max(1-dv,ma.EPSILON);
+  postProc(N,0) =
+    par(i, N, !),si.bus(N),par(i, N, !);
+  postProc(N,1) =
+    par(i, N, !),si.bus(N*2);
+  postProc(N,2) =
+    (
+      si.bus(N)
+    , ( si.bus(N)
+        <:  si.bus(N*2)
+      )
+    , si.bus(N)
+    )
+    :(
+    ro.crossnn(N)
+  , si.bus(N*2)
+  )
+    : (
+      si.bus(N)
+    , par(i, 2, soloOp(max))
+    , soloOp(min))
+    : (
+      si.bus(N)
+    , (select2(inputSel
+              ,_@fullLatency
+              ,_)
+       :abs:rm.reduce(max,samplesPerPixel))
+    , rm.reduce(min,samplesPerPixel)
+    )
+  with {
+    soloOp(op) =
+      si.bus(N)
+      <:(ba.parallelOp(op,N)
+        , si.bus(N)
+        )
+      : ba.selectn(N+1,channelSelect);
+    // 0 = all channels combined, 1 is first channel, 2 = second channel .. N = Nth channel
+    channelSelect = hslider("[0]channel select", 0, 0, N, 1);
+    inputSel = hslider("[1]input, output", 0, 0, 1, 1);
+    samplesPerPixel = hslider("[2]samples per pixel", 16, 1, 1024, 1);
+  };
 
-interpolate_logarithmic(dv,v0,v1) =
-  pow(((v1/v0)),dv)*v0 ;
 
-// https://www.desmos.com/calculator/pn4myus6x4
-shaper(s,x) = (x-x*s)/(s-x*2*s+1);
-///////////////////////////////////////////////////////////////////////////////
-//                                    GUI                                   //
-///////////////////////////////////////////////////////////////////////////////
+  ///////////////////////////////////////////////////////////////////////////////
+  //                              Utilities                                    //
+  ///////////////////////////////////////////////////////////////////////////////
 
-oneKnob = hslider("anti pump", 1, 0, 1, 0.01):si.smoo;
+  fade_to_inf(dv,v0) =
+    v0/max(1-dv,ma.EPSILON);
 
-DJinputGain =
-  0;
-// (it.remap(0, 0.5, -9, 0,oneKnob:min(0.5))):ba.db2linear;
-DJstrength =
-  // 1;
-  // it.remap(0, 0.5, 0, 1,oneKnob:min(0.5));
-  hslider("[02]DJ strength[unit:%]", 100, 0, 100, 1) * 0.01;
+  interpolate_logarithmic(dv,v0,v1) =
+    pow(((v1/v0)),dv)*v0 ;
 
-DJthresh =
-  thresh;
-// -1;
-DJattack =
-  // 0;
-  // 0.009;
-  hslider("[04]DJ attack[unit:ms] [scale:log]",1, 1000/maxSampleRate, 300,0.1)*0.001;
-orderAtt =
-  4;
-// hslider("[05]attack order", 4, 1, maxOrder, 1);
-fastRelease =
-  release;
-// hslider("[06]fast release[unit:ms] [scale:log]",420,0.1,maxRelease*1000,1)*0.001;
-transitionRange =
-  // it.remap(0, 1, 12, 6,oneKnob);
-  // 9;
-  hslider("[07]release transition range[unit:dB]",9,0,30,0.1);
-refTop =
-  hslider("[07]ref top[unit:dB]",3,0,12,0.1);
-refBot =
-  hslider("[07]ref bot[unit:dB]",-24,-30,0,0.1);
-dvTop =
-  hslider("[07]dv top[unit:dB]",2,-6,6,0.1);
-dvBot =
-  hslider("[07]dv bot[unit:dB]",-7,-30,0,0.1);
-slowRelease =
-  hslider("[08]slow release[unit:ms] [scale:log]",1000,50,10000,50)*0.001;
-// it.remap(0, 1, 0.5, 4,oneKnob);
-orderRel =
-  1;
-// hslider("[09]release order", 1, 1, maxOrder, 1);
-DJknee =
-  knee;
-// hslider("[10]knee[unit:dB]",1,0,72,0.1);
-// it.remap(0, 1, 9, 9,oneKnob:max(0.5));
-refOrder =
-  hslider("[11]ref release order", 1, 1, maxOrder, 1);
+  // https://www.desmos.com/calculator/pn4myus6x4
+  shaper(s,x) = (x-x*s)/(s-x*2*s+1);
+  ///////////////////////////////////////////////////////////////////////////////
+  //                                    GUI                                   //
+  ///////////////////////////////////////////////////////////////////////////////
 
-// give it some headroom.
-// when built into a mixer, there should be a limiter on the master.
-// if that is done, this can come back up to -1dB
-limThres = hslider("[14]AP lim offset[unit:dB]",30,-30,30,0.1);
-releaseLim =
-  // hslider("[15]release limiter[unit:ms] [scale:log]",60,5,500,1)*0.001;
-  it.remap(0, 1, 0.12, 0.06,oneKnob);
+  oneKnob = hslider("anti pump", 1, 0, 1, 0.01):si.smoo;
 
-orderRelLim =
-  4;
-// hslider("[16]lim release order", 4, 1, maxOrder, 1);
-limKnee =
-  knee;
-// hslider("[17]lim knee[unit:dB]",1,0,72,0.1);
-// it.remap(0.5, 1, 12, 0,oneKnob:max(0.5));
-// 100 ms
-// maxAttack = 0.1;
-// 2 sec
-// maxRelease = 2;
+  DJinputGain =
+    0;
+  // (it.remap(0, 0.5, -9, 0,oneKnob:min(0.5))):ba.db2linear;
+  DJstrength =
+    // 1;
+    // it.remap(0, 0.5, 0, 1,oneKnob:min(0.5));
+    serialGainsGroup(selectConfiguration,
+                     hslider("[02]DJ strength[unit:%]", 100, 0, 100, 1) * 0.01);
 
-// https://www.desmos.com/calculator/qcjwfaaqc5
+  DJthresh =
+    thresh;
+  // -1;
+  DJattack =
+    // 0;
+    // 0.009;
+    serialGainsGroup(selectConfiguration,
+                     hslider("[04]DJ attack[unit:ms] [scale:log]",1, 1000/maxSampleRate, 300,0.1)*0.001);
+  orderAtt =
+    4;
+  // hslider("[05]attack order", 4, 1, maxOrder, 1);
+  fastRelease =
+    release;
+  // hslider("[06]fast release[unit:ms] [scale:log]",420,0.1,maxRelease*1000,1)*0.001;
+  transitionRange =
+    // it.remap(0, 1, 12, 6,oneKnob);
+    // 9;
+    serialGainsGroup(selectConfiguration,
+                     hslider("[07]release transition range[unit:dB]",9,0,30,0.1));
+  refTop =
+    serialGainsGroup(selectConfiguration,
+                     hslider("[07]ref top[unit:dB]",3,0,12,0.1));
+  refBot =
+    serialGainsGroup(selectConfiguration,
+                     hslider("[07]ref bot[unit:dB]",-24,-30,0,0.1));
+  dvTop =
+    serialGainsGroup(selectConfiguration,
+                     hslider("[07]dv top[unit:dB]",2,-6,6,0.1));
+  dvBot =
+    serialGainsGroup(selectConfiguration,
+                     hslider("[07]dv bot[unit:dB]",-7,-30,0,0.1));
+  slowRelease =
+    serialGainsGroup(selectConfiguration,
+                     hslider("[08]slow release[unit:ms] [scale:log]",1000,50,10000,50)*0.001);
+  // it.remap(0, 1, 0.5, 4,oneKnob);
+  orderRel =
+    1;
+  // hslider("[09]release order", 1, 1, maxOrder, 1);
+  DJknee =
+    knee;
+  // hslider("[10]knee[unit:dB]",1,0,72,0.1);
+  // it.remap(0, 1, 9, 9,oneKnob:max(0.5));
+  refOrder =
+    serialGainsGroup(selectConfiguration,
+                     hslider("[11]ref release order", 1, 1, maxOrder, 1));
+
+  // give it some headroom.
+  // when built into a mixer, there should be a limiter on the master.
+  // if that is done, this can come back up to -1dB
+  limThres =
+    serialGainsGroup(selectConfiguration,
+                     hslider("[14]AP lim offset[unit:dB]",30,-30,30,0.1));
+  releaseLim =
+    // hslider("[15]release limiter[unit:ms] [scale:log]",60,5,500,1)*0.001;
+    it.remap(0, 1, 0.12, 0.06,oneKnob);
+
+  orderRelLim =
+    4;
+  // hslider("[16]lim release order", 4, 1, maxOrder, 1);
+  limKnee =
+    knee;
+  // hslider("[17]lim knee[unit:dB]",1,0,72,0.1);
+  // it.remap(0.5, 1, 12, 0,oneKnob:max(0.5));
+  // 100 ms
+  // maxAttack = 0.1;
+  // 2 sec
+  // maxRelease = 2;
+
+  // https://www.desmos.com/calculator/qcjwfaaqc5

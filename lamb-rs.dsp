@@ -13,5 +13,5 @@ process =
   component("lamb.dsp")
   [
     enableLatencyMeter = 1;
-    selectPostProc = 2;
+    selectOutputs = 2;
   ];
