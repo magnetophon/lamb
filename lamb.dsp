@@ -779,7 +779,7 @@ inputGain(0) =
 inputGain(selectConfiguration) =
   gainAB;
 
-gainAB = AB(enableAB,hslider("[01]input gain", 0, -24, 60, 0.1)):ba.db2linear:si.smoo;
+gainAB = AB(enableAB,hslider("[01]input gain", 0, -24, 24, 0.1)):ba.db2linear:si.smoo;
 strength =
   limiterGroup(selectConfiguration,
                AB(enableAB,strengthP));
