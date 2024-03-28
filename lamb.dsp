@@ -18,7 +18,7 @@ maxSampleRate = 48000;
 nrChannels = 2;
 // the number of input and output channels
 
-selectPostProc = 0;
+selectOutputs = 2;
 // 0 = just nrChannels audio outputs
 // 1 = nrChannels audio + nrChannels gain reduction outputs
 // 2 = for lamb-rs:
@@ -27,12 +27,12 @@ selectPostProc = 0;
 //  - nrChannels gain reduction outputs, downsampled to one value every samplesPerPixel samples
 // enable gain reduction outputs
 
-selectSmoother = 0;
+selectSmoother = 1;
 // 0 = just the sophisticated smoother, heavy on the CPU, long compile time
 // 1 = just a regular 4-pole smoother with lookahead
 // 2 = switchable between the two
 
-selectConfiguration = 0;
+selectConfiguration = 2;
 // 0 = just the peak limiter
 // 1 = just the serialGains
 // 2 = both
@@ -75,28 +75,40 @@ process =
 // DJcomp;
 
 configSelector(0) =
+si.bus(nrChannels)
+<:
+si.bus(nrChannels)
+, (
   (limiterGroup(selectConfiguration,preGain))
   : lamb(meters(selectConfiguration),1)
-  : postProc(nrChannels,selectPostProc);
+)
+  : postProc(nrChannels,selectOutputs)
+;
 
 configSelector(1) =
   preGain<:
   (
-    ( serialGainsGroup(selectConfiguration,serialGains(1))
+    // ( serialGainsGroup(selectConfiguration,serialGains(1))
+    ( serialGainsGroup(selectConfiguration,DJcompression_gain_N_chan(DJstrength,DJthresh,DJattack,fastRelease,DJknee,1,nrChannels))
       <: si.bus(nrChannels))
   , si.bus(nrChannels))
   : ro.interleave(nrChannels,2)
   : par(i, nrChannels, *);
 
 configSelector(2) =
-  preGain
-  <:( (serialGainsGroup(selectConfiguration,
-                        DJcompression_gain_N_chan(DJstrength,DJthresh,DJattack,fastRelease,DJknee,1,nrChannels)
-                       )
-      , si.bus(nrChannels))
-      : lamb(meters(selectConfiguration))
-    )
-  : postProc(nrChannels,selectPostProc)
+  si.bus(nrChannels)
+  <:
+  si.bus(nrChannels)
+,
+  (
+    preGain
+    <:( (serialGainsGroup(selectConfiguration,
+                          DJcompression_gain_N_chan(DJstrength,DJthresh,DJattack,fastRelease,DJknee,1,nrChannels)
+                         )
+        , si.bus(nrChannels))
+        : lamb(meters(selectConfiguration))
+      ))
+  : postProc(nrChannels,selectOutputs)
 ;
 
 configSelector(3) =
@@ -116,7 +128,7 @@ configSelector(3) =
     : lamb(meters(selectConfiguration))
   )
   ~FBproc
-   : postProc(nrChannels,selectPostProc)
+   : postProc(nrChannels,selectOutputs)
 ;
 
 FBproc =
@@ -497,8 +509,8 @@ lookahead_compressor_N_chan(N,meters,parGain,strength,thresh,attack,attackShape,
     (si.bus(N), meters)
     :(ro.interleave(N,2)
       : par(i,N, *))
-   , (si.bus(N)
-      ))
+  , (si.bus(N)
+    ))
 with {
   attackSamples = ba.sec2samp(attack);
   latencyMeter(0) = _;
@@ -889,7 +901,7 @@ DJcompressor_N_chan(strength,thresh,att,rel,knee,link,N) =
     : par(i,N, *)
   )
 , si.bus(N)
-  : postProc(N,selectPostProc)
+  : postProc(N,selectOutputs)
 ;
 
 DJcompression_gain_N_chan(strength,thresh,att,rel,knee,link,1) =
@@ -925,8 +937,9 @@ with {
        : ba.db2linear
        : smootherARorder(maxOrder, orderRel,orderAtt, adaptiveRel, 0)
          // , ((level-limThres):max(0)*-1: ba.db2linear)
-    ):min(gain_computer(1,thresh+limThres,limKnee,level): ba.db2linear)
-      // : smootherARorder(maxOrder, orderRelLim,4, releaseLim, 0)
+    )
+    // :min(gain_computer(1,thresh+limThres,limKnee,level): ba.db2linear)
+    // : smootherARorder(maxOrder, orderRelLim,4, releaseLim, 0)
     : ba.linear2db
       * strength
     : hbargraph("slow GR[unit:dB]", -24, 0)
@@ -963,10 +976,10 @@ with {
     : hbargraph("dv", 0, 1);
   idv= (fastGR
         :min(0)
-        / (transitionRange
-          )
-        *-1):min(1)
-      : hbargraph("dv", 0, 1)
+         / (transitionRange
+           )
+         *-1):min(1)
+       : hbargraph("dv", 0, 1)
   ;
   fastGR =
     (prevGain-prevRef)
@@ -985,21 +998,47 @@ with {
 // (level-thresh))
 // : max(0)*-strength;
 
-postProc(N,0) = si.bus(N),par(i, N, !);
-postProc(N,1) = si.bus(N*2);
+postProc(N,0) =
+  par(i, N, !),si.bus(N),par(i, N, !);
+postProc(N,1) =
+  par(i, N, !),si.bus(N*2);
 postProc(N,2) =
-  (  si.bus(N)
-     <:
-     (
-       si.bus(N)
-      ,par(i, N, abs:rm.reduce(max,samplesPerPixel))
-     )
-  )
- ,par(i, N, rm.reduce(min,samplesPerPixel))
+(
+  si.bus(N)
+  , ( si.bus(N)
+      <:  si.bus(N*2)
+    )
+, si.bus(N)
+)
+:(
+  ro.crossnn(N)
+, si.bus(N*2)
+)
+: (
+  si.bus(N)
+, par(i, 2, soloOp(max))
+, soloOp(min))
+: (
+  si.bus(N)
+, (select2(inputSel,_
+                    // @(attackSamples+relHoldSamples)
+           ,_):abs:rm.reduce(max,samplesPerPixel))
+, rm.reduce(min,samplesPerPixel)
+)
+with {
+  soloOp(op) =
+    si.bus(N)
+    <:(ba.parallelOp(op,N)
+      , si.bus(N)
+      )
+    : ba.selectn(N+1,channelSelect);
+  // 0 = all channels combined, 1 is first channel, 2 = second channel .. N = Nth channel
+  channelSelect = hslider("[0]channel select", 0, 0, N, 1);
+  inputSel = hslider("[1]input, output", 0, 0, 1, 1);
+  samplesPerPixel = hslider("[2]samples per pixel", 1, 1, 1024, 1);
+};
 
-;
 
-samplesPerPixel = hslider("samples per pixel", 1, 1, 1024, 1);
 ///////////////////////////////////////////////////////////////////////////////
 //                              Utilities                                    //
 ///////////////////////////////////////////////////////////////////////////////
@@ -1032,7 +1071,7 @@ DJthresh =
 DJattack =
   // 0;
   // 0.009;
-  hslider("[04]DJ attack[unit:ms] [scale:log]",9, 1000/maxSampleRate, 300,0.1)*0.001;
+  hslider("[04]DJ attack[unit:ms] [scale:log]",1, 1000/maxSampleRate, 300,0.1)*0.001;
 orderAtt =
   4;
 // hslider("[05]attack order", 4, 1, maxOrder, 1);
@@ -1044,15 +1083,15 @@ transitionRange =
   // 9;
   hslider("[07]release transition range[unit:dB]",9,0,30,0.1);
 refTop =
-  hslider("[07]ref top[unit:dB]",2,0,12,0.1);
+  hslider("[07]ref top[unit:dB]",3,0,12,0.1);
 refBot =
-  hslider("[07]ref bot[unit:dB]",-9,-30,0,0.1);
+  hslider("[07]ref bot[unit:dB]",-24,-30,0,0.1);
 dvTop =
   hslider("[07]dv top[unit:dB]",2,-6,6,0.1);
 dvBot =
-  hslider("[07]dv bot[unit:dB]",-9,-30,0,0.1);
+  hslider("[07]dv bot[unit:dB]",-7,-30,0,0.1);
 slowRelease =
-  hslider("[08]slow release[unit:ms] [scale:log]",2000,50,10000,50)*0.001;
+  hslider("[08]slow release[unit:ms] [scale:log]",1000,50,10000,50)*0.001;
 // it.remap(0, 1, 0.5, 4,oneKnob);
 orderRel =
   1;
@@ -1067,7 +1106,7 @@ refOrder =
 // give it some headroom.
 // when built into a mixer, there should be a limiter on the master.
 // if that is done, this can come back up to -1dB
-limThres = hslider("[14]AP lim offset[unit:dB]",6,-30,30,0.1);
+limThres = hslider("[14]AP lim offset[unit:dB]",30,-30,30,0.1);
 releaseLim =
   // hslider("[15]release limiter[unit:ms] [scale:log]",60,5,500,1)*0.001;
   it.remap(0, 1, 0.12, 0.06,oneKnob);
