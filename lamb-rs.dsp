@@ -13,5 +13,7 @@ process =
   component("lamb.dsp")
   [
     enableLatencyMeter = 1;
-    selectOutputs = 2;
+    // set this to 2 for downsampled selectable outputs,
+    // one for level and one for gain reduction
+    selectOutputs = 0;
   ];
