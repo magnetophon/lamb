@@ -478,12 +478,15 @@ with {
 // https://www.desmos.com/calculator/ubmqgogu2s
 // simplified:
 // https://www.desmos.com/calculator/cog4ujr7cs
+// simplified further:
+// https://www.desmos.com/calculator/yiwvcjiony
 
-f(x0,x1,y0,y1,k,x) = y0+(y1-y0)
-                     * (1-exp((k*(x-x0) /(x1-x0))))
-                     / (1-exp(k)) ;
+f(k,x) =
+  (1-exp(k*x))
+  / (1-exp(k)) ;
+
 fm1m2(c,x) =
-  f(0,1,0,1,-2.42*(c),x);
+  f(-2.42*(c),x);
 s(p) = sin(p*ma.PI+1.5*ma.PI)*0.5+0.5;
 c2(c,x) = s(fm1m2(c,x));
 CurveFormula(c,x) =
