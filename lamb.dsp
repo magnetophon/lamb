@@ -74,16 +74,19 @@ maxOrder = 4;
 ///////////////////////////////////////////////////////////////////////////////
 
 process =
-  configSelector(selectConfiguration);
-// DJcomp;
+  bypass_audio(0.01*ma.SR,bypass(selectConfiguration),
+               configSelector(selectConfiguration)
+              );
 
 configSelector(0) =
-si.bus(nrChannels)
-<:
-si.bus(nrChannels)
+  si.bus(nrChannels)
+  <:
+  si.bus(nrChannels)
 , (
   preGain
   : lamb(meters(selectConfiguration),1)
+  : ( par(i, nrChannels, _*outputGain(selectConfiguration))
+    , si.bus(nrChannels))
 )
   : postProc(nrChannels,selectOutputs)
 ;
@@ -96,7 +99,9 @@ configSelector(1) =
       <: si.bus(nrChannels))
   , si.bus(nrChannels))
   : ro.interleave(nrChannels,2)
-  : par(i, nrChannels, *);
+  : par(i, nrChannels, *)
+  : par(i, nrChannels, _*outputGain(selectConfiguration))
+;
 
 configSelector(2) =
   si.bus(nrChannels)
@@ -109,6 +114,8 @@ configSelector(2) =
         DJcompression_gain_N_chan(DJstrength,DJthresh,DJattack,fastRelease,DJknee,1,nrChannels)
       , si.bus(nrChannels))
         : lamb(meters(selectConfiguration))
+        : ( par(i, nrChannels, _*outputGain(selectConfiguration))
+          , si.bus(nrChannels))
       ))
   : postProc(nrChannels,selectOutputs)
 ;
@@ -134,6 +141,8 @@ configSelector(3) =
       , si.bus(nrChannels)
       )
       : lamb(meters(selectConfiguration))
+      : ( par(i, nrChannels, _*outputGain(selectConfiguration))
+        , si.bus(nrChannels))
     )
     ~FBproc)
   : postProc(nrChannels,selectOutputs) ;
@@ -722,10 +731,32 @@ shapedArray(bottom,top, shape ,nrElements) =
       *(top-bottom)
       +bottom
      );
-// with {
+
+///////////////////////////////////////////////////////////////////////////////
+//                               utilities                                   //
+///////////////////////////////////////////////////////////////////////////////
+
+bypass_audio(n, b, e) =
+  par(i, ins, _)
+  <:
+  par(i, ins, (_@fullLatency)*(xb))
+, ( e
+    : (par(i, ins, *(1-xb))
+      , par(i, outs-ins,
+            *(1-xb)+xb
+           )))
+  : ( ( si.bus(ins*2):>si.bus(ins))
+    , si.bus(outs-ins)
+    )
+with {
+  ins = inputs(e);
+  outs = outputs(e);
+  xb = ba.ramp(n, b):sineShaper;
+};
+
 // https://www.desmos.com/calculator/pn4myus6x4
 shaper(s,x) = (x-x*s)/(s-x*2*s+1);
-// };
+
 ///////////////////////////////////////////////////////////////////////////////
 //                                    GUI                                   //
 ///////////////////////////////////////////////////////////////////////////////
@@ -776,12 +807,18 @@ SINsmoo =
 
 ab = checkbox("[1]a/b");
 
+bypass(0) =
+  limiterGroup(selectConfiguration,
+               bypassAB) ;
+bypass(selectConfiguration) =
+  bypassAB;
+bypassAB = AB(enableAB,checkbox("[00]bypass"));
+
 inputGain(0) =
   limiterGroup(selectConfiguration,
                gainAB) ;
 inputGain(selectConfiguration) =
   gainAB;
-
 gainAB = AB(enableAB,hslider("[01]input gain", 0, -24, 24, 0.1)):ba.db2linear:si.smoo;
 strength =
   limiterGroup(selectConfiguration,
@@ -798,7 +835,6 @@ attackP = hslider("[04]attack[unit:ms] [scale:log]",9, 0, maxAttack*1000,0.1)*0.
 attackShape =
   limiterGroup(selectConfiguration,
                AB(enableAB,attackShapeP));
-// attackShapeP = half+hslider("[05]attack shape" , 2, 0-half, half, 0.1);
 attackShapeP = hslider("[05]attack shape" , 0, 0, 1, 0.01);
 release =
   limiterGroup(selectConfiguration,
@@ -807,7 +843,6 @@ releaseP = hslider("[06]release[unit:ms] [scale:log]",60,1,maxRelease*1000,1)*0.
 releaseShape =
   limiterGroup(selectConfiguration,
                AB(enableAB,releaseShapeP));
-// releaseShapeP = half+hslider("[07]release shape" , -3, 0-half, half, 0.1);
 releaseShapeP = hslider("[07]release shape" , 0.5, 0, 1, 0.01);
 relHoldSamples =
   limiterGroup(selectConfiguration,
@@ -822,6 +857,12 @@ link =
   limiterGroup(selectConfiguration,
                AB(enableAB,linkP));
 linkP = hslider("[10]link", 0, 0, 100, 1) *0.01;
+outputGain(0) =
+  limiterGroup(selectConfiguration,
+               outputGainAB) ;
+outputGain(selectConfiguration) =
+  outputGainAB;
+outputGainAB = AB(enableAB,hslider("[11]output gain", 0, -24, 24, 0.1)):ba.db2linear:si.smoo;
 
 //************************************** serialGains **********************************************************
 postAtt = hslider("post attack[ms]", 0, 0, 2000, 1)*0.001;
