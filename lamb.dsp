@@ -877,7 +877,7 @@ linkP = hslider("[10]link", 0, 0, 100, 1) *0.01;
 oneKnob  =
   limiterGroup(selectConfiguration,
                AB(enableAB,oneKnobP));
-oneKnobP = hslider("[11]anti pump", 1, 0, 1, 0.01):si.smoo;
+oneKnobP = hslider("[11]adaptive release", 50, 0, 100, 1)*0.01:si.smoo;
 attackLookahead =
   attackSamples
   * limiterGroup(selectConfiguration,
@@ -1029,6 +1029,7 @@ DJcompression_gain_N_chan(strength,thresh,att,rel,knee,link,N) =
 DJcompression_gain_mono(strength,thresh,att,rel,knee,level) =
   loop~(_,_)
        : (_,!)
+         * strength
        : ba.db2linear
          // : smootherARorder(maxOrder, orderRel,orderAtt, 0, att)
 with {
@@ -1044,7 +1045,6 @@ with {
     // :min(gain_computer(1,thresh+limThres,limKnee,level): ba.db2linear)
     // : smootherARorder(maxOrder, orderRelLim,4, releaseLim, 0)
     : ba.linear2db
-      * strength
       // : attachLatency(hbargraph("slow GR[unit:dB]", -24, 0))
   ;
 
@@ -1189,7 +1189,7 @@ refTop =
 // serialGainsGroup(selectConfiguration,
 // hslider("[07]ref top[unit:dB]",2,0,12,0.1));
 refBot =
-  it.remap(0.05, 1, -12, -3,oneKnob:max(0.05));
+  it.remap(0.15, 1, -12, -3,oneKnob:max(0.15));
 // serialGainsGroup(selectConfiguration,
 // hslider("[07]ref bot[unit:dB]",-24,-30,0,0.1));
 dvTop =
@@ -1197,7 +1197,7 @@ dvTop =
 // serialGainsGroup(selectConfiguration,
 // hslider("[07]dv top[unit:dB]",2,-6,6,0.1));
 dvBot =
-  it.remap(0.05, 1, -9, -3,oneKnob:max(0.05));
+  it.remap(0.25, 1, -9, -6,oneKnob:max(0.25));
 // serialGainsGroup(selectConfiguration,
 // hslider("[07]dv bot[unit:dB]",-7,-30,0,0.1));
 slowRelease =
