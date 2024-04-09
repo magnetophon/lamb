@@ -35,7 +35,7 @@ selectSmoother = 0;
 // 1 = just a regular 4-pole smoother with lookahead
 // 2 = switchable between the two
 
-selectConfiguration = 0;
+selectConfiguration = 2;
 // 0 = just the peak limiter
 // 1 = just the serialGains
 // 2 = both
@@ -872,12 +872,17 @@ link =
   limiterGroup(selectConfiguration,
                AB(enableAB,linkP));
 linkP = hslider("[10]link", 0, 0, 100, 1) *0.01;
+oneKnob  =
+  limiterGroup(selectConfiguration,
+               AB(enableAB,oneKnobP));
+oneKnobP = hslider("[11]anti pump", 1, 0, 1, 0.01):si.smoo;
+
 outputGain(0) =
   limiterGroup(selectConfiguration,
                outputGainAB) ;
 outputGain(selectConfiguration) =
   outputGainAB;
-outputGainAB = AB(enableAB,hslider("[11]output gain", 0, -24, 24, 0.1)):ba.db2linear:si.smoo;
+outputGainAB = AB(enableAB,hslider("[12]output gain", 0, -24, 24, 0.1)):ba.db2linear:si.smoo;
 
 //************************************** serialGains **********************************************************
 postAtt = hslider("post attack[ms]", 0, 0, 2000, 1)*0.001;
@@ -1018,7 +1023,7 @@ DJcompression_gain_mono(strength,thresh,att,rel,knee,level) =
   loop~(_,_)
        : (_,!)
        : ba.db2linear
-       : smootherARorder(maxOrder, orderRel,orderAtt, 0, att)
+         // : smootherARorder(maxOrder, orderRel,orderAtt, 0, att)
 with {
   loop(prevGain,prevRef) =
     gain,ref
@@ -1033,7 +1038,7 @@ with {
     // : smootherARorder(maxOrder, orderRelLim,4, releaseLim, 0)
     : ba.linear2db
       * strength
-    : attachLatency(hbargraph("slow GR[unit:dB]", -24, 0))
+      // : attachLatency(hbargraph("slow GR[unit:dB]", -24, 0))
   ;
 
   adaptiveRel =
@@ -1051,7 +1056,7 @@ with {
       // : smootherOrder(maxOrder,refOrder,refRel,0)
     : smootherOrder(1,1,refRel,0)
     : ba.linear2db
-    : attachLatency(hbargraph("ref[unit:dB]", -24, 0))
+      // : attachLatency(hbargraph("ref[unit:dB]", -24, 0))
   ;
   refRel =
     interpolate_logarithmic(
@@ -1061,10 +1066,12 @@ with {
     , slowRelease,slowRelease/ma.EPSILON) ;
   refDv =
     it.remap(refBot, refTop, 1, 0,fastGR:min(refTop):max(refBot))
-    : attachLatency(hbargraph("ref dv", 0, 1));
+    // : attachLatency(hbargraph("ref dv", 0, 1))
+  ;
   dv =
     it.remap(dvBot, dvTop, 1, 0,fastGR:min(dvTop):max(dvBot))
-    : attachLatency(hbargraph("dv", 0, 1));
+    // : attachLatency(hbargraph("dv", 0, 1))
+  ;
   fastGR =
     (prevGain-prevRef)
     // :min(0)
@@ -1141,25 +1148,24 @@ shaper(s,x) = (x-x*s)/(s-x*2*s+1);
 //                                    GUI                                   //
 ///////////////////////////////////////////////////////////////////////////////
 
-oneKnob = hslider("anti pump", 1, 0, 1, 0.01):si.smoo;
 
 DJinputGain =
   0;
 // (it.remap(0, 0.5, -9, 0,oneKnob:min(0.5))):ba.db2linear;
 DJstrength =
   // 1;
-  // it.remap(0, 0.5, 0, 1,oneKnob:min(0.5));
-  serialGainsGroup(selectConfiguration,
-                   hslider("[02]DJ strength[unit:%]", 100, 0, 100, 1) * 0.01);
+  it.remap(0, 0.25, 0, 1,oneKnob:min(0.25));
+// serialGainsGroup(selectConfiguration,
+// hslider("[02]DJ strength[unit:%]", 100, 0, 100, 1) * 0.01);
 
 DJthresh =
   thresh;
 // -1;
 DJattack =
-  // 0;
-  // 0.009;
-  serialGainsGroup(selectConfiguration,
-                   hslider("[04]DJ attack[unit:ms] [scale:log]",1, 1000/maxSampleRate, 300,0.1)*0.001);
+  0;
+// 0.009;
+// serialGainsGroup(selectConfiguration,
+// hslider("[04]DJ attack[unit:ms] [scale:log]",1, 1000/maxSampleRate, 300,0.1)*0.001);
 orderAtt =
   4;
 // hslider("[05]attack order", 4, 1, maxOrder, 1);
@@ -1172,20 +1178,25 @@ transitionRange =
   serialGainsGroup(selectConfiguration,
                    hslider("[07]release transition range[unit:dB]",9,0,30,0.1));
 refTop =
-  serialGainsGroup(selectConfiguration,
-                   hslider("[07]ref top[unit:dB]",3,0,12,0.1));
+  3;
+// serialGainsGroup(selectConfiguration,
+// hslider("[07]ref top[unit:dB]",2,0,12,0.1));
 refBot =
-  serialGainsGroup(selectConfiguration,
-                   hslider("[07]ref bot[unit:dB]",-24,-30,0,0.1));
+  it.remap(0.05, 1, -12, -3,oneKnob:max(0.05));
+// serialGainsGroup(selectConfiguration,
+// hslider("[07]ref bot[unit:dB]",-24,-30,0,0.1));
 dvTop =
-  serialGainsGroup(selectConfiguration,
-                   hslider("[07]dv top[unit:dB]",2,-6,6,0.1));
+  2;
+// serialGainsGroup(selectConfiguration,
+// hslider("[07]dv top[unit:dB]",2,-6,6,0.1));
 dvBot =
-  serialGainsGroup(selectConfiguration,
-                   hslider("[07]dv bot[unit:dB]",-7,-30,0,0.1));
+  it.remap(0.05, 1, -9, -3,oneKnob:max(0.05));
+// serialGainsGroup(selectConfiguration,
+// hslider("[07]dv bot[unit:dB]",-7,-30,0,0.1));
 slowRelease =
-  serialGainsGroup(selectConfiguration,
-                   hslider("[08]slow release[unit:ms] [scale:log]",1000,50,10000,50)*0.001);
+  0.05;
+// serialGainsGroup(selectConfiguration,
+// hslider("[08]ref release[unit:ms] [scale:log]",1000,50,10000,50)*0.001);
 // it.remap(0, 1, 0.5, 4,oneKnob);
 orderRel =
   1;
