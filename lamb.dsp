@@ -31,6 +31,7 @@ selectOutputs = 0;
 //  downsampled to one value every samplesPerPixel samples
 
 selectSmoother = 0;
+
 // 0 = just the sophisticated smoother, heavy on the CPU, long compile time
 // 1 = just a regular 4-pole smoother with lookahead
 // 2 = switchable between the two
@@ -350,7 +351,7 @@ currentLatency = select2(fixed_latency(selectConfiguration)
                         , fullLatency)
                  :latencyMeter(enableLatencyMeter);
 minimumLatency =
-  (attackSamples+relHoldSamples)
+  (attackLookahead+relHoldSamples)
   * hasLatency;
 fullLatency = (maxAttackSamples+maxRelHoldSamples) * hasLatency;
 hasLatency = (1-(selectConfiguration==1));
@@ -371,7 +372,8 @@ with {
     <:select2(attacking
              , max(_,prevGain)
              , min(_,prevGain))
-    :min(x@attackSamples);
+      // :min(x@attackLookahead)
+  ;
 
   gainStep =
     rawGainStep
@@ -395,7 +397,7 @@ with {
     warpedSine(releasing,shapeSlider,phase+(1 / sr / duration))
     - warpedSine(releasing,shapeSlider,phase);
 
-  hold = ba.slidingMin(attackSamples+1,maxAttackSamples,x);
+  hold = ba.slidingMin(attackLookahead+1,maxAttackSamples,x);
   dif =
     hold
     - prevGain;
@@ -580,7 +582,7 @@ gain_computer(strength,thresh,knee,level) =
 smootherSel(0,attack,attackShape,release,releaseShape) =
   SIN(attack,attackShape,release,releaseShape) :(!,_);
 smootherSel(1,attack,attackShape,release,releaseShape) =
-  ba.slidingMin(attackSamples+1,maxAttackSamples)
+  ba.slidingMin(attackLookahead+1,maxAttackSamples)
   : smoother(4, release, attack )
 with {
   // attackSamples = ba.sec2samp(attack);
@@ -876,13 +878,18 @@ oneKnob  =
   limiterGroup(selectConfiguration,
                AB(enableAB,oneKnobP));
 oneKnobP = hslider("[11]anti pump", 1, 0, 1, 0.01):si.smoo;
+attackLookahead =
+  attackSamples
+  * limiterGroup(selectConfiguration,
+                 AB(enableAB,attackLookaheadP));
+attackLookaheadP = hslider("[12]lookahead", 100, 0, 100, 1)*0.01;
 
 outputGain(0) =
   limiterGroup(selectConfiguration,
                outputGainAB) ;
 outputGain(selectConfiguration) =
   outputGainAB;
-outputGainAB = AB(enableAB,hslider("[12]output gain", 0, -24, 24, 0.1)):ba.db2linear:si.smoo;
+outputGainAB = AB(enableAB,hslider("[13]output gain", 0, -24, 24, 0.1)):ba.db2linear:si.smoo;
 
 //************************************** serialGains **********************************************************
 postAtt = hslider("post attack[ms]", 0, 0, 2000, 1)*0.001;
@@ -946,7 +953,7 @@ SIN_tester =
                   (
                     // ba.slidingMin(attackSamples+1,maxAttackSamples):
                     SIN(attack,release))
-                  ,_@attackSamples
+                  ,_@attackLookahead
                    // ,ba.slidingMin(attackSamples+1,maxAttackSamples)
                    // ,(((ba.slidingMin(attackSamples+1,maxAttackSamples):smootherCascade(4, release, attack )),_@attackSamples):min)
                  ));
@@ -1154,7 +1161,7 @@ DJinputGain =
 // (it.remap(0, 0.5, -9, 0,oneKnob:min(0.5))):ba.db2linear;
 DJstrength =
   // 1;
-  it.remap(0, 0.25, 0, 1,oneKnob:min(0.25));
+  it.remap(0, 0.25, 0, strength,oneKnob:min(0.25));
 // serialGainsGroup(selectConfiguration,
 // hslider("[02]DJ strength[unit:%]", 100, 0, 100, 1) * 0.01);
 
