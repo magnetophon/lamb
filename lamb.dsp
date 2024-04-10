@@ -1028,11 +1028,20 @@ DJcompression_gain_N_chan(strength,thresh,att,rel,knee,link,N) =
 
 DJcompression_gain_mono(strength,thresh,att,rel,knee,level) =
   loop~(_,_)
-       : (_,!)
+       // : (_,!)
+       : clipPeaks
          * strength
        : ba.db2linear
          // : smootherARorder(maxOrder, orderRel,orderAtt, 0, att)
 with {
+  clipPeaks(gain,ref) =
+    ref+ fastGR*dv
+  with {
+  fastGR = (gain-ref);
+  dv =
+    it.remap(refBot, refTop, 0, 1,fastGR:min(refTop):max(refBot));
+};
+
   loop(prevGain,prevRef) =
     gain,ref
   with {
