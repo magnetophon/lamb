@@ -1065,9 +1065,7 @@ with {
      ,rel) ;
 
   ref =
-    // (prevGain+transitionRange)
     (prevGain-dvBot)
-    // : min(transitionRange)
     : ba.db2linear
       // : smootherOrder(maxOrder,refOrder,refRel,0)
     : smootherOrder(1,1,refRel,0)
@@ -1188,27 +1186,24 @@ orderAtt =
 fastRelease =
   release;
 // hslider("[06]fast release[unit:ms] [scale:log]",420,0.1,maxRelease*1000,1)*0.001;
-transitionRange =
-  // it.remap(0, 1, 12, 6,oneKnob);
-  // 9;
-  serialGainsGroup(selectConfiguration,
-                   hslider("[07]release transition range[unit:dB]",9,0,30,0.1));
 refTop =
-  3;
+  // 3;
+  it.remap(0.5, 1, 3, 1,oneKnob:max(0.5));
 // serialGainsGroup(selectConfiguration,
-// hslider("[07]ref top[unit:dB]",2,0,12,0.1));
+// hslider("[06]ref top[unit:dB]",3,0,12,0.1));
 refBot =
   it.remap(0.15, 1, -12, -3,oneKnob:max(0.15));
 // serialGainsGroup(selectConfiguration,
 // hslider("[07]ref bot[unit:dB]",-24,-30,0,0.1));
 dvTop =
-  2;
+  it.remap(0.5, 1, 2, 0.5,oneKnob:max(0.5));
+// 2;
 // serialGainsGroup(selectConfiguration,
-// hslider("[07]dv top[unit:dB]",2,-6,6,0.1));
+// hslider("[08]dv top[unit:dB]",2,-6,6,0.1));
 dvBot =
   it.remap(0.25, 1, -9, -6,oneKnob:max(0.25));
 // serialGainsGroup(selectConfiguration,
-// hslider("[07]dv bot[unit:dB]",-7,-30,0,0.1));
+// hslider("[09]dv bot[unit:dB]",-7,-30,0,0.1));
 slowRelease =
   0.05;
 // serialGainsGroup(selectConfiguration,
