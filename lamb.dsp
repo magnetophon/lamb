@@ -1205,10 +1205,10 @@ dvBot =
 // serialGainsGroup(selectConfiguration,
 // hslider("[09]dv bot[unit:dB]",-7,-30,0,0.1));
 slowRelease =
-  0.05;
-// serialGainsGroup(selectConfiguration,
-// hslider("[08]ref release[unit:ms] [scale:log]",1000,50,10000,50)*0.001);
-// it.remap(0, 1, 0.5, 4,oneKnob);
+  // 0.05;
+  // serialGainsGroup(selectConfiguration,
+  // hslider("[08]ref release[unit:ms] [scale:log]",50,5,1000,5)*0.001);
+  it.remap(0.69, 1, 0.05, 0.303, oneKnob:max(0.69));
 orderRel =
   1;
 // hslider("[09]release order", 1, 1, maxOrder, 1);
