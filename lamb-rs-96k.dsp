@@ -11,6 +11,7 @@ declare license "AGPLv3";
 process =
   component("lamb.dsp")
   [
+    maxSampleRate = 96000;
     enableLatencyMeter = 1;
     // set this to 2 for downsampled selectable outputs,
     // one for level and one for gain reduction
