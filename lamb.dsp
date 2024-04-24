@@ -10,7 +10,6 @@ import("stdfaust.lib");
 ///////////////////////////////////////////////////////////////////////////////
 
 
-// maxSampleRate = 192000;
 maxSampleRate = 48000;
 // maxSampleRate = 100; // for svg
 // This has a lot of impact on the compile time and the cpu usage
@@ -519,7 +518,11 @@ CurveFormula(c,x) =
 ;
 Curve(c,x) =
   // CurveFormula(c,x);
-  ba.tabulateNd(1, CurveFormula,(nrShapes, 1<<16,0, 0,1, 1, c,x)).lin;
+  ba.tabulateNd(1, CurveFormula,(nrShapes, tableSize(maxSampleRate),0, 0,1, 1, c,x)).lin;
+
+tableSize(48000) = 1<<16;
+tableSize(96000) = 1<<17;
+tableSize(sr) = 1<<18;
 
 newCurve(releasing,c,x) =
   select2(releasing
