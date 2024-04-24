@@ -14,7 +14,5 @@ process =
     maxSampleRate = 192000;
     enableLatencyMeter = 1;
     enableGainReductionMeter = 0;
-    // set this to 2 for downsampled selectable outputs,
-    // one for level and one for gain reduction
-    selectOutputs = 0;
+    selectOutputs = 1;
   ];
