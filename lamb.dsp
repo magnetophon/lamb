@@ -413,11 +413,14 @@ with {
     (start,end)
   , shapeDif(shapeSlider,prevRamp+rampStep,duration',ma.SR)
     * ((dif'/dif)/(1-warpedSine(releasing,shapeSlider',prevRamp)))
-    :seq(i, 16, compare)
+    :seq(i, nrCompares(maxSampleRate), compare)
      // :seq(i, 24, compare)
     : ((+:_*.5),!) // average start and end, throw away the rest
     :max(0):min(1)
   with {
+    nrCompares(48000) = 16;
+    nrCompares(96000) = 17;
+    nrCompares(sr) = 18;
     start = 0;
     end = 1;
     rampStep = 1 / ma.SR / duration;
@@ -442,8 +445,8 @@ with {
            , attackShape
            , releaseShape);
 };
-
 };
+
 // ******************************************** the curves: ******************************
 
 
