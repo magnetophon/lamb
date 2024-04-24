@@ -67,6 +67,9 @@ serialGainsVarOrder = 0;
 // Mainly for https://github.com/magnetophon/lamb-rs to be able to report the latency to the host.
 enableLatencyMeter = 0;
 
+// Display a bargraph with the gain reduction
+// Not needed for https://github.com/magnetophon/lamb-rs
+enableGainReductionMeter = 1;
 
 maxOrder = 4;
 
@@ -710,19 +713,22 @@ smootherSelect(1,orderAtt, orderRel,att,rel) =
 // postProc(0) = si.bus(nrChannels),par(i, nrChannels, !);
 // postProc(1) = si.bus(nrChannels*2);
 
-meters(0) = combineGroup(metersV);
-meters(1) = metersH;
+meters(0) = combineGroup(metersV(enableGainReductionMeter ));
+meters(1) = metersH(enableGainReductionMeter);
 meters(2) = meters(1);
 meters(3) = meters(1);
 
-metersH =
+metersH(1) =
   ( par(i, nrChannels, (meterH(i)))
   , si.bus(nrChannels)
   );
-metersV =
+metersV(1) =
   ( par(i, nrChannels, (meterV(i)))
   , si.bus(nrChannels)
   );
+metersH(0) = si.bus(nrChannels*2);
+metersV(0) = si.bus(nrChannels*2);
+
 ///////////////////////////////////////////////////////////////////////////////
 //                           parameter arrays                                //
 ///////////////////////////////////////////////////////////////////////////////
@@ -1045,55 +1051,55 @@ with {
   loop(prevGain,prevRef) =
     gain,ref
   with {
-  gain =
-    (  gain_computer(1,thresh,knee,level)
-       : ba.db2linear
-       : smootherARorder(maxOrder, orderRel,orderAtt, adaptiveRel, 0)
-         // , ((level-limThres):max(0)*-1: ba.db2linear)
-    )
-    // :min(gain_computer(1,thresh+limThres,limKnee,level): ba.db2linear)
-    // : smootherARorder(maxOrder, orderRelLim,4, releaseLim, 0)
-    : ba.linear2db
-      // : attachLatency(hbargraph("slow GR[unit:dB]", -24, 0))
-  ;
+    gain =
+      (  gain_computer(1,thresh,knee,level)
+         : ba.db2linear
+         : smootherARorder(maxOrder, orderRel,orderAtt, adaptiveRel, 0)
+           // , ((level-limThres):max(0)*-1: ba.db2linear)
+      )
+      // :min(gain_computer(1,thresh+limThres,limKnee,level): ba.db2linear)
+      // : smootherARorder(maxOrder, orderRelLim,4, releaseLim, 0)
+      : ba.linear2db
+        // : attachLatency(hbargraph("slow GR[unit:dB]", -24, 0))
+    ;
 
-  adaptiveRel =
-    fade_to_inf(
-      // shaper(adaptShape,
-      1-dv
-      // )
-     ,rel) ;
+    adaptiveRel =
+      fade_to_inf(
+        // shaper(adaptShape,
+        1-dv
+        // )
+       ,rel) ;
 
-  ref =
-    (prevGain-dvBot)
-    : ba.db2linear
-      // : smootherOrder(maxOrder,refOrder,refRel,0)
-    : smootherOrder(1,1,refRel,0)
-    : ba.linear2db
-      // : attachLatency(hbargraph("ref[unit:dB]", -24, 0))
-  ;
-  refRel =
-    interpolate_logarithmic(
-      // shaper(refShape,
-      refDv
-      // )
-    , slowRelease,slowRelease/ma.EPSILON) ;
-  refDv =
-    it.remap(refBot, refTop, 1, 0,fastGR:min(refTop):max(refBot))
-    // : attachLatency(hbargraph("ref dv", 0, 1))
-  ;
-  dv =
-    it.remap(dvBot, dvTop, 1, 0,fastGR:min(dvTop):max(dvBot))
-    // : attachLatency(hbargraph("dv", 0, 1))
-  ;
-  fastGR =
-    (prevGain-prevRef)
-    // :min(0)
-    // :hbargraph("fast GR[unit:dB]", -24, 0)
-    // :hbargraph("fast GR plus[unit:dB]", 0, 12 )
-  ;
-  attachLatency(m) = _<:attach(_,(_@currentLatency):m);
-};
+    ref =
+      (prevGain-dvBot)
+      : ba.db2linear
+        // : smootherOrder(maxOrder,refOrder,refRel,0)
+      : smootherOrder(1,1,refRel,0)
+      : ba.linear2db
+        // : attachLatency(hbargraph("ref[unit:dB]", -24, 0))
+    ;
+    refRel =
+      interpolate_logarithmic(
+        // shaper(refShape,
+        refDv
+        // )
+      , slowRelease,slowRelease/ma.EPSILON) ;
+    refDv =
+      it.remap(refBot, refTop, 1, 0,fastGR:min(refTop):max(refBot))
+      // : attachLatency(hbargraph("ref dv", 0, 1))
+    ;
+    dv =
+      it.remap(dvBot, dvTop, 1, 0,fastGR:min(dvTop):max(dvBot))
+      // : attachLatency(hbargraph("dv", 0, 1))
+    ;
+    fastGR =
+      (prevGain-prevRef)
+      // :min(0)
+      // :hbargraph("fast GR[unit:dB]", -24, 0)
+      // :hbargraph("fast GR plus[unit:dB]", 0, 12 )
+    ;
+    attachLatency(m) = _<:attach(_,(_@currentLatency):m);
+  };
 };
 
 
