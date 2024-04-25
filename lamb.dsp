@@ -374,7 +374,8 @@ with {
     <:select2(attacking
              , max(_,prevGain)
              , min(_,prevGain))
-      // :min(x@attackLookahead)
+    :max(1-1@fullLatency)
+     // :min(x@attackLookahead)
   ;
 
   gainStep =
@@ -1066,7 +1067,6 @@ with {
       // :min(gain_computer(1,thresh+limThres,limKnee,level): ba.db2linear)
       // : smootherARorder(maxOrder, orderRelLim,4, releaseLim, 0)
       : ba.linear2db
-        * 1@fullLatency
         // : attachLatency(hbargraph("slow GR[unit:dB]", -24, 0))
     ;
 
@@ -1075,7 +1075,8 @@ with {
         // shaper(adaptShape,
         1-dv
         // )
-       ,rel) ;
+       ,rel)
+      * 1@fullLatency ;
 
     ref =
       (prevGain-dvBot)
@@ -1083,7 +1084,6 @@ with {
         // : smootherOrder(maxOrder,refOrder,refRel,0)
       : smootherOrder(1,1,refRel,0)
       : ba.linear2db
-        * 1@fullLatency
         // : attachLatency(hbargraph("ref[unit:dB]", -24, 0))
     ;
     refRel =
@@ -1091,7 +1091,7 @@ with {
         // shaper(refShape,
         refDv
         // )
-      , slowRelease,slowRelease/ma.EPSILON) ;
+      , slowRelease,slowRelease/ma.EPSILON) * 1@fullLatency;
     refDv =
       it.remap(refBot, refTop, 1, 0,fastGR:min(refTop):max(refBot))
       // : attachLatency(hbargraph("ref dv", 0, 1))
