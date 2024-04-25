@@ -1066,6 +1066,7 @@ with {
       // :min(gain_computer(1,thresh+limThres,limKnee,level): ba.db2linear)
       // : smootherARorder(maxOrder, orderRelLim,4, releaseLim, 0)
       : ba.linear2db
+        * 1@fullLatency
         // : attachLatency(hbargraph("slow GR[unit:dB]", -24, 0))
     ;
 
@@ -1082,7 +1083,7 @@ with {
         // : smootherOrder(maxOrder,refOrder,refRel,0)
       : smootherOrder(1,1,refRel,0)
       : ba.linear2db
-        * 1@currentLatency
+        * 1@fullLatency
         // : attachLatency(hbargraph("ref[unit:dB]", -24, 0))
     ;
     refRel =
