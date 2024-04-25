@@ -1082,6 +1082,7 @@ with {
         // : smootherOrder(maxOrder,refOrder,refRel,0)
       : smootherOrder(1,1,refRel,0)
       : ba.linear2db
+        * 1@currentLatency
         // : attachLatency(hbargraph("ref[unit:dB]", -24, 0))
     ;
     refRel =
