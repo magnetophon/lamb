@@ -373,10 +373,7 @@ with {
     (prevGain+gainStep)
     <:select2(attacking
              , max(_,prevGain)
-             , min(_,prevGain))
-    :max(1-1@fullLatency)
-     // :min(x@attackLookahead)
-  ;
+             , min(_,prevGain));
 
   gainStep =
     rawGainStep
@@ -569,10 +566,10 @@ lookahead_compression_gain_N_chan(parGain,strength,thresh,attack,attackShape,rel
 
 lookahead_compression_gain_mono(parGain,strength,thresh,attack,attackShape,release,releaseShape,knee,relHoldSamples) =
   gain_computer(strength,thresh,knee)
-  : ba.db2linear
   : min(parGain) // TODO: leave pargain in dB and do the min before the conversion here?
   : (releaseHold~_)
   : smootherSel(selectSmoother,attack,attackShape,release,releaseShape)
+  : ba.db2linear
 with {
   releaseHold(prevGain,rawGR) =
     max(
@@ -1041,11 +1038,8 @@ DJcompression_gain_N_chan(strength,thresh,att,rel,knee,link,N) =
 
 DJcompression_gain_mono(strength,thresh,att,rel,knee,level) =
   loop~(_,_)
-       // : (_,!)
        : clipPeaks
          * strength
-       : ba.db2linear
-         // : smootherARorder(maxOrder, orderRel,orderAtt, 0, att)
 with {
   clipPeaks(gain,ref) =
     ref+ fastGR*dv
@@ -1076,7 +1070,7 @@ with {
         1-dv
         // )
        ,rel)
-      * 1@fullLatency ;
+      * 1@fullLatency;
 
     ref =
       (prevGain-dvBot)
