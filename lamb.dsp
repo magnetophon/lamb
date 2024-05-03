@@ -416,9 +416,9 @@ with {
     : ((+:_*.5),!) // average start and end, throw away the rest
     :max(0):min(1)
   with {
-    nrCompares(48000) = 16;
-    nrCompares(96000) = 17;
-    nrCompares(sr) = 18;
+    nrCompares(48000) = 17;
+    nrCompares(96000) = 18;
+    nrCompares(sr) = 19;
     start = 0;
     end = 1;
     rampStep = 1 / ma.SR / duration;
@@ -521,9 +521,9 @@ Curve(c,x) =
   // CurveFormula(c,x);
   ba.tabulateNd(1, CurveFormula,(nrShapes, tableSize(maxSampleRate),0, 0,1, 1, c,x)).lin;
 
-tableSize(48000) = 1<<16;
-tableSize(96000) = 1<<17;
-tableSize(sr) = 1<<18;
+tableSize(48000) = 1<<17;
+tableSize(96000) = 1<<18;
+tableSize(sr) = 1<<19;
 
 newCurve(releasing,c,x) =
   select2(releasing
@@ -929,7 +929,7 @@ minAttTimeMs = 1000/maxSampleRate;
 
 // *******************************   more constants *********************************************************
 
-nrShapes = 3;
+nrShapes = 7;
 half = (nrShapes-1)*.5;
 
 // 50 ms
